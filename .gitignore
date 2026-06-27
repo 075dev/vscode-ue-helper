@@ -40,3 +40,4 @@ desktop.ini
 compile_commands.json
 .clangd
 .vscode/.code-workspace.backup
+.omo

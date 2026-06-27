@@ -2,12 +2,12 @@
  * createProject —— 一次性初始化 UE + clangd 工作区
  *
  * 5 步流程（每步在 VS Code 进度条上报告）：
- *   1. 写 .clangd（极简模板 + preparse headers + 宏补全）
+ *   1. 写 .clangd（模板风格：If/Compiler/FI/完整警告flag）
  *   2. 跑 UBT GenerateClangDatabase 生成 compile_commands.json
  *   3. 创建补全文件系统（5 个 curated header 文件）
  *   4. 将 completionHelper.cpp 加入 compile_commands.json
  *   5. 完成提示
-
+ *
  * 额外步骤（后台执行）：
  *   - 修改 rsp 文件移除 PCH 引用
  *   - 创建 RSP 匹配器（引擎源码导航用）
@@ -15,13 +15,12 @@
  *   - 工作区备份（防止 UBT 覆盖 .code-workspace）
  *
  * 系统头文件（/X + /imsvc + -fms-compatibility-version）不在本任务中注入，
- * 需用户手动通过 "Set System Includes" 命令触发，避免破坏 UE 头文件路径。
- *
- * 任何一步失败都允许继续（其他步骤独立）。最后弹汇总结果。
+ * 需用户手动通过 "Set System Includes" 命令触发。
  */
 
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import * as fs from 'node:fs/promises';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import {
@@ -35,6 +34,7 @@ import {
   fillMissingCompileCommands,
   getPrepareIncludesList,
 } from '@clangd';
+import { detectSystemIncludesWithEngineRecommendation } from '@clangd/windowsSdk';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
 
@@ -81,9 +81,9 @@ export async function executeCreateProject(
       cancellable: false,
     },
     async (progress) => {
-      // Step 1: 写入 .clangd（极简模板 + preparse headers + 宏补全）
-      // 使用 begin/end 标记管理配置块，保留用户已有内容
-      // ⚠️ 系统头文件（/X + /imsvc）不在本步注入，由用户通过 setSystemIncludes 手动触发
+      // Step 1: 写入 .clangd（模板风格：If/Compiler/FI/完整警告flag）
+      // 使用 yaml 库序列化，覆盖整个文件（无 managed 标记）
+      // ⚠️ 系统头文件不在本步注入，由用户通过 setSystemIncludes 手动触发
       progress.report({
         message: `Step 1/5: writing .clangd (mode: ${config.completionMode})...`,
         increment: 0,
@@ -95,11 +95,59 @@ export async function executeCreateProject(
           project.path,
         );
 
+        // 检测系统头文件（/X + /imsvc + -fms-compatibility-version）
+        let systemIncludeFlags: string[] | undefined;
+        if (process.platform === 'win32') {
+          try {
+            const detected = await detectSystemIncludesWithEngineRecommendation(
+              engine.path,
+              config.clangdPath || undefined,
+              logger,
+            );
+            if (detected) {
+              systemIncludeFlags = detected;
+              logger.info(
+                `[createProject] detected ${detected.length} system include flags`,
+              );
+            }
+          } catch (err) {
+            logger.warn(
+              '[createProject] system include detection failed, skipping:',
+              err,
+            );
+          }
+        }
+
+        // 推断 compiler 路径（从 clangd 路径或默认 LLVM 安装目录）
+        let compilerPath: string | undefined;
+        if (config.clangdPath) {
+          // 从 clangd 路径推断 clang-cl.exe 路径（同目录）
+          compilerPath = path.join(path.dirname(config.clangdPath), 'clang-cl.exe');
+        } else {
+          // 尝试默认路径
+          const defaultPaths = [
+            'C:\\Program Files\\LLVM\\bin\\clang-cl.exe',
+            'C:\\Program Files (x86)\\LLVM\\bin\\clang-cl.exe',
+          ];
+          for (const p of defaultPaths) {
+            try {
+              await fs.access(p);
+              compilerPath = p;
+              break;
+            } catch {
+              /* 路径不存在，继续尝试下一个 */
+            }
+          }
+        }
+
         const clangdConfigPath = await writeClangdConfig(project.path, {
           completionMode: config.completionMode,
           macroHelperPath:
             config.completionMode === 'slow' ? macroHelperPath : undefined,
           preparseHeaders,
+          systemIncludeFlags,
+          compilerPath,
+          projectPath: project.path,
         });
         results.push({
           step: 'Write .clangd',

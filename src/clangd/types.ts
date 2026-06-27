@@ -33,7 +33,7 @@ export interface PrepareIncludesList {
  * - ❌ Index（22.x 仍报 "Unknown If key 'Index'"，等后续版本）
  */
 export interface IfBlock {
-  PathMatch?: string;
+  PathMatch?: string | string[];
   CompileFlags?: {
     Add?: string[];
     Remove?: string[];
@@ -49,6 +49,9 @@ export interface IfBlock {
  * 只包含 clangd 22.x 已确认支持的字段，避免 "Unknown Config key" 警告。
  */
 export interface ClangdConfig {
+  /** 条件块。⚠️ 22.x 不支持 Index 在 If 块中 */
+  If?: IfBlock;
+
   CompileFlags?: {
     Remove?: string[];
     Add?: string[];
@@ -57,6 +60,8 @@ export interface ClangdConfig {
      * clangd 22.x 明确要求放在 CompileFlags 内部，不能在根级别。
      */
     CompilationDatabase?: string;
+    /** 编译器路径（模板风格，如 D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe） */
+    Compiler?: string;
   };
 
   Diagnostics?: {
@@ -90,6 +95,4 @@ export interface ClangdConfig {
     StandardIndexCapacity?: number;
   };
 
-  /** 条件块。⚠️ 22.x 不支持 Index 在 If 块中 */
-  If?: IfBlock[];
 }

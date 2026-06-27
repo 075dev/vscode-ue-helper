@@ -135,7 +135,7 @@ export async function renderClangdFlags(opts: {
     const sdkEntries = await fs.readdir(opts.sdkRoot, { withFileTypes: true });
     for (const entry of sdkEntries) {
       if (entry.isDirectory()) {
-        flags.push(`/imsvc"${path.join(opts.sdkRoot, entry.name)}"`);
+        flags.push(`/imsvc${path.join(opts.sdkRoot, entry.name)}`);
       }
     }
   } catch {
@@ -143,7 +143,7 @@ export async function renderClangdFlags(opts: {
   }
 
   // MSVC C++ headers.
-  flags.push(`/imsvc"${path.join(opts.msvcRoot, 'include')}"`);
+  flags.push(`/imsvc${path.join(opts.msvcRoot, 'include')}`);
 
   if (opts.fmsCompatibilityVersion) {
     flags.push(`-fms-compatibility-version=${opts.fmsCompatibilityVersion}`);

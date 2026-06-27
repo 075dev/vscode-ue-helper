@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { renderYaml, defaultClangdConfig, renderManagedBlock, upsertManagedBlock } from '@clangd/clangdConfig';
+import { renderClangdConfig, defaultClangdConfig, replaceSystemIncludeBlock } from '@clangd/clangdConfig';
 
-describe('renderYaml (low-level renderer)', () => {
-  it('renders an empty config as empty string', () => {
-    const yaml = renderYaml({});
-    expect(yaml).toBe('');
+describe('renderClangdConfig (yaml 序列化)', () => {
+  it('renders an empty config', () => {
+    const yaml = renderClangdConfig({});
+    expect(yaml.trim()).toBe('{}');
   });
 
   it('renders CompileFlags.Add as a YAML list', () => {
-    const yaml = renderYaml({
+    const yaml = renderClangdConfig({
       CompileFlags: { Add: ['-std=c++20', '-Wno-foo'] },
     });
     expect(yaml).toContain('CompileFlags:');
@@ -17,35 +17,98 @@ describe('renderYaml (low-level renderer)', () => {
     expect(yaml).toContain('    - -Wno-foo');
   });
 
-  it('renders Diagnostics.Suppress', () => {
-    const yaml = renderYaml({
-      Diagnostics: { Suppress: ['unknown-warning-option', 'unused-includes'] },
-    });
-    expect(yaml).toContain('Diagnostics:');
-    expect(yaml).toContain('  Suppress:');
-    expect(yaml).toContain('    - unknown-warning-option');
-  });
-
   it('renders CompilationDatabase inside CompileFlags (clangd 22.x requirement)', () => {
-    const yaml = renderYaml({
+    const yaml = renderClangdConfig({
       CompileFlags: { CompilationDatabase: '.vscode/vscodeuehelper' },
     });
+    // 必须在 CompileFlags 内部缩进 2 空格，不在根级别
     expect(yaml).toContain('  CompilationDatabase: .vscode/vscodeuehelper');
-    // ⚠️ 关键：不能在根级别
-    expect(yaml.split('\n')[0]).toBe('CompileFlags:');
+    const lines = yaml.split('\n');
+    const cfLine = lines.findIndex((l) => l.trim() === 'CompileFlags:');
+    const cdLine = lines.findIndex((l) => l.trim().startsWith('CompilationDatabase:'));
+    expect(cfLine).toBeLessThan(cdLine); // CompilationDatabase 在 CompileFlags 下面
   });
 });
 
-describe('defaultClangdConfig (极简模板)', () => {
+describe('defaultClangdConfig (模板风格)', () => {
   it('contains required fields', () => {
     const cfg = defaultClangdConfig();
     expect(cfg.CompileFlags?.CompilationDatabase).toBe('.vscode/vscodeuehelper');
-    expect(cfg.Diagnostics?.Suppress).toContain('builtin_definition');
-    expect(cfg.Diagnostics?.Suppress).toContain('unknown-warning-option');
     expect(cfg.Diagnostics?.UnusedIncludes).toBe('None');
-    expect(cfg.Diagnostics?.MissingIncludes).toBe('None');
     expect(cfg.InlayHints?.Enabled).toBe('Yes');
-    expect(cfg.Index?.Background).toBe('Build');
+    expect(cfg.InlayHints?.ParameterNames).toBe('Yes');
+    expect(cfg.InlayHints?.DeducedTypes).toBe('Yes');
+    expect(cfg.InlayHints?.Designators).toBe('Yes');
+  });
+
+  it('uses /std:c++20 on Windows', () => {
+    const cfg = defaultClangdConfig();
+    const add = cfg.CompileFlags?.Add ?? [];
+    if (process.platform === 'win32') {
+      expect(add).toContain('/std:c++20');
+    } else {
+      expect(add).toContain('-std=c++20');
+    }
+  });
+
+  it('includes MSVC compatibility flags', () => {
+    const cfg = defaultClangdConfig();
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add).toContain('/TP');
+    expect(add).toContain('-mwaitpkg');
+    expect(add).toContain('-Werror');
+    expect(add).toContain('-Wshadow');
+    expect(add).toContain('-Wundef');
+  });
+
+  it('includes systemIncludeFlags at the top', () => {
+    const cfg = defaultClangdConfig({
+      systemIncludeFlags: ['/X', '/imsvc"path"'],
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add[0]).toBe('/X');
+    expect(add[1]).toBe('/imsvc"path"');
+  });
+
+  it('includes /FI macroHelperPath in slow mode', () => {
+    const cfg = defaultClangdConfig({
+      completionMode: 'slow',
+      macroHelperPath: '/path/to/macroCompletionHelper.h',
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add).toContain('/FI/path/to/macroCompletionHelper.h');
+  });
+
+  it('does NOT include /FI macroHelperPath in fast mode', () => {
+    const cfg = defaultClangdConfig({
+      completionMode: 'fast',
+      macroHelperPath: '/path/to/macroCompletionHelper.h',
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add).not.toContain('/FI/path/to/macroCompletionHelper.h');
+  });
+
+  it('sets Compiler when compilerPath is provided', () => {
+    const cfg = defaultClangdConfig({
+      compilerPath: 'D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe',
+    });
+    expect(cfg.CompileFlags?.Compiler).toBe('D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe');
+  });
+
+  it('generates If.PathMatch when projectPath is provided', () => {
+    const cfg = defaultClangdConfig({
+      projectPath: '/path/to/MyProject.uproject',
+    });
+    expect(cfg.If).toBeDefined();
+    expect(cfg.If?.PathMatch).toBeDefined();
+    const matches = cfg.If?.PathMatch as string[];
+    expect(matches).toContain('.vscode/vscodeuehelper/completionHelper.cpp');
+    expect(matches).toContain('Source/.*\\.(cpp|h)');
+  });
+
+  it('omits If when projectPath is not provided', () => {
+    const cfg = defaultClangdConfig();
+    expect(cfg.If).toBeUndefined();
   });
 
   it('does NOT contain Preamble/Hover/Completion (clangd 22.x unsupported)', () => {
@@ -56,77 +119,45 @@ describe('defaultClangdConfig (极简模板)', () => {
   });
 });
 
-describe('renderManagedBlock (带 begin/end 标记)', () => {
-  it('contains both markers', () => {
-    const block = renderManagedBlock();
-    expect(block).toContain('# <<< vscodeuehelper-managed >>>');
-    expect(block).toContain('# <<< end-vscodeuehelper-managed >>>');
+describe('replaceSystemIncludeBlock (yaml 替换)', () => {
+  it('replaces system include flags in Add', () => {
+    const input = renderClangdConfig({
+      CompileFlags: {
+        Add: [
+          '/X',
+          '/imsvc"old/path"',
+          '-fms-compatibility-version=19.0',
+          '/std:c++20',
+          '-Wno-foo',
+        ],
+      },
+    });
+    const newFlags = ['/X', '/imsvc"new/path"', '-fms-compatibility-version=19.1'];
+    const result = replaceSystemIncludeBlock(input, newFlags);
+
+    expect(result).toContain('/imsvc"new/path"');
+    expect(result).toContain('-fms-compatibility-version=19.1');
+    // 旧系统 flag 被替换
+    expect(result).not.toContain('/imsvc"old/path"');
+    expect(result).not.toContain('-fms-compatibility-version=19.0');
+    // 非系统 flag 保留
+    expect(result).toContain('-Wno-foo');
+    // std flag 也是系统 flag，被替换
+    expect(result).not.toContain('/std:c++20');
   });
 
-  it('contains default config content', () => {
-    const block = renderManagedBlock();
-    expect(block).toContain('CompilationDatabase: .vscode/vscodeuehelper');
-    expect(block).toContain('Diagnostics:');
-    expect(block).toContain('Index:');
-  });
-});
-
-describe('upsertManagedBlock (managed block 管理)', () => {
-  it('inserts block into empty file', () => {
-    const result = upsertManagedBlock('');
-    expect(result).toContain('# <<< vscodeuehelper-managed >>>');
-    expect(result).toContain('# <<< end-vscodeuehelper-managed >>>');
-  });
-
-  it('replaces existing content without managed markers (避免重复键)', () => {
-    const existing = '# 用户自定义注释（无 managed 标记）\nCompileFlags:\n  Add: ["my-flag"]';
-    const result = upsertManagedBlock(existing);
-    // 用户内容被 managed block 替换，而不是追加
-    expect(result).not.toContain('# 用户自定义注释');
-    expect(result).not.toContain('"my-flag"');
-    expect(result).toContain('# <<< vscodeuehelper-managed >>>');
-    expect(result).toContain('# <<< end-vscodeuehelper-managed >>>');
-  });
-
-  it('replaces existing managed block but preserves outer content', () => {
-    const existing = [
-      '# 用户顶部注释',
-      '# <<< vscodeuehelper-managed >>>',
-      'Diagnostics:',
-      '  Suppress:',
-      '    - old-one',
-      '# <<< end-vscodeuehelper-managed >>>',
-      '# 用户底部注释',
-    ].join('\n');
-    const result = upsertManagedBlock(existing);
-    expect(result).toContain('# 用户顶部注释');
-    expect(result).toContain('# 用户底部注释');
-    // 旧内容应该被替换
-    expect(result).not.toContain('- old-one');
-    // 新内容应该出现
-    expect(result).toContain('builtin_definition');
-  });
-
-  it('idempotent: upsert twice produces same result', () => {
-    const first = upsertManagedBlock('');
-    const second = upsertManagedBlock(first);
-    expect(second).toBe(first);
+  it('returns input unchanged for non-YAML text', () => {
+    const result = replaceSystemIncludeBlock('not yaml', ['/X']);
+    expect(result).toBe('not yaml');
   });
 });
 
 describe('YAML quoting', () => {
-  it('quotes strings with YAML-sensitive characters', () => {
-    const yaml = renderYaml({
+  it('handles strings with colons correctly', () => {
+    const yaml = renderClangdConfig({
       CompileFlags: { Add: ['-DFOO=bar:baz'] },
     });
-    expect(yaml).toContain('"-DFOO=bar:baz"');
-  });
-
-  it('does not quote simple strings', () => {
-    const yaml = renderYaml({
-      CompileFlags: { Add: ['-std=c++20'] },
-    });
-    expect(yaml).toContain('    - -std=c++20');
-    expect(yaml).not.toContain('"-std=c++20"');
+    // yaml 库自动处理冒号
+    expect(yaml).toContain("-DFOO=bar:baz");
   });
 });
