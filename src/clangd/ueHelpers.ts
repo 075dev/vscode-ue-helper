@@ -15,6 +15,7 @@ const END_UBT_SCRIPT_FILE_NAMES_UNIX = ['Engine', 'Build', 'BatchFiles', 'RunUBT
 const END_UBT_SCRIPT_FILE_NAMES_WIN = ['Engine', 'Build', 'BatchFiles', 'RunUBT.bat'];
 const END_DIRECTORY_NAMES_TO_UNREAL_BUILD_TOOL = ['Engine', 'Binaries', 'DotNET', 'UnrealBuildTool'];
 const UNREAL_BUILD_TOOL_APP_NAME = 'UnrealBuildTool';
+const UNREAL_BUILD_TOOL_EXE_NAME = 'UnrealBuildTool.exe';
 
 /* ------------------------------------------------------------------ */
 /*  doesUriExist                                                        */
@@ -37,10 +38,12 @@ export async function doesUriExist(uri: vscode.Uri): Promise<boolean> {
 /**
  * 查找 UnrealBuildTool 的可执行路径。
  *
- * 优先级（对齐原版 getUbtPath）：
+ * 优先级（适配 UE 5.x）：
  *   1. Windows: <engineRoot>/Engine/Build/BatchFiles/RunUBT.bat
+ *      ⚠️ UE 5.x 不再生成 .bat，只有 .sh（仅 Linux 平台）
  *   2. Unix:    <engineRoot>/Engine/Build/BatchFiles/RunUBT.sh
- *   3. 回退:    <engineRoot>/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool
+ *   3. 回退:    <engineRoot>/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe
+ *      这是 UE 5.x 主要的可执行文件，跨平台通用
  *
  * @param ueUri 引擎根目录的 vscode.Uri
  * @returns 绝对路径字符串，找不到返回 null
@@ -52,19 +55,26 @@ export async function getUbtPath(ueUri: vscode.Uri): Promise<string | null> {
     return unixUri.fsPath;
   }
 
-  /* 2. RunUBT.bat (Windows) */
+  /* 2. RunUBT.bat (Windows, UE 4.x 兼容) */
   const winUri = vscode.Uri.joinPath(ueUri, ...END_UBT_SCRIPT_FILE_NAMES_WIN);
   if (process.platform === 'win32' && (await doesUriExist(winUri))) {
     return winUri.fsPath;
   }
 
-  /* 3. 回退到 UnrealBuildTool 二进制 */
+  /* 3. 回退到 UnrealBuildTool.exe（UE 5.x 主要入口） */
   const ubtDirUri = vscode.Uri.joinPath(ueUri, ...END_DIRECTORY_NAMES_TO_UNREAL_BUILD_TOOL);
   if (!(await doesUriExist(ubtDirUri))) {
     return null;
   }
-  const ubtAppUri = vscode.Uri.joinPath(ubtDirUri, UNREAL_BUILD_TOOL_APP_NAME);
-  return ubtAppUri.fsPath;
+  // Windows: .exe; 其他平台: 无扩展名
+  const exeName = process.platform === 'win32' ? UNREAL_BUILD_TOOL_EXE_NAME : UNREAL_BUILD_TOOL_APP_NAME;
+  const ubtExeUri = vscode.Uri.joinPath(ubtDirUri, exeName);
+  if (await doesUriExist(ubtExeUri)) {
+    return ubtExeUri.fsPath;
+  }
+
+  // 最后的回退：返回无扩展名路径（让 OS 自己找）
+  return vscode.Uri.joinPath(ubtDirUri, UNREAL_BUILD_TOOL_APP_NAME).fsPath;
 }
 
 /* ------------------------------------------------------------------ */

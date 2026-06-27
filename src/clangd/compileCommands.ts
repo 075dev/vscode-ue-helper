@@ -6,12 +6,13 @@
  *   - 执行方式：vscode.tasks.executeTask + vscode.ShellExecution
  *     （Windows 用 PowerShell.exe）
  *   - 双路径：
- *       Non-Native（clangd 智能感知）：
+ *       默认（GenerateClangDatabase 模式，**实际生成 compile_commands.json**）：
  *         <TargetName> <Platform> Development <uprojectPath>
- *         -Compiler=Clang -mode=GenerateClangDataBase
- *       Native：
+ *         -mode=GenerateClangDatabase
+ *       可选（Native 模式，⚠️ **不**生成 compile_commands.json）：
  *         -projectfiles -project=<uprojectPath> -game -engine -dotnet
- *   - UBT 查找：RunUBT.bat / RunUBT.sh 优先，回退 UnrealBuildTool 二进制
+ *   - UBT 查找：UE 5.x 优先 UnrealBuildTool.exe，回退 RunUBT.bat/sh
+ *   - LLVM_PATH：自动检测 + 注入到 UBT 进程（GenerateClangDatabase 必需）
  *
  * 主要导出:
  *   - generateCompileCommands: 通过 Task API 执行 UBT 生成 compile_commands.json
@@ -332,24 +333,48 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   const ubtRelPath = `.${path.sep}${path.relative(opts.engineRoot, ubtAbsPath)}`;
 
   // 3. 构造参数（双路径）
-  // 默认使用 Native 模式（-projectfiles），因为：
-  //   a) 产出的 compile_commands.json 包含实际源文件路径，不是只有 gen.cpp
-  //   b) 不需要 LLVM/clang 工具链（Non-Native 需要 -mode=GenerateClangDatabase）
-  //   c) 和 unreal-clangd v3 行为一致
-  const isNative = opts.isNative !== false; // true / undefined → Native，只有明确 false 才走 Non-Native
+  //
+  // 默认 GenerateClangDatabase 模式（-mode=GenerateClangDataBase）
+  // 这是**实际生成 compile_commands.json** 的模式！
+  //
+  // ⚠️ 注意：-projectfiles（Native）模式**不**生成 compile_commands.json，
+  // 它只生成 VS project files (.vcxproj)。如果用户强制使用 Native 模式，
+  // compile_commands.json 会保持不变，可能导致 clangd 看到陈旧的内容。
+  const isNative = opts.isNative === true; // 只有明确 true 才走 Native，默认 GenerateClangDatabase
   const args = isNative ? buildNativeArgs(opts) : await buildNonNativeArgs(opts);
 
+  if (isNative) {
+    log.warn(
+      '[compileCommands] ⚠️ Using -projectfiles (Native) mode. ' +
+        'This mode generates VS project files but DOES NOT generate compile_commands.json. ' +
+        'compile_commands.json will remain unchanged (possibly stale). ' +
+        'Consider using the default GenerateClangDatabase mode instead.',
+    );
+  }
   log.info(`[compileCommands] mode=${isNative ? 'Native' : 'Non-Native'} project=${opts.project}`);
 
-  // 4. Non-Native 模式下尝试注入 LLVM_PATH（避免 Clang 工具链检查失败）
+  // 4. 尝试注入 LLVM_PATH（避免 Clang 工具链检查失败）
+  //    Native 模式不强制需要，但也注入以防其他子流程需要
   const taskEnv = await (async (): Promise<Record<string, string> | undefined> => {
-    if (isNative) return undefined;
     // 优先读全局环境变量
     const envLlvm = process.env.LLVM_PATH;
-    if (envLlvm) return { LLVM_PATH: envLlvm };
+    if (envLlvm) {
+      log.info(`[compileCommands] using LLVM_PATH from env: ${envLlvm}`);
+      return { LLVM_PATH: envLlvm };
+    }
     // 回退：通过 where clang 反推
     const found = await findClangToolchain();
-    if (found) return { LLVM_PATH: found };
+    if (found) {
+      log.info(`[compileCommands] auto-detected LLVM_PATH: ${found}`);
+      return { LLVM_PATH: found };
+    }
+    if (!isNative) {
+      log.warn(
+        '[compileCommands] LLVM_PATH not set and clang not found in PATH. ' +
+          'GenerateClangDatabase mode requires clang. Set vscodeUEHelper.clangdPath ' +
+          'or LLVM_PATH environment variable.',
+      );
+    }
     return undefined;
   })();
 
@@ -360,40 +385,51 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
 
   // 6. 定位输出文件
   //
-  // Native (-projectfiles): 产出到项目目录的 .vscode/<projectName>/
-  // Non-Native (-Mode=GenerateClangDatabase): 写到引擎根目录
+  // GenerateClangDatabase (-Mode=GenerateClangDatabase): 写到引擎根目录
+  //   <EngineRoot>/compile_commands.json
+  // Native (-projectfiles): 只生成 .vcxproj，**不**生成 compile_commands.json
   //
-  // 注意：projectfiles 命令在引擎目录执行，所以输出在引擎根目录的 .vscode/ 下
   const projectDir = path.dirname(opts.project);
   const candidates = [
-    // 优先：引擎根目录的 .vscode/<项目名>/（UBT -projectfiles 默认输出位置）
-    path.join(opts.engineRoot, '.vscode', projectName, FILE_NAME_COMPILE_COMMANDS),
+    // 优先：UE 5.x GenerateClangDatabase 默认输出到引擎根目录
+    path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS),
     // 备选：项目目录的 .vscode/vscodeuehelper/（linkToWorkspaceRoot 目标位置）
     path.join(projectDir, '.vscode', 'vscodeuehelper', FILE_NAME_COMPILE_COMMANDS),
     // 备选：项目目录根
     path.join(projectDir, FILE_NAME_COMPILE_COMMANDS),
-    // 备选：引擎根目录（Non-Native 模式）
-    path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS),
+    // 备选：引擎根目录的 .vscode/<项目名>/（旧版 Native 模式可能）
+    path.join(opts.engineRoot, '.vscode', projectName, FILE_NAME_COMPILE_COMMANDS),
     // 兼容 unreal-clangd 的输出目录名
     path.join(opts.engineRoot, '.vscode', 'unreal-clangd', FILE_NAME_COMPILE_COMMANDS),
   ];
 
   log.info(`[generateCompileCommands] searching compile_commands.json in candidates: ${JSON.stringify(candidates)}`);
 
+  // 找到**第一个存在且非空**的文件
   for (const p of candidates) {
     try {
-      await fs.access(p);
-      log.info(`[generateCompileCommands] found compile_commands.json at: ${p}`);
-      return p;
+      const stat = await fs.stat(p);
+      if (stat.size > 2) {
+        // > 2 字节：避免空数组 []
+        log.info(`[generateCompileCommands] found compile_commands.json at: ${p} (${stat.size} bytes)`);
+        return p;
+      } else {
+        log.warn(`[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`);
+      }
     } catch {
       // not here
     }
   }
 
   throw new Error(
-    `UBT task completed but compile_commands.json not found.\n` +
+    `UBT task completed but compile_commands.json not found or empty.\n` +
     `Checked:\n` +
-    candidates.map((c) => `  - ${c}`).join('\n'),
+    candidates.map((c) => `  - ${c}`).join('\n') +
+    `\n\nPossible causes:\n` +
+    `  1. UBT isNative mode (-projectfiles) does not generate compile_commands.json\n` +
+    `  2. LLVM/clang not found: set LLVM_PATH env var or vscodeUEHelper.clangdPath setting\n` +
+    `  3. Engine version compatibility issue\n` +
+    `Check the VSCode UE Helper output channel for UBT logs.`,
   );
 }
 

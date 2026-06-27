@@ -24,10 +24,13 @@ import { CompletionModeController } from './completionMode';
 export {
   writeClangdConfig,
   defaultClangdConfig,
-  renderClangdConfig,
+  renderManagedBlock,
+  upsertManagedBlock,
   replaceSystemIncludeBlock,
   findClangdConfig,
   SYSTEM_INCLUDE_FILTER_PREFIXES,
+  MANAGED_BEGIN,
+  MANAGED_END,
   type ClangdConfigOptions,
 } from './clangdConfig';
 export { generateCompileCommands, linkToWorkspaceRoot, isClangdAvailable, fillMissingCompileCommands } from './compileCommands';

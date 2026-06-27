@@ -125,10 +125,10 @@ export async function renderClangdFlags(opts: {
 }): Promise<string[]> {
   const flags: string[] = [];
 
-  // ⚠️ 重要：不要使用 /X flag！
-  // `/X` 会清除 clang 内置的 include 搜索路径，同时也会破坏
-  // compile_commands.json 中已有的 UE 头文件路径，导致 preamble
-  // 从 300MB 变成 267KB，UE 头文件完全找不到！
+  // ✅ /X flag 是必须的（参照 unreal-clangd 的 setCustomSysInc 实现）
+  // 作用：抑制 clang 内置的 include 搜索路径（避免与 MSVC 标准库冲突）
+  // 注意：compile_commands.json 中的 UE /I 路径不受 /X 影响（它们是命令行参数，不是内置 include）
+  flags.push('/X');
 
   // Include every SDK subdir (ucrt, shared, um, winrt, cppwinrt).
   try {

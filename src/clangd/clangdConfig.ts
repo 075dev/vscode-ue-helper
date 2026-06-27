@@ -1,219 +1,59 @@
 /**
  * clangdConfig —— 在项目根写 .clangd 文件
  *
- * 参考 engine-link: 抑制 MSVC 假阳性(builtin_definition 对 _MSC_VER,
- * unknown-warning-option 对 clang 的更严警告),配置 background indexing。
+ * 设计原则（参照 unreal-clangd v3 + engine-link）：
+ * 1. **极简默认**：默认 .clangd 只包含必要的 CompileFlags.CompilationDatabase +
+ *    Diagnostics.Suppress（4 行）。其他高级配置（InlayHints、Index）作为可选注入。
+ * 2. **begin/end 标记**：用 `# <<< vscodeuehelper-managed >>>` 和
+ *    `# <<< end-vscodeuehelper-managed >>>` 标记我们管理的配置块，保留用户已有内容。
+ * 3. **不破坏用户文件**：再次调用 writeClangdConfig 时，只替换 managed block 内部，
+ *    用户自己写的 .clangd 内容（如 custom PathMatch 规则）完全保留。
+ * 4. **clangd 22.x 兼容**：
+ *    - CompilationDatabase 必须放在 CompileFlags 内部
+ *    - 移除 Preamble/Hover/Completion（22.x 不支持，会报 Unknown Config key）
+ *    - If 块不包含 Index（22.x 仍报 Unknown If key 'Index'）
  *
- * .clangd 是 YAML 格式。理想用 js-yaml 写,但避免加依赖,直接输出纯文本。
+ * ## 典型生成的 .clangd
  *
- * 主要导出:
- *   - renderClangdConfig: ClangdConfig 对象 → YAML 文本
- *   - writeClangdConfig: 写默认 .clangd 到项目根
- *   - defaultClangdConfig: 默认 ClangdConfig 对象
- *   - replaceSystemIncludeBlock: 替换 .clangd 里的 /imsvc 等 SDK 标志块(setSystemIncludes 用)
+ * ```yaml
+ * # <<< vscodeuehelper-managed >>>
+ * # 编辑上方/下方内容可保留，但请勿修改此标记块。
+ * CompileFlags:
+ *   CompilationDatabase: .vscode/vscodeuehelper
+ * Diagnostics:
+ *   Suppress:
+ *     - builtin_definition
+ *     - unknown-warning-option
+ *     - deprecated-declarations
+ *     - unused-includes
+ *     - builtin-macro-redefinition
+ *   UnusedIncludes: None
+ *   MissingIncludes: None
+ * InlayHints:
+ *   Enabled: Yes
+ * Index:
+ *   Background: Build
+ * # <<< end-vscodeuehelper-managed >>>
+ * ```
  */
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { ClangdConfig, IfBlock } from './types';
 
-/**
- * Render a ClangdConfig object as a `.clangd` YAML string.
- *
- * The format is a small subset of YAML. We deliberately avoid a full
- * YAML library — clangd's `.clangd` only requires strings, arrays of
- * strings, and one level of nesting.
- */
-export function renderClangdConfig(config: ClangdConfig): string {
-  const lines: string[] = [];
+// ===== Managed block 标记 =====
+export const MANAGED_BEGIN = '# <<< vscodeuehelper-managed >>>';
+export const MANAGED_END = '# <<< end-vscodeuehelper-managed >>>';
 
-  // ========== CompileFlags ==========
-  if (config.CompileFlags) {
-    lines.push('CompileFlags:');
-    if (config.CompileFlags.Remove && config.CompileFlags.Remove.length > 0) {
-      lines.push('  Remove:');
-      for (const item of config.CompileFlags.Remove) {
-        lines.push(`    - ${yamlString(item)}`);
-      }
-    }
-    if (config.CompileFlags.Add && config.CompileFlags.Add.length > 0) {
-      lines.push('  Add:');
-      for (const item of config.CompileFlags.Add) {
-        lines.push(`    - ${yamlString(item)}`);
-      }
-    }
-    // ✅ clangd 22.x 要求：CompilationDatabase 必须放在 CompileFlags 内部
-    if (config.CompileFlags.CompilationDatabase) {
-      lines.push(`  CompilationDatabase: ${config.CompileFlags.CompilationDatabase}`);
-    }
-  }
+// ===== 默认 .clangd 内容 =====
 
-  // ========== Preamble 缓存优化 ==========
-  if (config.Preamble) {
-    lines.push('Preamble:');
-    if (config.Preamble.Storage) {
-      lines.push(`  Storage: ${config.Preamble.Storage}`);
-    }
-  }
-
-  // ========== Diagnostics ==========
-  if (config.Diagnostics) {
-    lines.push('Diagnostics:');
-    if (config.Diagnostics.Suppress && config.Diagnostics.Suppress.length > 0) {
-      lines.push('  Suppress:');
-      for (const item of config.Diagnostics.Suppress) {
-        lines.push(`    - ${yamlString(item)}`);
-      }
-    }
-    if (config.Diagnostics.UnusedIncludes) {
-      lines.push(`  UnusedIncludes: ${config.Diagnostics.UnusedIncludes}`);
-    }
-    if (config.Diagnostics.MissingIncludes) {
-      lines.push(`  MissingIncludes: ${config.Diagnostics.MissingIncludes}`);
-    }
-  }
-
-  // ========== InlayHints ==========
-  if (config.InlayHints) {
-    lines.push('InlayHints:');
-    if (config.InlayHints.Enabled !== undefined) {
-      lines.push(`  Enabled: ${config.InlayHints.Enabled}`);
-    }
-    if (config.InlayHints.ParameterNames !== undefined) {
-      lines.push(`  ParameterNames: ${config.InlayHints.ParameterNames}`);
-    }
-    if (config.InlayHints.DeducedTypes !== undefined) {
-      lines.push(`  DeducedTypes: ${config.InlayHints.DeducedTypes}`);
-    }
-    if (config.InlayHints.Designators !== undefined) {
-      lines.push(`  Designators: ${config.InlayHints.Designators}`);
-    }
-    if (config.InlayHints.Types !== undefined) {
-      lines.push(`  Types: ${config.InlayHints.Types}`);
-    }
-  }
-
-  // ========== Hover ==========
-  if (config.Hover) {
-    lines.push('Hover:');
-    if (config.Hover.ShowAKA !== undefined) {
-      lines.push(`  ShowAKA: ${config.Hover.ShowAKA}`);
-    }
-  }
-
-  // ========== Completion ==========
-  if (config.Completion) {
-    lines.push('Completion:');
-    if (config.Completion.AllScopes !== undefined) {
-      lines.push(`  AllScopes: ${config.Completion.AllScopes}`);
-    }
-  }
-
-  // ========== Index ==========
-  if (config.Index) {
-    lines.push('Index:');
-    if (config.Index.Background) {
-      lines.push(`  Background: ${config.Index.Background}`);
-    }
-    if (config.Index.StandardIndexCapacity !== undefined) {
-      lines.push(`  StandardIndexCapacity: ${config.Index.StandardIndexCapacity}`);
-    }
-  }
-
-  // ========== If-blocks (render AFTER top-level fields) ==========
-  if (config.If && config.If.length > 0) {
-    for (const block of config.If) {
-      lines.push(...renderIfBlock(block));
-    }
-  }
-
-  return lines.join('\n') + '\n';
-}
-
-/**
- * Render a single IfBlock as YAML lines.
- * Each If block is its own mapping with nested CompileFlags / Index / Diagnostics.
- */
-function renderIfBlock(block: IfBlock): string[] {
-  const lines: string[] = [];
-  lines.push('If:');
-  if (block.PathMatch) {
-    lines.push(`  PathMatch: ${block.PathMatch}`);
-  }
-  if (block.CompileFlags) {
-    lines.push('  CompileFlags:');
-    if (block.CompileFlags.Remove && block.CompileFlags.Remove.length > 0) {
-      lines.push('    Remove:');
-      for (const item of block.CompileFlags.Remove) {
-        lines.push(`      - ${yamlString(item)}`);
-      }
-    }
-    if (block.CompileFlags.Add && block.CompileFlags.Add.length > 0) {
-      lines.push('    Add:');
-      for (const item of block.CompileFlags.Add) {
-        lines.push(`      - ${yamlString(item)}`);
-      }
-    }
-  }
-  if (block.Index) {
-    lines.push('  Index:');
-    if (block.Index.Background) {
-      lines.push(`    Background: ${block.Index.Background}`);
-    }
-  }
-  if (block.Diagnostics) {
-    lines.push('  Diagnostics:');
-    if (block.Diagnostics.Suppress && block.Diagnostics.Suppress.length > 0) {
-      lines.push('    Suppress:');
-      for (const item of block.Diagnostics.Suppress) {
-        lines.push(`      - ${yamlString(item)}`);
-      }
-    }
-  }
-  return lines;
-}
-
-/** Options for building the default `.clangd` config. */
-export interface ClangdConfigOptions {
-  /**
-   * Completion mode — 'fast' omits macro completions, 'slow' adds
-   * `-include <macroCompletionHelper.h>` to let clangd index UE macros.
-   */
-  completionMode?: 'fast' | 'slow';
-  /**
-   * Absolute path to macroCompletionHelper.h. Required when
-   * completionMode === 'slow'. Ignored in fast mode.
-   */
-  macroHelperPath?: string;
-  /**
-   * Additional headers (typically from preparseIncludes.ts) to inject as
-   * `-include <header>` flags before the macroHelperPath include.
-   * These are the SharedPCH headers that tell clangd about UE macros.
-   */
-  preparseHeaders?: string[];
-  /**
-   * Windows SDK + MSVC system include flags (Windows only).
-   * These are generated by detectSystemIncludes() and injected at the
-   * BEGINNING of CompileFlags.Add so clangd finds Windows headers correctly.
-   * 
-   * ⚠️ Important: Generated ONCE at Step 1 of createProject — NEVER modify
-   * .clangd afterwards! That breaks YAML formatting.
-   */
-  systemIncludeFlags?: string[];
-}
-
-/** Default config for UE C++ projects. */
+/** 默认 ClangdConfig: 极简模板 + 按需注入 */
 export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfig {
   const addFlags: string[] = [];
 
-  // ========== Windows SDK + MSVC 系统头文件（Windows only） ==========
-  // ⚠️ 只在 Step 1 注入一次！后续绝不修改 .clangd，避免 YAML 格式破坏！
-  // 这些 flag 由 detectSystemIncludes() 自动检测生成，包含：
-  //   - /X: 清除 clang 默认的 include 搜索路径
-  //   - /imsvc <path>: Windows SDK + MSVC 头文件路径
-  //   - -fms-compatibility-version: MSVC 编译器版本
-  //
-  // 注意：UE 的头文件路径来自 compile_commands.json，不受 /X 影响
+  // ========== Windows SDK + MSVC 系统头文件 ==========
+  // 由 detectSystemIncludes() 生成，包含 /X + /imsvc + -fms-compatibility-version
+  // 仅当用户主动触发 setSystemIncludes 命令时传入，初始 creatProject 不自动注入
   if (opts.systemIncludeFlags && opts.systemIncludeFlags.length > 0) {
     addFlags.push(...opts.systemIncludeFlags);
   }
@@ -227,16 +67,16 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
     '-Wno-deprecated-declarations',
   );
 
-  // SharedPCH preparse headers — both fast and slow modes get these.
-  // They tell clangd about UE's generated .generated.h and module PCH.
+  // ========== SharedPCH preparse headers ==========
+  // 注入 UE 核心头文件路径，让 clangd 能识别 UCLASS / UPROPERTY 宏
   if (opts.preparseHeaders && opts.preparseHeaders.length > 0) {
     for (const header of opts.preparseHeaders) {
       addFlags.push('-include', header);
     }
   }
 
-  // Slow 模式：预包含宏补全头文件，让 clangd 能补全 UPROPERTY / UFUNCTION 等 UE 宏
-  // (preparseHeaders already injected above, so this appends after them)
+  // ========== Slow 模式宏补全 ==========
+  // 预包含 macroCompletionHelper.h，让 clangd 能补全 UE 宏
   if (opts.completionMode === 'slow' && opts.macroHelperPath) {
     addFlags.push('-include');
     addFlags.push(opts.macroHelperPath);
@@ -244,201 +84,236 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
 
   return {
     CompileFlags: {
-      // UE's UHT emits -FI with absolute paths that clangd can't resolve;
-      // drop them so clangd uses its own -include injection.
-      Remove: ['-FI*', '-Wno-*'],
-      Add: addFlags,
-      // ✅ clangd 22.x 要求：CompilationDatabase 必须放在 CompileFlags 内部
-      // 不能放在根级别，否则会报错 "Unknown Config key 'CompilationDatabase'"
+      Remove: addFlags.length > 0 ? ['-FI*', '-Wno-*'] : undefined,
+      Add: addFlags.length > 0 ? addFlags : undefined,
+      // clangd 22.x 要求：放在 CompileFlags 内部，不能在根级别
       CompilationDatabase: '.vscode/vscodeuehelper',
-    },
-    // Preamble 缓存优化 - 大幅加快文件打开速度（clangd 16+）
-    // clangd 会把头文件预编译部分缓存到磁盘，第二次打开同一个文件时速度提升 5-10 倍
-    Preamble: {
-      Storage: 'Disk',
     },
     Diagnostics: {
       Suppress: [
+        // MSVC 头文件定义了 Clang 也认作 builtin 的符号，触发 builtin_definition
+        'builtin_definition',
+        // MSVC 的 /W4 警告 Clang 认作未知警告
         'unknown-warning-option',
-        'unused-includes',
+        // UE 自有 deprecation 宏
         'deprecated-declarations',
-        // MSVC builds set _MSC_VER; clangd's builtin_definition check
-        // incorrectly flags the macro as redefined.
+        // UE 头文件 include 链复杂，unused-includes 误报率高
+        'unused-includes',
+        // MSVC 设置 _MSC_VER；Clang 的 builtin_macro_redefinition 误报
         'builtin-macro-redefinition',
       ],
-      // UE 头文件依赖复杂，关闭严格的未使用/缺失头文件检查（clangd 15+ 支持）
+      // UE 头文件依赖复杂，关闭严格检查避免误报
       UnusedIncludes: 'None',
       MissingIncludes: 'None',
     },
-    // 内嵌提示：让代码更易读 (clangd 14+)
     InlayHints: {
       Enabled: 'Yes',
-      ParameterNames: 'Yes',  // 调用函数时显示参数名
-      DeducedTypes: 'Yes',    // 显示 auto 变量的实际类型
-      Designators: 'Yes',     // 显示 lambda 返回类型和结构体初始化器
-    },
-    // 悬停显示类型别名 (clangd 14+)
-    Hover: {
-      ShowAKA: 'Yes',  // 悬停时显示 "also known as" 类型别名
-    },
-    // 补全配置 (clangd 14+)
-    Completion: {
-      AllScopes: 'Yes',  // 在所有作用域中搜索补全符号（UE 项目必需）
+      ParameterNames: 'Yes',
+      DeducedTypes: 'Yes',
+      Designators: 'Yes',
     },
     Index: {
       Background: 'Build',
     },
-    If: defaultIfBlocks(),
+    // If 块必须为空（clangd 22.x 不支持 Index 在 If 块中）
+    If: [],
   };
 }
 
-/**
- * Default UE If-blocks for clangd performance optimisation.
- *
- * ⚠️ clangd 22.x 限制：If 块中不支持 Index 配置！
- * 会报错："Unknown If key 'Index'"
- *
- * 所以目前只能在 If 块中使用：
- * - ✅ PathMatch
- * - ✅ CompileFlags (Add/Remove)
- * - ✅ Diagnostics (Suppress)
- * - ❌ Index（不支持）
- *
- * 等 clangd 后续版本支持 Index 在 If 块中后，可以重新启用引擎跳过优化：
- *   - Engine/Source/.* → skip background indexing (用户通常不修改引擎代码)
- *   - Source/.*         → keep full background indexing for project sources
- *
- * 目前先返回空数组，避免 clangd 22.x 报错。
- */
-export function defaultIfBlocks(): IfBlock[] {
-  // clangd 22.x does not support Index in If-blocks yet
-  // Return empty array to avoid "Unknown If key 'Index'" warnings
-  return [];
+/** Options for building the default `.clangd` config. */
+export interface ClangdConfigOptions {
+  completionMode?: 'fast' | 'slow';
+  macroHelperPath?: string;
+  preparseHeaders?: string[];
+  /**
+   * 系统头文件 flag（/X + /imsvc + -fms-compatibility-version）。
+   * 仅 Windows，由 setSystemIncludes 命令注入。
+   * 不参与默认模板生成，避免破坏 UE 头文件路径。
+   */
+  systemIncludeFlags?: string[];
 }
 
-/** Write `.clangd` to project root. Returns the path written. */
+// ===== 渲染：把 ClangdConfig 对象 → YAML 文本 =====
+
+/**
+ * 把 ClangdConfig 对象渲染为 YAML 文本（极简格式，不含注释）。
+ * 注意：实际写入 .clangd 时使用 renderManagedBlock()，包含 begin/end 标记。
+ * 导出供测试使用。
+ */
+export function renderYaml(config: ClangdConfig): string {
+  const lines: string[] = [];
+
+  if (config.CompileFlags) {
+    lines.push('CompileFlags:');
+    if (config.CompileFlags.Remove?.length) {
+      lines.push('  Remove:');
+      for (const item of config.CompileFlags.Remove) {
+        lines.push(`    - ${yamlString(item)}`);
+      }
+    }
+    if (config.CompileFlags.Add?.length) {
+      lines.push('  Add:');
+      for (const item of config.CompileFlags.Add) {
+        lines.push(`    - ${yamlString(item)}`);
+      }
+    }
+    if (config.CompileFlags.CompilationDatabase) {
+      lines.push(`  CompilationDatabase: ${config.CompileFlags.CompilationDatabase}`);
+    }
+  }
+
+  if (config.Diagnostics) {
+    lines.push('Diagnostics:');
+    if (config.Diagnostics.Suppress?.length) {
+      lines.push('  Suppress:');
+      for (const item of config.Diagnostics.Suppress) {
+        lines.push(`    - ${yamlString(item)}`);
+      }
+    }
+    if (config.Diagnostics.UnusedIncludes) {
+      lines.push(`  UnusedIncludes: ${config.Diagnostics.UnusedIncludes}`);
+    }
+    if (config.Diagnostics.MissingIncludes) {
+      lines.push(`  MissingIncludes: ${config.Diagnostics.MissingIncludes}`);
+    }
+  }
+
+  if (config.InlayHints) {
+    lines.push('InlayHints:');
+    if (config.InlayHints.Enabled) lines.push(`  Enabled: ${config.InlayHints.Enabled}`);
+    if (config.InlayHints.ParameterNames) lines.push(`  ParameterNames: ${config.InlayHints.ParameterNames}`);
+    if (config.InlayHints.DeducedTypes) lines.push(`  DeducedTypes: ${config.InlayHints.DeducedTypes}`);
+    if (config.InlayHints.Designators) lines.push(`  Designators: ${config.InlayHints.Designators}`);
+  }
+
+  if (config.Index) {
+    lines.push('Index:');
+    if (config.Index.Background) lines.push(`  Background: ${config.Index.Background}`);
+    if (config.Index.StandardIndexCapacity !== undefined) {
+      lines.push(`  StandardIndexCapacity: ${config.Index.StandardIndexCapacity}`);
+    }
+  }
+
+  if (config.If && config.If.length > 0) {
+    for (const block of config.If) {
+      lines.push(...renderIfBlock(block));
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function renderIfBlock(block: IfBlock): string[] {
+  const lines: string[] = ['If:'];
+  if (block.PathMatch) lines.push(`  PathMatch: ${block.PathMatch}`);
+  if (block.CompileFlags) {
+    lines.push('  CompileFlags:');
+    if (block.CompileFlags.Add?.length) {
+      lines.push('    Add:');
+      for (const item of block.CompileFlags.Add) {
+        lines.push(`      - ${yamlString(item)}`);
+      }
+    }
+    if (block.CompileFlags.Remove?.length) {
+      lines.push('    Remove:');
+      for (const item of block.CompileFlags.Remove) {
+        lines.push(`      - ${yamlString(item)}`);
+      }
+    }
+  }
+  if (block.Diagnostics) {
+    lines.push('  Diagnostics:');
+    if (block.Diagnostics.Suppress?.length) {
+      lines.push('    Suppress:');
+      for (const item of block.Diagnostics.Suppress) {
+        lines.push(`      - ${yamlString(item)}`);
+      }
+    }
+  }
+  return lines;
+}
+
+/** 把字符串安全地放入 YAML（必要时加引号、转义） */
+function yamlString(s: string): string {
+  if (/[:#&*!|>'"%@`{}\[\],\n]/.test(s) || s !== s.trim()) {
+    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+  return s;
+}
+
+// ===== Managed block =====
+
+/**
+ * 构造带 begin/end 标记的 managed block 文本。
+ * 用户自己写的 .clangd 内容（标记外）会保留下来。
+ */
+export function renderManagedBlock(config: ClangdConfig = defaultClangdConfig()): string {
+  return [
+    MANAGED_BEGIN,
+    '# 此块由 VSCode UE Helper 自动管理，请勿手动编辑。',
+    '# 若需自定义配置，请在下方（本块之外）添加。',
+    renderYaml(config),
+    MANAGED_END,
+  ].join('\n');
+}
+
+/**
+ * 在已有 .clangd 内容中 upsert managed block。
+ * - 已有 managed block：替换块内内容，保留块外用户内容
+ * - 无 managed 标记：无论有无内容，替换整个文件为 managed block（避免重复键）
+ * - 完全空：写入 managed block
+ */
+export function upsertManagedBlock(existing: string, config: ClangdConfig = defaultClangdConfig()): string {
+  const newBlock = renderManagedBlock(config);
+  const beginIdx = existing.indexOf(MANAGED_BEGIN);
+  const endIdx = existing.indexOf(MANAGED_END);
+
+  // 已有完整的 managed block → 替换块内，保留块外用户内容
+  if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
+    const before = existing.slice(0, beginIdx).replace(/\s+$/, '');
+    const afterStart = endIdx + MANAGED_END.length;
+    const after = existing.slice(afterStart).replace(/^\s+/, '');
+
+    const parts: string[] = [];
+    if (before) parts.push(before);
+    parts.push(newBlock);
+    if (after) parts.push(after);
+    return parts.join('\n\n') + '\n';
+  }
+
+  // 完全没有 managed block：
+  // ⚠️ 关键：替换整个文件为 managed block，而不是追加！
+  // 这样做避免了已有内容（CompileFlags/Diagnostics等）与 managed block 重复的问题。
+  // 用户自定义配置应放在结束标记 # <<< end-vscodeuehelper-managed >>> 之后。
+  return newBlock + '\n';
+}
+
+// ===== 写文件 =====
+
+/**
+ * 把 .clangd 写到项目根目录。保留用户已有内容，upsert managed block。
+ * @returns 写入的文件路径
+ */
 export async function writeClangdConfig(
   projectPath: string,
   opts: ClangdConfigOptions = {},
 ): Promise<string> {
   const target = path.join(path.dirname(projectPath), '.clangd');
-  const yaml = renderClangdConfig(defaultClangdConfig(opts));
-  await fs.writeFile(target, yaml, 'utf-8');
+  const config = defaultClangdConfig(opts);
+
+  let existing = '';
+  try {
+    existing = await fs.readFile(target, 'utf-8');
+  } catch {
+    // 文件不存在，正常
+  }
+
+  const newContent = upsertManagedBlock(existing, config);
+  await fs.writeFile(target, newContent, 'utf-8');
   return target;
 }
 
-/**
- * Filter prefix list for `CompileFlags.Add` items that come from
- * `setSystemIncludes` (MSVC / SDK / `/X`). Used to replace the previous
- * system-include block without disturbing user-added flags.
- */
-export const SYSTEM_INCLUDE_FILTER_PREFIXES = [
-  '/imsvc',
-  '-fms-compatibility-version=',
-  '/std:',
-];
-
-/**
- * Replace the system-include block inside a .clangd file. Existing flags
- * matching `SYSTEM_INCLUDE_FILTER_PREFIXES` are dropped; the new flags
- * are spliced in at the start of `CompileFlags.Add`. Returns the new file
- * contents. No-op (returns input unchanged) if nothing changed.
- */
-export function replaceSystemIncludeBlock(yaml: string, newFlags: string[]): string {
-  // Match the Add: array under CompileFlags:
-  //   CompileFlags:
-  //     Remove:
-  //       - ...
-  //     Add:
-  //       - foo
-  //       - /imsvc...
-  // We rewrite by lines.
-  const lines = yaml.split(/\r?\n/);
-  let addIdx = -1;
-  let inCompileFlags = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
-
-    // 检测是否进入 CompileFlags 块（顶级别名）
-    if (/^CompileFlags:\s*$/.test(line)) {
-      inCompileFlags = true;
-      continue;
-    }
-
-    // 如果在 CompileFlags 块内，并且检测到非缩进的新顶级块，则退出
-    if (inCompileFlags && /^[A-Za-z]+:\s*$/.test(line)) {
-      inCompileFlags = false;
-      break;
-    }
-
-    // 在 CompileFlags 块内找到 Add:
-    if (inCompileFlags && /^\s+Add:\s*$/.test(line)) {
-      addIdx = i;
-      break;
-    }
-  }
-
-  if (addIdx === -1) {
-    // No CompileFlags.Add block found — find existing CompileFlags: and add Add: to it
-    let compileFlagsIdx = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (/^CompileFlags:\s*$/.test(lines[i] ?? '')) {
-        compileFlagsIdx = i;
-        break;
-      }
-    }
-
-    if (compileFlagsIdx !== -1) {
-      // 找到现有的 CompileFlags:，在其后插入 Add:
-      const before = lines.slice(0, compileFlagsIdx + 1);
-      const after = lines.slice(compileFlagsIdx + 1);
-      const addBlock = ['  Add:', ...newFlags.map((f) => `    - ${yamlString(f)}`)];
-      return [...before, ...addBlock, ...after].join('\n');
-    }
-
-    // 没有 CompileFlags:，才创建新的
-    const compileFlagsBlock = [
-      'CompileFlags:',
-      '  Add:',
-      ...newFlags.map((f) => `    - ${yamlString(f)}`),
-      '',
-    ].join('\n');
-
-    return `${yaml.trimEnd()}\n${compileFlagsBlock}\n`;
-  }
-
-  // Walk the Add: block, collecting non-system-include lines.
-  const kept: string[] = [];
-  let i = addIdx + 1;
-  while (i < lines.length) {
-    const line = lines[i] ?? '';
-    const itemMatch = line.match(/^\s*-\s+(.+?)\s*$/);
-    if (!itemMatch) break; // end of Add: block
-    const value = itemMatch[1] ?? '';
-    // Strip surrounding YAML quotes for the prefix test.
-    const unquoted = value.replace(/^["'](.*)["']$/, '$1');
-    const isSystemInclude = SYSTEM_INCLUDE_FILTER_PREFIXES.some((p) => unquoted.startsWith(p));
-    if (!isSystemInclude) kept.push(line);
-    i++;
-  }
-
-  // Reconstruct: CompileFlags: \n Add: \n <new> \n <kept> \n <rest>
-  const indent = '    ';
-  const rebuilt: string[] = [];
-  rebuilt.push(lines[addIdx - 1] ?? 'CompileFlags:'); // "CompileFlags:"
-  rebuilt.push(lines[addIdx] ?? '  Add:'); // "  Add:"
-  for (const f of newFlags) rebuilt.push(`${indent}- ${yamlString(f)}`);
-  for (const k of kept) rebuilt.push(k);
-  for (; i < lines.length; i++) rebuilt.push(lines[i] ?? '');
-
-  return rebuilt.join('\n');
-}
-
-/**
- * Locate the `.clangd` file for a given project (project root = dirname
- * of the .uproject). Returns null if no file exists.
- */
+/** 找到 .clangd 的绝对路径。如果不存在返回 null。 */
 export async function findClangdConfig(projectPath: string): Promise<string | null> {
   const target = path.join(path.dirname(projectPath), '.clangd');
   try {
@@ -449,13 +324,141 @@ export async function findClangdConfig(projectPath: string): Promise<string | nu
   }
 }
 
+// ===== 系统头文件注入（setSystemIncludes 用）=====
+
 /**
- * Quote a string for YAML if it contains characters that need it.
- * Conservative — only quote when definitely needed.
+ * 过滤前缀：用于识别 system include 相关的 flag
+ * 匹配 /X, /imsvc*, -fms-compatibility-version=, /std:*
  */
-function yamlString(s: string): string {
-  if (/[:#&*!|>'"%@`{}\[\],\n]/.test(s) || s !== s.trim()) {
-    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+export const SYSTEM_INCLUDE_FILTER_PREFIXES = [
+  '/X',
+  '/imsvc',
+  '-fms-compatibility-version=',
+  '/std:',
+];
+
+/**
+ * 在 .clangd 的 CompileFlags.Add 中替换/注入系统头文件 flag。
+ *
+ * 设计：
+ * 1. 把 Add 中的旧 system include flag 全部移除（按前缀）
+ * 2. 把 newFlags 插入到 Add 顶部（system includes 优先于其他 flag）
+ * 3. 保留其他用户添加的 flag
+ *
+ * ⚠️ 必须先用 writeClangdConfig 写入默认配置（确保有 managed block 结构）。
+ */
+export function replaceSystemIncludeBlock(yaml: string, newFlags: string[]): string {
+  const lines = yaml.split(/\r?\n/);
+  let managedBegin = -1;
+  let managedEnd = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i]?.trim() === MANAGED_BEGIN) managedBegin = i;
+    if (lines[i]?.trim() === MANAGED_END) managedEnd = i;
   }
-  return s;
+
+  if (managedBegin === -1 || managedEnd === -1) {
+    // 没有 managed block → 走老的 upsertManagedBlock 逻辑
+    const newYaml = upsertManagedBlock(yaml, {
+      CompileFlags: {
+        Add: newFlags,
+        CompilationDatabase: '.vscode/vscodeuehelper',
+      },
+    });
+    return newYaml;
+  }
+
+  // 在 managed block 内找到 CompileFlags.Add
+  const before = lines.slice(0, managedBegin + 1);
+  const after = lines.slice(managedEnd);
+  const inner = lines.slice(managedBegin + 1, managedEnd);
+
+  // 在 inner 中找 Add: 块
+  let inCompileFlags = false;
+  let addIdx = -1;
+  for (let i = 0; i < inner.length; i++) {
+    const line = inner[i] ?? '';
+    if (/^CompileFlags:\s*$/.test(line)) {
+      inCompileFlags = true;
+      continue;
+    }
+    if (inCompileFlags && /^[A-Za-z]/.test(line) && /:\s*$/.test(line)) {
+      inCompileFlags = false;
+      continue;
+    }
+    if (inCompileFlags && /^\s+Add:\s*$/.test(line)) {
+      addIdx = i;
+      break;
+    }
+  }
+
+  if (addIdx === -1) {
+    // 没有 Add: 块 → 在 CompileFlags: 后插入
+    const newInner: string[] = [];
+    let inserted = false;
+    for (let i = 0; i < inner.length; i++) {
+      newInner.push(inner[i] ?? '');
+      if (/^CompileFlags:\s*$/.test(inner[i] ?? '') && !inserted) {
+        newInner.push('  Add:');
+        for (const f of newFlags) {
+          newInner.push(`    - ${yamlString(f)}`);
+        }
+        inserted = true;
+      }
+    }
+    if (!inserted) {
+      // 完全没找到 CompileFlags: → 追加
+      newInner.push('CompileFlags:');
+      newInner.push('  Add:');
+      for (const f of newFlags) {
+        newInner.push(`    - ${yamlString(f)}`);
+      }
+    }
+    return [...before, ...newInner, ...after].join('\n');
+  }
+
+  // 找到 Add:，替换其中的 system include flag
+  const keptLines: string[] = [];
+  let i = addIdx + 1;
+  while (i < inner.length) {
+    const line = inner[i] ?? '';
+    const m = line.match(/^\s*-\s+(.+?)\s*$/);
+    if (!m) break; // Add 块结束
+    const value = (m[1] ?? '').replace(/^["'](.*)["']$/, '$1');
+    const isSysInc = SYSTEM_INCLUDE_FILTER_PREFIXES.some((p) => value.startsWith(p));
+    if (!isSysInc) keptLines.push(line);
+    i++;
+  }
+
+  // 重组：CompileFlags: → Add: → 新 system include flags → 用户 flag
+  const newInner: string[] = [];
+  for (let j = 0; j < inner.length; j++) {
+    if (j === addIdx) {
+      // Add: 这一行
+      newInner.push(inner[j] ?? '  Add:');
+      // 插入新 system include flags
+      for (const f of newFlags) {
+        newInner.push(`    - ${yamlString(f)}`);
+      }
+      // 跳过原有的 system include flag（已过滤）
+      i = addIdx + 1;
+      while (i < inner.length) {
+        const line = inner[i] ?? '';
+        const m = line.match(/^\s*-\s+(.+?)\s*$/);
+        if (!m) break;
+        if (keptLines.includes(line)) {
+          newInner.push(line);
+        }
+        i++;
+      }
+      // 跳过原始 inner 中已处理的部分
+      j = i - 1; // 循环会 j++
+    } else if (j > addIdx && j < i) {
+      // 跳过原 Add 块内容
+      continue;
+    } else {
+      newInner.push(inner[j] ?? '');
+    }
+  }
+
+  return [...before, ...newInner, ...after].join('\n');
 }

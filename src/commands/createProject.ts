@@ -2,15 +2,20 @@
  * createProject —— 一次性初始化 UE + clangd 工作区
  *
  * 5 步流程（每步在 VS Code 进度条上报告）：
- *   1. 写 .clangd（使用当前 completionMode）
- *   2. 跑 UBT 生成 compile_commands.json
+ *   1. 写 .clangd（极简模板 + preparse headers + 宏补全）
+ *   2. 跑 UBT GenerateClangDatabase 生成 compile_commands.json
  *   3. 创建补全文件系统（5 个 curated header 文件）
  *   4. 将 completionHelper.cpp 加入 compile_commands.json
- *   5. Windows: 设置系统包含路径（SDK + MSVC + C++ 标准）
- *
+ *   5. 完成提示
+
  * 额外步骤（后台执行）：
  *   - 修改 rsp 文件移除 PCH 引用
+ *   - 创建 RSP 匹配器（引擎源码导航用）
+ *   - 补全缺失的 compile_commands.json 条目
  *   - 工作区备份（防止 UBT 覆盖 .code-workspace）
+ *
+ * 系统头文件（/X + /imsvc + -fms-compatibility-version）不在本任务中注入，
+ * 需用户手动通过 "Set System Includes" 命令触发，避免破坏 UE 头文件路径。
  *
  * 任何一步失败都允许继续（其他步骤独立）。最后弹汇总结果。
  */
@@ -28,8 +33,8 @@ import {
   startModifyResponseFiles,
   startCreateRspMatchers,
   fillMissingCompileCommands,
+  getPrepareIncludesList,
 } from '@clangd';
-import { detectSystemIncludesWithEngineRecommendation } from '@clangd/windowsSdk';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
 
@@ -76,43 +81,35 @@ export async function executeCreateProject(
       cancellable: false,
     },
     async (progress) => {
-      // Step 1: 一次性生成完整的 .clangd（包含系统头文件！）
-      // ⚠️ 关键：这里就生成最终版的 .clangd，后续绝不修改！
-      // 避免后续调用 replaceSystemIncludeBlock 破坏 YAML 格式！
+      // Step 1: 写入 .clangd（极简模板 + preparse headers + 宏补全）
+      // 使用 begin/end 标记管理配置块，保留用户已有内容
+      // ⚠️ 系统头文件（/X + /imsvc）不在本步注入，由用户通过 setSystemIncludes 手动触发
       progress.report({
         message: `Step 1/5: writing .clangd (mode: ${config.completionMode})...`,
         increment: 0,
       });
       try {
-        // Windows 平台：自动检测系统头文件 + 应用引擎推荐的 SDK 版本
-        let systemIncludeFlags: string[] | undefined;
-        if (process.platform === 'win32') {
-          logger.info('[createProject] 自动检测 Windows SDK + MSVC 版本...');
-          const result = await detectSystemIncludesWithEngineRecommendation(
-            engine.path,
-            config.clangdPath,
-            logger,
-          );
-          systemIncludeFlags = result ?? undefined;
-          if (systemIncludeFlags) {
-            logger.info(`[createProject] 生成了 ${systemIncludeFlags.length} 个系统头文件 flag`);
-          }
-        }
+        // 加载 UE SharedPCH preparse headers（UCLASS/UPROPERTY 宏补全必需）
+        const preparseHeaders = await getPrepareIncludesList(
+          config.completionMode,
+          project.path,
+        );
 
         const clangdConfigPath = await writeClangdConfig(project.path, {
           completionMode: config.completionMode,
           macroHelperPath:
             config.completionMode === 'slow' ? macroHelperPath : undefined,
-          systemIncludeFlags: systemIncludeFlags ?? undefined,
+          preparseHeaders,
         });
         results.push({
           step: 'Write .clangd',
           ok: true,
-          detail: systemIncludeFlags
-            ? `${clangdConfigPath} (${systemIncludeFlags.length} system include flags, SDK version matched to UE recommendation)`
-            : clangdConfigPath,
+          detail: clangdConfigPath,
         });
-        logger.info(`[createProject] wrote ${clangdConfigPath}`);
+        logger.info(
+          `[createProject] wrote ${clangdConfigPath} ` +
+          `(mode: ${config.completionMode}, preparse: ${preparseHeaders.length} headers)`,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push({ step: 'Write .clangd', ok: false, detail: msg });
@@ -137,7 +134,10 @@ export async function executeCreateProject(
         jsonPath = await generateCompileCommands({
           project: project.path,
           engineRoot: engine.path,
-          isNative: true, // Native 模式：-projectfiles，产出实际源文件路径
+          // GenerateClangDatabase 模式：实际生成 compile_commands.json
+          // 参考：UE 5.x 用 -mode=GenerateClangDatabase，需要 LLVM/clang
+          // isNative: true 用的是 -projectfiles，不会生成 compile_commands.json！
+          isNative: false,
         });
 
         logger.info(`[createProject] step 2 generateCompileCommands returned jsonPath=${jsonPath}`);
@@ -301,7 +301,7 @@ export async function executeCreateProject(
         ok: true,
         detail:
           process.platform === 'win32'
-            ? '✅ MSVC/SDK paths auto-configured (matched UE recommended SDK version). .clangd is FINAL — do not modify manually!'
+            ? 'Use "Set System Includes" to add MSVC/SDK paths. Otherwise ready.'
             : 'Project ready to use',
       });
       progress.report({ increment: 20 });
