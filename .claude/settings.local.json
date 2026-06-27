@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/install-plan.js --help)",
+      "WebFetch(domain:github.com)",
+      "mcp__codegraph__codegraph_files",
+      "Skill(claude-hud:configure)",
+      "Bash(rm -f .gateguard-probe-3)",
+      "Bash(ls -la .gateguard*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npx vitest:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

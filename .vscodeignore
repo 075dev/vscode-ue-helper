@@ -1,0 +1,23 @@
+# Files and directories to exclude from the .vsix package.
+# See https://code.visualstudio.com/api/working-with-extensions/publishing-extension
+
+.vscode/**
+.vscode-test/**
+out/test/**
+test/**
+coverage/**
+node_modules/**
+src/**
+tsconfig.json
+tsconfig.test.json
+esbuild.config.mjs
+vitest.config.ts
+.eslintrc.json
+.eslintrc.js
+.prettierrc
+.gitignore
+CLAUDE.md
+.claude/**
+*.log
+*.vsix
+.DS_Store

@@ -1,0 +1,12 @@
+{
+  "engineVersion": "5.4",
+  "mode": "slow",
+  "description": "UE5 SharedPCH headers for clangd macro completion. Uses the same 5 engine SharedPCH files as fast mode (Core, CoreUObject, Engine, Slate, UnrealEd) for full module coverage. addMacroCompletions.h provides additional UE macro completions for comprehensive support.",
+  "headers": [
+    "$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h",
+    "$(EngineRoot)/Source/Runtime/CoreUObject/Public/CoreUObjectSharedPCH.h",
+    "$(EngineRoot)/Source/Runtime/Engine/Public/EngineSharedPCH.h",
+    "$(EngineRoot)/Source/Runtime/Slate/Public/SlateSharedPCH.h",
+    "$(EngineRoot)/Source/Editor/UnrealEd/Public/UnrealEdSharedPCH.h"
+  ]
+}
