@@ -230,21 +230,21 @@ export function replaceSystemIncludeBlock(yamlText: string, newFlags: string[]):
   let root: unknown;
   try {
     root = yaml.parse(yamlText);
-    if (!root || typeof root !== 'object') return yamlText;
+    if (!root || typeof root !== 'object') {return yamlText;}
   } catch {
     return yamlText;
   }
 
   const doc = root as Record<string, unknown>;
   const cf = doc.CompileFlags;
-  if (!cf || typeof cf !== 'object') return yamlText;
+  if (!cf || typeof cf !== 'object') {return yamlText;}
   const compileFlags = cf as Record<string, unknown>;
 
   const oldAdd = compileFlags.Add;
   const oldAddItems: string[] = [];
   if (Array.isArray(oldAdd)) {
     for (const item of oldAdd) {
-      if (typeof item === 'string') oldAddItems.push(item);
+      if (typeof item === 'string') {oldAddItems.push(item);}
     }
   }
 

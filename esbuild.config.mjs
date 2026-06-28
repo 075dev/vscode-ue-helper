@@ -8,17 +8,15 @@
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { writeFileSync, mkdirSync, chmodSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWatch = process.argv.includes('--watch');
 const isProd = process.argv.includes('--production') || (!isWatch && process.env.NODE_ENV === 'production');
 
 /** @type {import('esbuild').BuildOptions} */
-const buildOptions = {
-  entryPoints: [resolve(__dirname, 'src/extension.ts')],
+const sharedOptions = {
   bundle: true,
-  outfile: resolve(__dirname, 'out/extension.js'),
-  external: ['vscode', '@vscode/*'],
   format: 'cjs',
   platform: 'node',
   target: 'node18',
@@ -26,9 +24,6 @@ const buildOptions = {
   minify: isProd,
   treeShaking: true,
   logLevel: 'info',
-  define: {
-    'process.env.NODE_ENV': isProd ? '"production"' : '"development"',
-  },
   alias: {
     '@': resolve(__dirname, 'src'),
     '@core': resolve(__dirname, 'src/core'),
@@ -48,15 +43,79 @@ const buildOptions = {
   },
 };
 
+/** VS Code 扩展入口 — vscode 模块由 VS Code 运行时提供 */
+const extensionBuild = {
+  ...sharedOptions,
+  entryPoints: [resolve(__dirname, 'src/extension.ts')],
+  outfile: resolve(__dirname, 'out/extension.js'),
+  external: ['vscode', '@vscode/*'],
+  define: {
+    'process.env.NODE_ENV': isProd ? '"production"' : '"development"',
+  },
+};
+
+/** clangd LSP 代理 CLI 入口 — 独立可执行文件，不依赖 vscode */
+const proxyBuild = {
+  ...sharedOptions,
+  entryPoints: [resolve(__dirname, 'src/clangd/proxy/cli.ts')],
+  outfile: resolve(__dirname, 'out/clangdProxy.js'),
+  // 代理 CLI 不依赖 vscode，是独立进程
+  external: [],
+  define: {
+    'process.env.NODE_ENV': isProd ? '"production"' : '"development"',
+  },
+};
+
 if (isWatch) {
-  const ctx = await esbuild.context(buildOptions);
-  await ctx.watch();
+  const extCtx = await esbuild.context(extensionBuild);
+  await extCtx.watch();
+  const proxyCtx = await esbuild.context(proxyBuild);
+  await proxyCtx.watch();
   console.log('[esbuild] watching for changes...');
 } else {
-  const result = await esbuild.build(buildOptions);
-  if (result.errors.length > 0) {
-    console.error('[esbuild] build errors:', result.errors);
+  const extResult = await esbuild.build(extensionBuild);
+  if (extResult.errors.length > 0) {
+    console.error('[esbuild] extension build errors:', extResult.errors);
     process.exit(1);
   }
-  console.log('[esbuild] build complete → out/extension.js');
+  console.log('[esbuild] extension build complete → out/extension.js');
+
+  const proxyResult = await esbuild.build(proxyBuild);
+  if (proxyResult.errors.length > 0) {
+    console.error('[esbuild] proxy build errors:', proxyResult.errors);
+    process.exit(1);
+  }
+  console.log('[esbuild] proxy build complete → out/clangdProxy.js');
+
+  // 生成 launcher 脚本（供 clangd 扩展通过 clangd.path + useScriptAsExecutable 调用）
+  const launcherDir = resolve(__dirname, 'out/launcher');
+  mkdirSync(launcherDir, { recursive: true });
+
+  // Windows .bat launcher
+  const batContent = [
+    '@echo off',
+    'REM proxy-launcher.bat —— clangd LSP 代理启动器（Windows）',
+    'REM 由 esbuild 自动生成，配合 clangd.useScriptAsExecutable=true 使用。',
+    '',
+    'set "PROXY_DIR=%~dp0.."',
+    'node "%PROXY_DIR%\\clangdProxy.js" %*',
+    '',
+  ].join('\r\n');
+  writeFileSync(resolve(launcherDir, 'proxy-launcher.bat'), batContent, 'utf-8');
+  console.log('[esbuild] launcher generated → out/launcher/proxy-launcher.bat');
+
+  // Unix .sh launcher
+  const shContent = [
+    '#!/bin/sh',
+    '# proxy-launcher.sh —— clangd LSP 代理启动器（Unix）',
+    '# 由 esbuild 自动生成，配合 clangd.useScriptAsExecutable=true 使用。',
+    '',
+    'PROXY_DIR="$(cd "$(dirname "$0")/.." && pwd)"',
+    'exec node "$PROXY_DIR/clangdProxy.js" "$@"',
+    '',
+  ].join('\n');
+  writeFileSync(resolve(launcherDir, 'proxy-launcher.sh'), shContent, 'utf-8');
+  // Unix 可执行权限（Windows 上忽略失败）
+  try { chmodSync(resolve(launcherDir, 'proxy-launcher.sh'), 0o755); } catch { /* ignore on Windows */ }
+  console.log('[esbuild] launcher generated → out/launcher/proxy-launcher.sh');
 }

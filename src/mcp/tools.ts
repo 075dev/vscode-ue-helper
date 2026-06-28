@@ -76,7 +76,7 @@ export const MCP_TOOLS: MCPTool[] = [
  * Call a tool by name with the given args. Returns the JSON string the
  * MCP transport expects.
  */
-export async function callTool(name: string, args: Record<string, unknown>): Promise<string> {
+export function callTool(name: string, args: Record<string, unknown>): string {
   switch (name) {
     case 'ue_build': {
       const mode = (args.mode as string) ?? 'build';

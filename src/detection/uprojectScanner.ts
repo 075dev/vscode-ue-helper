@@ -68,7 +68,7 @@ export class UprojectScanner {
     for (const filePath of files) {
       try {
         const info = await this.parseUProject(filePath);
-        if (info) projects.push(info);
+        if (info) {projects.push(info);}
       } catch (err) {
         console.warn(`[uprojectScanner] failed to parse ${filePath}:`, err);
       }
@@ -102,7 +102,7 @@ export class UprojectScanner {
     try {
       // UE's .uproject is JSON5-ish: allows trailing commas and comments.
       // Strict JSON.parse fails on these — use JSON5 to match UBT's tolerance.
-      raw = JSON5.parse(text) as RawUProject;
+      raw = JSON5.parse(text);
     } catch (err) {
       console.warn(`[uprojectScanner] JSON5 parse failed for ${filePath}:`, err);
       return null;
@@ -112,7 +112,7 @@ export class UprojectScanner {
     const modules: string[] = [];
     if (Array.isArray(raw.Modules)) {
       for (const m of raw.Modules) {
-        if (m?.Name && typeof m.Name === 'string') modules.push(m.Name);
+        if (m?.Name && typeof m.Name === 'string') {modules.push(m.Name);}
       }
     }
     if (Array.isArray(raw.Targets)) {

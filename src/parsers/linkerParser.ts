@@ -23,7 +23,7 @@ export interface LinkerMatch {
 export class LinkerParser {
   parse(line: string): LinkerMatch | null {
     const m = LINKER_ERR_RE.exec(line.trim());
-    if (!m) return null;
+    if (!m) {return null;}
     return {
       code: `LNK${m[1]}`,
       message: m[2]?.trim() ?? '',

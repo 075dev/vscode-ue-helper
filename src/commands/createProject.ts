@@ -50,18 +50,18 @@ export async function executeCreateProject(
   let project = projects.find(
     (p) => p.path === detection.workspaceContext.getSelectedProject(),
   );
-  if (!project && projects.length === 1) project = projects[0];
-  if (!project) project = await pickProject(projects);
-  if (!project) return;
+  if (!project && projects.length === 1) {project = projects[0];}
+  if (!project) {project = await pickProject(projects);}
+  if (!project) {return;}
   await detection.workspaceContext.setProject(project);
 
   const engines = await detection.discovery.discover();
   let engine = engines.find(
     (e) => e.path === detection.workspaceContext.getSelectedEngine(),
   );
-  if (!engine && engines.length === 1) engine = engines[0];
-  if (!engine) engine = await pickEngine(engines);
-  if (!engine) return;
+  if (!engine && engines.length === 1) {engine = engines[0];}
+  if (!engine) {engine = await pickEngine(engines);}
+  if (!engine) {return;}
   await detection.workspaceContext.setEngine(engine);
 
   const projectDir = path.dirname(project.path);

@@ -147,6 +147,27 @@
         "title@zh": "选择构建目标",
         "category": "UE Helper",
         "icon": "$(symbol-class)"
+      },
+      {
+        "command": "vscodeUEHelper.enableClangdProxy",
+        "title": "Enable Clangd LSP Proxy",
+        "title@zh": "启用 Clangd LSP 代理",
+        "category": "UE Helper",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "vscodeUEHelper.disableClangdProxy",
+        "title": "Disable Clangd LSP Proxy",
+        "title@zh": "禁用 Clangd LSP 代理",
+        "category": "UE Helper",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "vscodeUEHelper.showClangdProxyStatus",
+        "title": "Show Clangd Proxy Status",
+        "title@zh": "显示 Clangd 代理状态",
+        "category": "UE Helper",
+        "icon": "$(info)"
       }
     ],
     "configuration": {
@@ -259,6 +280,71 @@
           "default": "info",
           "description": "Log verbosity for the extension.",
           "description@zh": "扩展日志详细级别。"
+        },
+        "vscodeUEHelper.clangdProxy.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable clangd LSP proxy with didClose keepalive and localization.",
+          "description@zh": "启用 clangd LSP 代理（didClose 保活和汉化支持）。"
+        },
+        "vscodeUEHelper.clangdProxy.keepaliveMax": {
+          "type": "number",
+          "default": 20,
+          "description": "Maximum number of keepalive documents. Invalid values clamp to 20.",
+          "description@zh": "最大 keepalive 文档数。无效值将 clamp 到 20。"
+        },
+        "vscodeUEHelper.clangdProxy.keepaliveTtlSec": {
+          "type": "number",
+          "default": 900,
+          "description": "Keepalive TTL in seconds. Invalid values clamp to 900.",
+          "description@zh": "Keepalive 生存时间（秒）。无效值将 clamp 到 900。"
+        },
+        "vscodeUEHelper.clangdProxy.realClangdPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the real clangd binary. Empty = auto-detect.",
+          "description@zh": "真实 clangd 二进制路径。留空 = 自动检测。"
+        },
+        "vscodeUEHelper.clangdProxy.logPath": {
+          "type": "string",
+          "default": "",
+          "description": "Log file path for the proxy. Empty = no file logging (stderr only).",
+          "description@zh": "代理日志文件路径。留空 = 不输出日志文件（仅 stderr）。"
+        },
+        "vscodeUEHelper.clangdProxy.localization.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable clangd output localization (Chinese append/override).",
+          "description@zh": "启用 clangd 输出汉化（追加/替换模式）。"
+        },
+        "vscodeUEHelper.clangdProxy.localization.mode": {
+          "type": "string",
+          "enum": [
+            "append",
+            "override"
+          ],
+          "default": "append",
+          "description": "Localization mode: append = add Chinese after English, override = replace English.",
+          "description@zh": "汉化模式：append = 在英文后追加中文，override = 替换英文。"
+        },
+        "vscodeUEHelper.clangdProxy.localization.targets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "diagnostics",
+              "codeActions",
+              "hover"
+            ]
+          },
+          "default": [
+            "diagnostics",
+            "codeActions",
+            "hover"
+          ],
+          "uniqueItems": true,
+          "description": "Localization targets. Invalid values are filtered out.",
+          "description@zh": "汉化目标。无效值将被过滤。"
         }
       }
     },
@@ -271,6 +357,15 @@
         {
           "command": "vscodeUEHelper.setSystemIncludes",
           "when": "isWindows"
+        },
+        {
+          "command": "vscodeUEHelper.enableClangdProxy"
+        },
+        {
+          "command": "vscodeUEHelper.disableClangdProxy"
+        },
+        {
+          "command": "vscodeUEHelper.showClangdProxyStatus"
         }
       ]
     },

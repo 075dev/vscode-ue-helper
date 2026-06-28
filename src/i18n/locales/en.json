@@ -85,5 +85,31 @@
   "completion.fast": "UE Clangd: fast completion (curated macros) — click to switch to slow",
   "completion.slow": "UE Clangd: slow completion (all macros) — click to switch to fast",
 
-  "systemIncludes.placeholder": "Set System Includes — coming in Phase 6 (Windows-only feature)."
+  "systemIncludes.placeholder": "Set System Includes — coming in Phase 6 (Windows-only feature).",
+
+  "common.yes": "Yes",
+  "common.no": "No",
+  "common.autoDetect": "(auto-detect)",
+  "common.notSet": "(not set)",
+
+  "proxy.enable.alreadyEnabled": "Clangd LSP Proxy is already enabled.",
+  "proxy.enable.success": "Clangd LSP Proxy enabled. Consider restarting clangd to apply.",
+  "proxy.enable.restartClangd": "Restart clangd",
+  "proxy.enable.failed": "Failed to enable Clangd LSP Proxy.",
+
+  "proxy.disable.success": "Clangd LSP Proxy disabled, original settings restored.",
+  "proxy.disable.restartClangd": "Restart clangd",
+  "proxy.disable.warning": "Disable Clangd LSP Proxy: {reason}",
+  "proxy.disable.failed": "Failed to disable Clangd LSP Proxy.",
+
+  "proxy.status.title": "VSCodeUEHelper — Clangd LSP Proxy Status",
+  "proxy.status.enabled": "Config Enabled:  {value}",
+  "proxy.status.active": "Currently Active: {value}",
+  "proxy.status.launcherPath": "Launcher Path:   {value}",
+  "proxy.status.realClangdPath": "Real Clangd:     {value}",
+  "proxy.status.keepaliveMax": "Keepalive Max:   {value}",
+  "proxy.status.keepaliveTtlSec": "Keepalive TTL:   {value}s",
+  "proxy.status.logPath": "Log Path:        {value}",
+  "proxy.status.backupExists": "Backup Exists:   {value}",
+  "proxy.status.summary": "Clangd LSP Proxy: enabled={enabled}, active={active}"
 }

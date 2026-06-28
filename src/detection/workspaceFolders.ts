@@ -31,11 +31,11 @@ export async function readWorkspaceFolders(workspaceFile: string): Promise<strin
   try {
     const text = await fs.readFile(workspaceFile, 'utf-8');
     const parsed = JSON.parse(text) as WorkspaceFile;
-    if (!Array.isArray(parsed.folders)) return [];
+    if (!Array.isArray(parsed.folders)) {return [];}
     const workspaceRoot = path.dirname(workspaceFile);
     const out: string[] = [];
     for (const folder of parsed.folders) {
-      if (!folder?.path) continue;
+      if (!folder?.path) {continue;}
       const resolved = path.isAbsolute(folder.path)
         ? folder.path
         : path.resolve(workspaceRoot, folder.path);

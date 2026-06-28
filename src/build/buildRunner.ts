@@ -31,7 +31,7 @@ const execFileAsync = promisify(execFile);
  */
 async function killTree(child: ChildProcessWithoutNullStreams): Promise<void> {
   const pid = child.pid;
-  if (!pid) return;
+  if (!pid) {return;}
   try {
     if (process.platform === 'win32') {
       await execFileAsync('taskkill', ['/F', '/T', '/PID', String(pid)]);
@@ -92,11 +92,11 @@ export async function runBuild(
     // the top-level cmd.exe wrapper. On Windows we use `taskkill /T /F`
     // which walks the parent→child chain.
     if (options.signal) {
-      const onAbort = () => {
-        killTree(child);
+      const onAbort = (): void => {
+        void killTree(child);
       };
-      if (options.signal.aborted) onAbort();
-      else options.signal.addEventListener('abort', onAbort, { once: true });
+      if (options.signal.aborted) { void onAbort(); }
+      else { options.signal.addEventListener('abort', onAbort, { once: true }); }
     }
 
     let stdoutBuf = '';

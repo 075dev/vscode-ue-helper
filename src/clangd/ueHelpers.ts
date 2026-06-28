@@ -119,8 +119,8 @@ export async function getBuildTargetNames(projectDir: string): Promise<string[]>
 
   const targets: string[] = [];
   for (const [name, fileType] of entries) {
-    if (fileType !== vscode.FileType.File) continue;
-    if (!name.endsWith('.Target.cs')) continue;
+    if (fileType !== vscode.FileType.File) {continue;}
+    if (!name.endsWith('.Target.cs')) {continue;}
     targets.push(name.slice(0, -'.Target.cs'.length));
   }
 

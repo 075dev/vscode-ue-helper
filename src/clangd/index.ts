@@ -20,6 +20,7 @@ import { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
+import { ClangdProxyManager } from './proxyManager';
 
 export {
   writeClangdConfig,
@@ -69,6 +70,7 @@ export { startCreateRspMatchers, type RspMatcher } from './createRspMatchers';
 export interface ClangdHandles {
   completionMode: CompletionModeController;
   backup: WorkspaceBackup;
+  proxyManager: ClangdProxyManager;
 }
 
 export function activateClangd(
@@ -79,6 +81,7 @@ export function activateClangd(
 ): ClangdHandles {
   const completionMode = new CompletionModeController(config);
   const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
+  const proxyManager = new ClangdProxyManager(context, config, logger);
 
   // Render the status bar item and listen for config changes.
   completionMode.show();
@@ -97,5 +100,5 @@ export function activateClangd(
   // For Phase 3 we just register the contract.
 
   logger.info('[clangd] activated (status bar ready)');
-  return { completionMode, backup };
+  return { completionMode, backup, proxyManager };
 }

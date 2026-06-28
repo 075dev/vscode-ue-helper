@@ -53,7 +53,7 @@ const disposables: vscode.Disposable[] = [];
  *   - 失败时 logger.error + showErrorMessage(弹窗给用户看)
  *   - 不让插件处于半激活状态 —— 失败后其他命令都不能用
  */
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export function activate(context: vscode.ExtensionContext): Promise<void> {
   // 第一步: 初始化国际化。必须在 Logger 之前 —— Logger 的输出也可能要翻译
   // initI18n() 会读 vscode.env.language,自动选 zh 或 en locale
   initI18n();
@@ -100,22 +100,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const hasShownWelcome = context.globalState.get<boolean>('vscodeUEHelper.welcomed');
     if (!hasShownWelcome) {
       // t('ui.welcome.real') 自动根据 locale 返回中文或英文
-      vscode.window.showInformationMessage(t('ui.welcome.real'), 'Open').then((choice) => {
+      void vscode.window.showInformationMessage(t('ui.welcome.real'), 'Open').then((choice) => {
         // 用户点了 Open 才执行 showProjectInfo —— 显示项目状态到 Output 面板
         if (choice === 'Open') {
           void showProjectInfo(config, logger, detection);
         }
       });
       // 标记已显示,写入 globalState(跨会话保留)
-      context.globalState.update('vscodeUEHelper.welcomed', true);
+      void context.globalState.update('vscodeUEHelper.welcomed', true);
     }
   } catch (err) {
     // 任何激活步骤失败都走到这里
     logger.error('Activation failed:', err);
-    vscode.window.showErrorMessage(
+    void vscode.window.showErrorMessage(
       `VSCodeUEHelper failed to activate: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+  return Promise.resolve();
 }
 
 /**

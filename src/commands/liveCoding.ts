@@ -18,14 +18,14 @@ export async function executeLiveCoding(
   detection: DetectionHandles,
 ): Promise<void> {
   if (!isLiveCodingSupported(config.platform)) {
-    vscode.window.showWarningMessage('Live Coding is currently Windows-only. Use Rebuild instead.');
+    void vscode.window.showWarningMessage('Live Coding is currently Windows-only. Use Rebuild instead.');
     return;
   }
 
   const project =
     (await pickProject(await detection.scanner.scan())) ?? (await detection.scanner.findSingle());
   if (!project) {
-    vscode.window.showWarningMessage('No .uproject to live-code.');
+    void vscode.window.showWarningMessage('No .uproject to live-code.');
     return;
   }
 
@@ -34,7 +34,7 @@ export async function executeLiveCoding(
     (await pickEngine(engines)) ??
     engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine());
   if (!engine) {
-    vscode.window.showWarningMessage('No Unreal Engine installation selected.');
+    void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
     return;
   }
 
@@ -45,9 +45,9 @@ export async function executeLiveCoding(
       platform: config.platform,
       projectPath: project.path,
     });
-    vscode.window.showInformationMessage(`Live Coding triggered for ${project.name}`);
+    void vscode.window.showInformationMessage(`Live Coding triggered for ${project.name}`);
   } catch (err) {
-    vscode.window.showErrorMessage(
+    void vscode.window.showErrorMessage(
       `Live Coding failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }

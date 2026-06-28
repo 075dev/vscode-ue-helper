@@ -48,9 +48,9 @@ export async function executeSetSystemIncludes(
   // Resolve the active project + engine (same shape as executeBuild).
   const projects = await detection.scanner.scan();
   let project = projects.find((p) => p.path === detection.workspaceContext.getSelectedProject());
-  if (!project && projects.length === 1) project = projects[0];
-  if (!project) project = await pickProject(projects);
-  if (!project) return;
+  if (!project && projects.length === 1) {project = projects[0];}
+  if (!project) {project = await pickProject(projects);}
+  if (!project) {return;}
   await detection.workspaceContext.setProject(project);
 
   // 引擎已经在工作区中选择过，直接读取
@@ -126,7 +126,7 @@ export async function executeSetSystemIncludes(
     })),
     { placeHolder: 'Select MSVC version', title: 'MSVC' },
   );
-  if (!msvcChoice) return;
+  if (!msvcChoice) {return;}
   const msvcRoot = path.join(msvcParent, msvcChoice.label);
 
   // ── QuickPick 2: Windows SDK version ──
@@ -144,7 +144,7 @@ export async function executeSetSystemIncludes(
       title: 'Windows SDK',
     },
   );
-  if (!sdkChoice) return;
+  if (!sdkChoice) {return;}
   const sdkRoot = path.join(sdkParent, sdkChoice.label);
 
   // Render flags and splice into .clangd.

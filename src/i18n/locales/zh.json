@@ -85,5 +85,31 @@
   "completion.fast": "UE Clangd: 快速补全(精选宏)— 点击切换到慢速",
   "completion.slow": "UE Clangd: 慢速补全(所有宏)— 点击切换到快速",
 
-  "systemIncludes.placeholder": "设置系统包含路径 — Phase 6 实现(仅 Windows)。"
+  "systemIncludes.placeholder": "设置系统包含路径 — Phase 6 实现(仅 Windows)。",
+
+  "common.yes": "是",
+  "common.no": "否",
+  "common.autoDetect": "(自动检测)",
+  "common.notSet": "(未设置)",
+
+  "proxy.enable.alreadyEnabled": "Clangd LSP 代理已启用，无需重复操作。",
+  "proxy.enable.success": "Clangd LSP 代理已启用。建议重启 clangd 以生效。",
+  "proxy.enable.restartClangd": "重启 clangd",
+  "proxy.enable.failed": "启用 Clangd LSP 代理失败。",
+
+  "proxy.disable.success": "Clangd LSP 代理已禁用，原始设置已恢复。",
+  "proxy.disable.restartClangd": "重启 clangd",
+  "proxy.disable.warning": "禁用 Clangd LSP 代理: {reason}",
+  "proxy.disable.failed": "禁用 Clangd LSP 代理失败。",
+
+  "proxy.status.title": "VSCodeUEHelper — Clangd LSP Proxy 状态",
+  "proxy.status.enabled": "配置启用:    {value}",
+  "proxy.status.active": "当前激活:    {value}",
+  "proxy.status.launcherPath": "Launcher 路径: {value}",
+  "proxy.status.realClangdPath": "真实 Clangd:  {value}",
+  "proxy.status.keepaliveMax": "Keepalive Max: {value}",
+  "proxy.status.keepaliveTtlSec": "Keepalive TTL: {value}s",
+  "proxy.status.logPath": "日志路径:     {value}",
+  "proxy.status.backupExists": "备份存在:     {value}",
+  "proxy.status.summary": "Clangd LSP Proxy: 启用={enabled}, 激活={active}"
 }

@@ -46,7 +46,7 @@ export async function executeInstallRules(
     ? path.dirname(project.path)
     : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root) {
-    vscode.window.showWarningMessage('No workspace root found.');
+    void vscode.window.showWarningMessage('No workspace root found.');
     return;
   }
 
@@ -62,6 +62,6 @@ export async function executeInstallRules(
   const copilotFile = path.join(ghDir, 'copilot-instructions.md');
   await fs.writeFile(copilotFile, RULES_CONTENT, 'utf-8');
 
-  vscode.window.showInformationMessage(`Installed AI agent rules:\n${cursorFile}\n${copilotFile}`);
+  void vscode.window.showInformationMessage(`Installed AI agent rules:\n${cursorFile}\n${copilotFile}`);
   logger.info(`[installRules] wrote ${cursorFile} + ${copilotFile}`);
 }

@@ -30,7 +30,7 @@ async function findUProject(roots: readonly vscode.WorkspaceFolder[]): Promise<s
     try {
       const entries = await fs.readdir(folder.uri.fsPath);
       const uproject = entries.find((e) => e.endsWith('.uproject'));
-      if (uproject) return path.join(folder.uri.fsPath, uproject);
+      if (uproject) {return path.join(folder.uri.fsPath, uproject);}
     } catch {
       // skip
     }
@@ -39,7 +39,7 @@ async function findUProject(roots: readonly vscode.WorkspaceFolder[]): Promise<s
 }
 
 async function locateUEFromRegistry(version: string): Promise<string | null> {
-  if (process.platform !== 'win32') return null;
+  if (process.platform !== 'win32') {return null;}
   for (const regPath of [
     `HKLM\\SOFTWARE\\EpicGames\\Unreal Engine\\${version}`,
     `HKLM\\SOFTWARE\\WOW6432Node\\EpicGames\\Unreal Engine\\${version}`,
@@ -85,7 +85,7 @@ async function locateUE(version: string): Promise<string | null> {
 export async function executeRegenerateWorkspace(logger: Logger): Promise<void> {
   const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
   if (workspaceFolders.length === 0) {
-    vscode.window.showWarningMessage(t('regen.noWorkspace'));
+    void vscode.window.showWarningMessage(t('regen.noWorkspace'));
     return;
   }
 
@@ -100,7 +100,7 @@ export async function executeRegenerateWorkspace(logger: Logger): Promise<void> 
         progress.report({ message: t('regen.step1') });
         const uprojectPath = await findUProject(workspaceFolders);
         if (!uprojectPath) {
-          vscode.window.showErrorMessage(t('regen.noUproject'));
+          void vscode.window.showErrorMessage(t('regen.noUproject'));
           return;
         }
         const projectName = path.basename(uprojectPath, '.uproject');
@@ -113,7 +113,7 @@ export async function executeRegenerateWorkspace(logger: Logger): Promise<void> 
         const uproject = JSON.parse(uprojectText) as UProjectJson;
         const version = uproject.EngineAssociation;
         if (!version) {
-          vscode.window.showErrorMessage(t('regen.noEngineAssoc'));
+          void vscode.window.showErrorMessage(t('regen.noEngineAssoc'));
           return;
         }
         progress.report({ message: t('regen.step2.done', { version }) });
@@ -121,7 +121,7 @@ export async function executeRegenerateWorkspace(logger: Logger): Promise<void> 
         progress.report({ message: t('regen.step3', { version }) });
         const enginePath = await locateUE(version);
         if (!enginePath) {
-          vscode.window.showErrorMessage(t('regen.engineNotFound', { version }));
+          void vscode.window.showErrorMessage(t('regen.engineNotFound', { version }));
           return;
         }
         progress.report({ message: t('regen.step3.done', { path: enginePath }) });
@@ -155,7 +155,7 @@ export async function executeRegenerateWorkspace(logger: Logger): Promise<void> 
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error('[regenerateWorkspace] failed:', msg);
-        vscode.window.showErrorMessage(t('regen.failed', { error: msg }));
+        void vscode.window.showErrorMessage(t('regen.failed', { error: msg }));
       }
     },
   );

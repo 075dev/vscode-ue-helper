@@ -31,7 +31,7 @@ export async function executeUninstall(logger: Logger, detection: DetectionHandl
     ? path.dirname(project.path)
     : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root) {
-    vscode.window.showWarningMessage('No workspace root found.');
+    void vscode.window.showWarningMessage('No workspace root found.');
     return;
   }
 
@@ -65,7 +65,7 @@ export async function executeUninstall(logger: Logger, detection: DetectionHandl
     }
   }
 
-  vscode.window.showInformationMessage(
+  void vscode.window.showInformationMessage(
     removed.length > 0 ? `Cleaned: ${removed.join(', ')}` : 'No generated files found to clean.',
   );
   logger.info(`[uninstall] removed ${removed.length} target(s)`);

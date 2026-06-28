@@ -20,7 +20,7 @@ export async function executeLaunchEditor(
   const project =
     (await pickProject(await detection.scanner.scan())) ?? (await detection.scanner.findSingle());
   if (!project) {
-    vscode.window.showWarningMessage('No .uproject to launch.');
+    void vscode.window.showWarningMessage('No .uproject to launch.');
     return;
   }
 
@@ -29,7 +29,7 @@ export async function executeLaunchEditor(
     (await pickEngine(engines)) ??
     engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine());
   if (!engine) {
-    vscode.window.showWarningMessage('No Unreal Engine installation selected.');
+    void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
     return;
   }
 
@@ -40,9 +40,9 @@ export async function executeLaunchEditor(
       platform: config.platform,
       projectPath: project.path,
     });
-    vscode.window.showInformationMessage(`Launched Unreal Editor for ${project.name}`);
+    void vscode.window.showInformationMessage(`Launched Unreal Editor for ${project.name}`);
   } catch (err) {
-    vscode.window.showErrorMessage(
+    void vscode.window.showErrorMessage(
       `Failed to launch editor: ${err instanceof Error ? err.message : String(err)}`,
     );
   }

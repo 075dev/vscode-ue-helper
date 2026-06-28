@@ -132,7 +132,7 @@ export class StatusBarManager {
 
   /** Update all status bar items based on current context and settings. */
   update(ctx: StatusBarContext, settings: StatusBarSettings): void {
-    if (this._isBuilding) return;
+    if (this._isBuilding) {return;}
 
     // ── Build (prominent) ──
     this.buildBtn.text = '$(play)  Build';

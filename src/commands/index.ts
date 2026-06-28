@@ -11,6 +11,7 @@
  *   - setSystemIncludes / installRules / uninstall
  *   - openWorkspaceFile / regenerateWorkspace
  *   - selectConfig / selectTarget
+ *   - enableClangdProxy / disableClangdProxy / showClangdProxyStatus
  */
 
 import * as vscode from 'vscode';
@@ -33,6 +34,9 @@ import { executeOpenWorkspaceFile } from './openWorkspaceFile';
 import { executeRegenerateWorkspace } from './regenerateWorkspace';
 import { executeSelectConfig } from './selectConfig';
 import { executeSelectTarget } from './selectTarget';
+import { executeEnableClangdProxy } from './enableClangdProxy';
+import { executeDisableClangdProxy } from './disableClangdProxy';
+import { executeShowClangdProxyStatus } from './showClangdProxyStatus';
 
 export function activateCommands(
   context: vscode.ExtensionContext,
@@ -85,5 +89,14 @@ export function activateCommands(
   registerCommand(context, 'vscodeUEHelper.selectTarget', () =>
     executeSelectTarget(config, logger),
   );
-  logger.info(`[commands] registered 16 commands`);
+  registerCommand(context, 'vscodeUEHelper.enableClangdProxy', () =>
+    executeEnableClangdProxy(config, logger, clangd),
+  );
+  registerCommand(context, 'vscodeUEHelper.disableClangdProxy', () =>
+    executeDisableClangdProxy(config, logger, clangd),
+  );
+  registerCommand(context, 'vscodeUEHelper.showClangdProxyStatus', () =>
+    executeShowClangdProxyStatus(config, logger, clangd),
+  );
+  logger.info(`[commands] registered 19 commands`);
 }

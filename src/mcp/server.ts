@@ -31,7 +31,7 @@ export class MCPServer {
       },
     );
 
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    this.server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: MCP_TOOLS.map((t) => ({
         name: t.name,
         description: t.description,
@@ -39,10 +39,10 @@ export class MCPServer {
       })),
     }));
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, (request) => {
       const { name, arguments: args } = request.params;
       this.logger.info(`[mcp] tool call: ${name}`);
-      const result = await callTool(name ?? '', (args as Record<string, unknown>) ?? {});
+      const result = callTool(name ?? '', (args as Record<string, unknown>) ?? {});
       return {
         content: [{ type: 'text', text: result }],
       };

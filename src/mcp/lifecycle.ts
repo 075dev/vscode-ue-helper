@@ -11,14 +11,14 @@
 export type MCPMode = 'auto' | 'always' | 'never';
 
 export function shouldStartMCP(mode: MCPMode): boolean {
-  if (mode === 'always') return true;
-  if (mode === 'never') return false;
+  if (mode === 'always') {return true;}
+  if (mode === 'never') {return false;}
   // 'auto' mode — start iff we can detect a Cursor / Claude Code host.
   return detectHost() !== null;
 }
 
 export function detectHost(): 'cursor' | 'claude-code' | null {
-  if (process.env.CURSOR_TRACE_ID || process.env.CURSOR_USER_DATA_DIR) return 'cursor';
-  if (process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SSE_PORT) return 'claude-code';
+  if (process.env.CURSOR_TRACE_ID || process.env.CURSOR_USER_DATA_DIR) {return 'cursor';}
+  if (process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SSE_PORT) {return 'claude-code';}
   return null;
 }

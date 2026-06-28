@@ -53,7 +53,7 @@ export class MsvcParser {
 
   /** Flush any trailing buffered line. Call when the build ends. */
   flush(): ParsedDiagnostic[] {
-    if (!this.buffer.trim()) return [];
+    if (!this.buffer.trim()) {return [];}
     const parsed = this.parseLine(this.buffer);
     this.buffer = '';
     return parsed ? [parsed] : [];
@@ -61,7 +61,7 @@ export class MsvcParser {
 
   private parseLine(rawLine: string): ParsedDiagnostic | null {
     const line = rawLine.trim();
-    if (!line) return null;
+    if (!line) {return null;}
 
     // Strip UBT build context prefix: "[1/45] ModuleName: " or similar.
     const cleaned = line.replace(/^\s*\[\d+\/\d+\]\s+[^:]+:\s*/, '');
@@ -112,8 +112,8 @@ export class MsvcParser {
 
   private normalizeSeverity(s: string): 'error' | 'warning' | 'note' {
     const lower = s.toLowerCase();
-    if (lower === 'error' || lower === 'fatal error') return 'error';
-    if (lower === 'warning') return 'warning';
+    if (lower === 'error' || lower === 'fatal error') {return 'error';}
+    if (lower === 'warning') {return 'warning';}
     return 'note';
   }
 }

@@ -77,7 +77,10 @@ export function activateDetection(
 
       // 读取根目录下的 .code-workspace 并解析 folders 配置
       const workspaceRaw = await fs.readFile(WorkspacePath, 'utf-8');
-      const entries = JSON.parse(workspaceRaw).folders ?? [];
+      const wsData = JSON.parse(workspaceRaw) as { folders?: Array<{ name?: string; path?: string }> };
+      const entries: Array<{ name: string; path: string }> = (wsData.folders ?? []).map(
+        (f: { name?: string; path?: string }) => ({ name: f.name ?? '', path: f.path ?? '' }),
+      );
 
       // 调试打印：让用户看到 .code-workspace 在哪、解析出了什么
       logger.info(`[detection] workspaceFile = ${WorkspacePath}`);
@@ -85,11 +88,12 @@ export function activateDetection(
       logger.info(`[detection] entries (count=${entries.length}):`);
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
-        logger.info(`[detection]   [${i}] name="${e?.name}" path="${e?.path}"`);
+        if (!e) { continue; }
+        logger.info(`[detection]   [${i}] name="${e.name}" path="${e.path}"`);
       }
 
       // folders[0] = 项目目录（path 为 "."，对应工作区根目录）
-      const projectEntry = entries[0];
+      const projectEntry = entries[0]!;
       const projectAbsPath = path.resolve(workspaceRootDir, projectEntry.path);
       const uprojectPath = path.join(projectAbsPath, `${projectEntry.name}.uproject`);
 

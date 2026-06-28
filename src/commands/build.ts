@@ -31,12 +31,12 @@ export async function executeBuild(
   detection: DetectionHandles,
 ): Promise<void> {
   // Resolve project
-  let projects = await detection.scanner.scan();
+  const projects = await detection.scanner.scan();
   let project = projects.find((p) => p.path === detection.workspaceContext.getSelectedProject());
-  if (!project && projects.length === 1) project = projects[0];
-  if (!project) project = await pickProject(projects);
+  if (!project && projects.length === 1) {project = projects[0];}
+  if (!project) {project = await pickProject(projects);}
   if (!project) {
-    vscode.window.showWarningMessage('No .uproject selected.');
+    void vscode.window.showWarningMessage('No .uproject selected.');
     return;
   }
   await detection.workspaceContext.setProject(project);
@@ -44,9 +44,9 @@ export async function executeBuild(
   // Resolve engine
   const engines = await detection.discovery.discover();
   let engine = engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine());
-  if (!engine) engine = await pickEngine(engines);
+  if (!engine) {engine = await pickEngine(engines);}
   if (!engine) {
-    vscode.window.showWarningMessage('No Unreal Engine installation selected.');
+    void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
     return;
   }
   await detection.workspaceContext.setEngine(engine);
@@ -61,8 +61,8 @@ export async function executeBuild(
   });
 
   // Adjust args for rebuild/clean modes.
-  if (mode === 'rebuild') cmd.args.push('-Rebuild');
-  if (mode === 'clean') cmd.args.push('-Clean');
+  if (mode === 'rebuild') {cmd.args.push('-Rebuild');}
+  if (mode === 'clean') {cmd.args.push('-Clean');}
 
   const titleMap: Record<Mode, string> = {
     build: 'Building UE project',
@@ -82,8 +82,8 @@ export async function executeBuild(
     // can kill the child process when the user clicks Cancel.
     const controller = new AbortController();
     const onCancel = () => controller.abort();
-    if (token.isCancellationRequested) onCancel();
-    else token.onCancellationRequested(onCancel);
+    if (token.isCancellationRequested) { void onCancel(); }
+    else { token.onCancellationRequested(onCancel); }
 
     const r = await runBuild(
       { file: cmd.file, args: cmd.args },
@@ -95,7 +95,7 @@ export async function executeBuild(
     );
     if (!r.ok) {
       channel.appendLine(`[UE Helper] build failed: ${r.error.message}`);
-      vscode.window.showErrorMessage(`Build failed: ${r.error.message}`);
+      void vscode.window.showErrorMessage(`Build failed: ${r.error.message}`);
       return null;
     }
     pushDiagnostics(r.value.diagnostics);
@@ -107,12 +107,12 @@ export async function executeBuild(
   });
 
   if (result && result.exitCode === 0) {
-    vscode.window.showInformationMessage(
+    void vscode.window.showInformationMessage(
       `${titleMap[mode]} succeeded (${(result.durationMs / 1000).toFixed(1)}s, ` +
         `${result.diagnostics.length} diagnostics)`,
     );
   } else if (result) {
-    vscode.window.showWarningMessage(
+    void vscode.window.showWarningMessage(
       `${titleMap[mode]} failed with exit code ${result.exitCode}. See output for details.`,
     );
   }

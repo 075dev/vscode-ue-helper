@@ -367,7 +367,7 @@ export async function addCompletionHelperToCompileCommands(
 
   try {
     const text = await fs.readFile(ccPath, 'utf-8');
-    entries = JSON.parse(text);
+    entries = JSON.parse(text) as Array<Record<string, unknown>>;
     if (!Array.isArray(entries) || entries.length === 0) {
       return false;
     }
@@ -443,13 +443,13 @@ export async function populateAddCompletions(opts: PopulateOptions): Promise<Pop
 /**
  * @deprecated 请使用 createCompletionFiles() 代替。
  */
-export async function findUhtGeneratedHeaders(_projectPath: string): Promise<string[]> {
+export function findUhtGeneratedHeaders(_projectPath: string): string[] {
   return [];
 }
 
 /**
  * @deprecated 请使用 createCompletionFiles() 代替。
  */
-export async function parseExistingIncludes(_filePath: string): Promise<string[]> {
+export function parseExistingIncludes(_filePath: string): string[] {
   return [];
 }

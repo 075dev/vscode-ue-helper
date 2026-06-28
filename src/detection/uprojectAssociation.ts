@@ -82,11 +82,11 @@ async function checkFilesystemFallback(): Promise<boolean> {
     try {
       const entries = await fs.readdir(parent, { withFileTypes: true });
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
+        if (!entry.isDirectory()) {continue;}
         const buildVersion = path.join(parent, entry.name, 'Engine', 'Build', 'Build.version');
         try {
           const stat = await fs.stat(buildVersion);
-          if (stat.isFile()) return true;
+          if (stat.isFile()) {return true;}
         } catch {
           // not an engine root, skip
         }

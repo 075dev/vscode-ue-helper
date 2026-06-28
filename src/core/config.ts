@@ -52,6 +52,24 @@ export type CompletionMode = 'fast' | 'slow';
 /** MCP 服务器模式：auto = 仅在 Cursor/Claude Code 启用，always = 总是，never = 不启用 */
 export type MCPMode = 'auto' | 'always' | 'never';
 
+
+/** Clangd Proxy 本地化目标类型 */
+export type ClangdProxyLocalizationTarget = "diagnostics" | "codeActions" | "hover";
+
+/** Clangd Proxy 本地化模式：append = 追加到 clangd 输出，override = 完全替换 */
+export type ClangdProxyLocalizationMode = "append" | "override";
+
+/** Clangd Proxy 本地化目标有效值集合，用于过滤 */
+const VALID_LOCALIZATION_TARGETS: readonly ClangdProxyLocalizationTarget[] = [
+  "diagnostics",
+  "codeActions",
+  "hover",
+] as const;
+
+/** Clangd Proxy keepaliveMax 安全默认值 */
+const DEFAULT_KEEPALIVE_MAX = 20;
+/** Clangd Proxy keepaliveTtlSec 安全默认值 */
+const DEFAULT_KEEPALIVE_TTL_SEC = 900;
 export class Config {
   /** 底层 VS Code 配置对象，构造时一次性获取，VS Code 会自动跟踪变化 */
   private readonly root: vscode.WorkspaceConfiguration;
@@ -116,7 +134,72 @@ export class Config {
     return false;
   }
 
-  // ===== 写入 / 监听 =====
+  
+  // ===== Clangd Proxy 配置 =====
+
+  /** 是否启用 clangd LSP Proxy，默认 false */
+  get clangdProxyEnabled(): boolean {
+    return this.root.get<boolean>("clangdProxy.enabled") ?? false;
+  }
+
+  /** clangd Proxy 最大 keepalive 连接数，无效值（<=0 / 非数值）clamp 到 20 */
+  get clangdProxyKeepaliveMax(): number {
+    const raw = this.root.get<unknown>("clangdProxy.keepaliveMax");
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      return raw;
+    }
+    return DEFAULT_KEEPALIVE_MAX;
+  }
+
+  /** clangd Proxy keepalive TTL（秒），无效值（<=0 / 非数值）clamp 到 900 */
+  get clangdProxyKeepaliveTtlSec(): number {
+    const raw = this.root.get<unknown>("clangdProxy.keepaliveTtlSec");
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      return raw;
+    }
+    return DEFAULT_KEEPALIVE_TTL_SEC;
+  }
+
+  /** 真实 clangd 二进制路径，空字符串 = 自动检测 */
+  get clangdProxyRealClangdPath(): string | undefined {
+    const v = this.root.get<string>("clangdProxy.realClangdPath");
+    return v && v.length > 0 ? v : undefined;
+  }
+
+  /** clangd Proxy 日志文件路径，空字符串 = 不输出日志文件 */
+  get clangdProxyLogPath(): string | undefined {
+    const v = this.root.get<string>("clangdProxy.logPath");
+    return v && v.length > 0 ? v : undefined;
+  }
+
+  /** 是否启用 clangd Proxy 本地化支持，默认 false */
+  get clangdProxyLocalizationEnabled(): boolean {
+    return this.root.get<boolean>("clangdProxy.localization.enabled") ?? false;
+  }
+
+  /** clangd Proxy 本地化模式，默认 append（追加到 clangd 输出） */
+  get clangdProxyLocalizationMode(): ClangdProxyLocalizationMode {
+    return this.root.get<ClangdProxyLocalizationMode>("clangdProxy.localization.mode") ?? "append";
+  }
+
+  /**
+   * clangd Proxy 本地化目标列表。
+   * - 过滤掉无效值，只保留 'diagnostics' | 'codeActions' | 'hover'
+   * - 如果过滤后为空，返回默认值 ['diagnostics', 'codeActions', 'hover']
+   */
+  get clangdProxyLocalizationTargets(): ClangdProxyLocalizationTarget[] {
+    const raw = this.root.get<unknown>("clangdProxy.localization.targets");
+    if (!Array.isArray(raw)) {
+      return [...VALID_LOCALIZATION_TARGETS];
+    }
+    const filtered = raw.filter(
+      (item): item is ClangdProxyLocalizationTarget =>
+        typeof item === "string" &&
+        (VALID_LOCALIZATION_TARGETS as readonly string[]).includes(item),
+    );
+    return filtered.length > 0 ? filtered : [...VALID_LOCALIZATION_TARGETS];
+  }
+// ===== 写入 / 监听 =====
 
   /**
    * 写入一个配置项。
@@ -150,7 +233,8 @@ export class Config {
     return vscode.workspace.onDidChangeConfiguration((e) => {
       // affectsConfiguration 检查给定 section 是否受变化影响
       // 注意只过滤 vscodeUEHelper 开头，避免收到无关配置变化
-      if (e.affectsConfiguration('vscodeUEHelper')) listener(e);
+      if (e.affectsConfiguration('vscodeUEHelper')) {listener(e);}
     });
   }
 }
+

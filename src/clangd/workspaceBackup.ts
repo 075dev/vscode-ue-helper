@@ -38,7 +38,7 @@ export class WorkspaceBackup {
     const dir = path.dirname(this.projectPath);
     const entries = await fs.readdir(dir).catch(() => []);
     const workspaceFile = entries.find((e) => e.endsWith('.code-workspace'));
-    if (!workspaceFile) return;
+    if (!workspaceFile) {return;}
 
     const src = path.join(dir, workspaceFile);
     const dst = path.join(dir, BACKUP_DIR, BACKUP_FILE);
@@ -54,7 +54,7 @@ export class WorkspaceBackup {
     const dir = path.dirname(this.projectPath);
     const entries = await fs.readdir(dir).catch(() => []);
     const workspaceFile = entries.find((e) => e.endsWith('.code-workspace'));
-    if (!workspaceFile) return;
+    if (!workspaceFile) {return;}
 
     const src = path.join(dir, BACKUP_DIR, BACKUP_FILE);
     const dst = path.join(dir, workspaceFile);

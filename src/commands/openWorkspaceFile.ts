@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 export async function executeOpenWorkspaceFile(): Promise<void> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (folders.length === 0) {
-    vscode.window.showWarningMessage('No workspace open.');
+    void vscode.window.showWarningMessage('No workspace open.');
     return;
   }
   // Look for a .code-workspace in any of the workspace roots.
@@ -22,12 +22,12 @@ export async function executeOpenWorkspaceFile(): Promise<void> {
       const ws = entries.find((e) => e.endsWith('.code-workspace'));
       if (ws) {
         const filePath = path.join(folder.uri.fsPath, ws);
-        await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
+        void vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
         return;
       }
     } catch {
       // skip
     }
   }
-  vscode.window.showInformationMessage('No .code-workspace file found in workspace roots.');
+  void vscode.window.showInformationMessage('No .code-workspace file found in workspace roots.');
 }

@@ -70,7 +70,7 @@ export class UBTTaskProvider implements vscode.TaskProvider {
       }),
       'ue-helper-msvc',
     );
-    if (group) task.group = group;
+    if (group) {task.group = group;}
     task.presentationOptions = {
       reveal: vscode.TaskRevealKind.Always,
       echo: true,

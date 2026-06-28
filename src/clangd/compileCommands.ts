@@ -283,7 +283,7 @@ async function findClangToolchain(): Promise<string | undefined> {
   try {
     const { stdout } = await execFileAsync(cmd, ['clang']);
     const clangPath = stdout.trim().split('\n')[0]?.trim();
-    if (!clangPath) return undefined;
+    if (!clangPath) {return undefined;}
     // clang.exe → bin/ → LLVM root
     return path.dirname(path.dirname(clangPath));
   } catch {
@@ -587,7 +587,7 @@ export async function fillMissingCompileCommands(
   let entries: { file: string; directory: string; command?: string; arguments?: string[] }[];
   try {
     const content = await fs.readFile(jsonPath, 'utf-8');
-    entries = JSON.parse(content);
+    entries = JSON.parse(content) as { file: string; directory: string; command?: string; arguments?: string[] }[];
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger?.error(`[fillMissingCompileCommands] failed to read existing JSON: ${msg}`);

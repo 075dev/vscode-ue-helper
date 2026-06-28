@@ -68,7 +68,7 @@ export async function startCreateRspMatchers(
     return [];
   }
 
-  if (rspNames.length === 0) return [];
+  if (rspNames.length === 0) {return [];}
 
   // 步骤 3：获取 UE 引擎源码的模块目录列表，用于匹配
   const engineSourceDir = path.join(enginePath, 'Engine', 'Source');
@@ -121,7 +121,7 @@ async function findRspDirForMatchers(projectDir: string): Promise<string | null>
       const candidate = path.join(vscodeDir, name);
       try {
         const stat = await fs.stat(candidate);
-        if (!stat.isDirectory()) continue;
+        if (!stat.isDirectory()) {continue;}
         const subEntries = await fs.readdir(candidate);
         if (subEntries.some((e) => e.endsWith('.rsp'))) {
           return candidate;
@@ -203,7 +203,7 @@ function matchRspToEngineModule(
     includePaths.push(match[1] ?? '');
   }
 
-  if (includePaths.length === 0) return null;
+  if (includePaths.length === 0) {return null;}
 
   // 去掉 Intermediate 路径
   const filtered = includePaths.filter(

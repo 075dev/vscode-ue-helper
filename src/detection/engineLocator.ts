@@ -32,16 +32,16 @@ export interface EngineLocation {
 }
 
 export async function locateEngineByVersion(version: string): Promise<EngineLocation | null> {
-  if (!version || version.trim().length === 0) return null;
+  if (!version || version.trim().length === 0) {return null;}
 
   if (process.platform === 'win32') {
     const fromReg = await locateFromRegistry(version);
-    if (fromReg) return fromReg;
+    if (fromReg) {return fromReg;}
     const fromPath = await locateFromCommonPaths(version);
-    if (fromPath) return fromPath;
+    if (fromPath) {return fromPath;}
   } else if (process.platform === 'darwin' || process.platform === 'linux') {
     const fromFs = await locateFromFilesystem(version, process.platform);
-    if (fromFs) return fromFs;
+    if (fromFs) {return fromFs;}
   }
   return null;
 }
@@ -50,7 +50,7 @@ export async function locateEngineByVersionAsInstall(
   version: string,
 ): Promise<EngineInstall | null> {
   const loc = await locateEngineByVersion(version);
-  if (!loc) return null;
+  if (!loc) {return null;}
   return {
     path: loc.path,
     version: loc.version,
@@ -113,9 +113,9 @@ async function locateFromFilesystem(
     try {
       const entries = await fs.readdir(parent, { withFileTypes: true });
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
+        if (!entry.isDirectory()) {continue;}
         const candidate = path.join(parent, entry.name);
-        if (!(await hasBuildVersion(candidate))) continue;
+        if (!(await hasBuildVersion(candidate))) {continue;}
         const v = await readVersion(candidate);
         if (v?.startsWith(`${version}.`)) {
           return {

@@ -68,7 +68,7 @@ export class CompletionModeController {
    * 用于初始激活或 refresh。
    */
   async rewriteClangd(mode?: Mode): Promise<void> {
-    if (!this.projectPath) return;
+    if (!this.projectPath) {return;}
 
     const currentMode = mode ?? this.config.completionMode;
 

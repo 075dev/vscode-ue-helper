@@ -21,9 +21,9 @@ const UBT_PROGRESS_RE = /^\s*\[\s*(\d+)\s*\/\s*(\d+)\s*\]\s*(.*)$/;
 export class UbtParser {
   parse(line: string): UBTProgress | null {
     const trimmed = line.trim();
-    if (!trimmed) return null;
+    if (!trimmed) {return null;}
     const m = UBT_PROGRESS_RE.exec(trimmed);
-    if (!m) return null;
+    if (!m) {return null;}
     const currentStr = m[1] ?? '0';
     const totalStr = m[2] ?? '0';
     const description = m[3] ?? '';

@@ -24,11 +24,11 @@ export async function readWorkspaceEngines(workspaceFile: string): Promise<strin
   try {
     const text = await fs.readFile(workspaceFile, 'utf-8');
     const parsed = JSON.parse(text) as WorkspaceFile;
-    if (!Array.isArray(parsed.folders)) return [];
+    if (!Array.isArray(parsed.folders)) {return [];}
     const workspaceRoot = path.dirname(workspaceFile);
     const out: string[] = [];
     for (const folder of parsed.folders) {
-      if (!folder?.path) continue;
+      if (!folder?.path) {continue;}
       const resolved = path.isAbsolute(folder.path)
         ? folder.path
         : path.resolve(workspaceRoot, folder.path);
@@ -62,7 +62,7 @@ export async function discoverEngineCandidatesFromWorkspace(
     try {
       const entries = await fs.readdir(root, { withFileTypes: true });
       for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith('.code-workspace')) continue;
+        if (!entry.isFile() || !entry.name.endsWith('.code-workspace')) {continue;}
         const paths = await readWorkspaceEngines(path.join(root, entry.name));
         for (const p of paths) {
           if (enginePattern.test(p) || enginePattern.test(path.basename(p))) {

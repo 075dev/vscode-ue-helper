@@ -16,7 +16,7 @@ import { ProjectInfo, EngineInstall } from '@detection';
 
 export async function pickProject(projects: ProjectInfo[]): Promise<ProjectInfo | undefined> {
   if (projects.length === 0) {
-    vscode.window.showInformationMessage('No .uproject files found in workspace.');
+    void vscode.window.showInformationMessage('No .uproject files found in workspace.');
     return undefined;
   }
   const items = projects.map((p) => ({
@@ -34,7 +34,7 @@ export async function pickProject(projects: ProjectInfo[]): Promise<ProjectInfo 
 
 export async function pickEngine(engines: EngineInstall[]): Promise<EngineInstall | undefined> {
   if (engines.length === 0) {
-    vscode.window.showInformationMessage(
+    void vscode.window.showInformationMessage(
       'No Unreal Engine installations detected. Set vscodeUEHelper.engineRoot manually.',
     );
     return undefined;

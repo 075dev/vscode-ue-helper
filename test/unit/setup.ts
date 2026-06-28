@@ -20,7 +20,7 @@ vi.mock('vscode', () => ({
       onDidDelete: vi.fn(),
       dispose: vi.fn(),
     })),
-    findFiles: vi.fn(async () => []),
+    findFiles: vi.fn(() => Promise.resolve([])),
   },
   window: {
     showInformationMessage: vi.fn(),
@@ -43,8 +43,8 @@ vi.mock('vscode', () => ({
       hide: vi.fn(),
       dispose: vi.fn(),
     })),
-    withProgress: vi.fn(async (_opts: unknown, task: (p: unknown) => unknown) =>
-      task({ report: vi.fn() }),
+    withProgress: vi.fn((_opts: unknown, task: (p: unknown) => unknown) =>
+      Promise.resolve(task({ report: vi.fn() })),
     ),
   },
   commands: {
@@ -61,7 +61,7 @@ vi.mock('vscode', () => ({
   },
   tasks: {
     registerTaskProvider: vi.fn(() => ({ dispose: vi.fn() })),
-    fetchTasks: vi.fn(async () => []),
+    fetchTasks: vi.fn(() => Promise.resolve([])),
     executeTask: vi.fn(),
     Task: class {},
     TaskScope: { Workspace: 1, Global: 2 },
@@ -117,6 +117,8 @@ vi.mock('vscode', () => ({
     ) {}
   },
   ProgressLocation: { Notification: 10, Window: 15 },
+  ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+  ExtensionMode: { Production: 1, Development: 2, Test: 3 },
   extensions: { getExtension: vi.fn() },
   env: {
     isWindows: process.platform === 'win32',
