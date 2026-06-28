@@ -117,8 +117,25 @@ Phase 7 待发布 —— 走 `vsce publish`。
 | `vscodeUEHelper.autoBackupWorkspace` | `true` | 自动备份 .code-workspace |
 | `vscodeUEHelper.useMCP` | `auto` | MCP 服务器模式（auto/always/never） |
 | `vscodeUEHelper.lspLoggingLevel` | `info` | 日志详细级别 |
+| `vscodeUEHelper.clangdProxy.enabled` | `false` | 启用 Clangd LSP Proxy（关闭文件保活 + 汉化） |
+| `vscodeUEHelper.clangdProxy.realClangdPath` | 空 | **可选** 高级覆盖：留空时 proxy 会自动复用 `vscodeUEHelper.clangdPath` / 第三方 `clangd.path` / PATH；普通用户无需手动填写 |
+| `vscodeUEHelper.clangdProxy.logPath` | 空 | proxy 日志文件路径；为空时只写 stderr |
+| `vscodeUEHelper.clangdProxy.localization.enabled` | `false` | 启用诊断 / CodeAction / Hover 的汉化 |
 
 建议在 **workspace 级别**配置（写到 `.vscode/settings.json`），不要污染全局设置。
+
+#### Clangd LSP Proxy 解析顺序与安全回滚
+
+启用 Proxy 时（`UE Helper: Enable Clangd LSP Proxy`），插件会按以下顺序自动解析真实 clangd 路径：
+
+1. `vscodeUEHelper.clangdProxy.realClangdPath`（高级覆盖，常规用户留空）
+2. `vscodeUEHelper.clangdPath`
+3. 第三方 clangd 扩展当前的 `clangd.path`（自动排除 proxy launcher 自身）
+4. 备份中的原始 `clangd.path`
+5. 系统 PATH 中的 `clangd(.exe)`
+6. Windows 默认 LLVM 安装目录（`C:\Program Files\LLVM\bin` 等）
+
+如果上述全部无法定位有效 clangd，Enable 不会写入任何 clangd / proxy 配置，会回滚 `clangdProxy.enabled=false` 并在 Output 面板报错。
 
 ---
 
@@ -172,6 +189,27 @@ Phase 7 待发布 —— 走 `vsce publish`。
 - 仅 Windows 支持
 - 需要先 Build 一次（Live Coding 基于已编译的二进制）
 - 引擎版本 ≥ 4.27
+
+### "Clangd LSP Proxy 反复提示 Server process exited with code 0"
+
+启用 Proxy 后，如果 Output 面板里反复出现 `Server process exited with code 0` / `connection disposed` 等重启循环，说明 proxy CLI 启动后立即正常退出，而不是作为 LSP 服务器保活。
+
+该问题在**当前版本**已修复：
+
+- bundled CLI `clangdProxy.js` 入口已接通 `process.stdin` ↔ `LspBridge.feedClientFrame()` 与 `bridge.onClientOutput()` ↔ `process.stdout`
+- 回归测试 `test/unit/clangd/proxy/cliStdio.test.ts` 与 `e2eCliRestartLoop.test.ts` 覆盖「启动后不应立即退出」
+
+受影响的范围（请升级到当前版本）：
+
+- 老版本扩展（v0.1.0 之前或本仓库 2026-06 之前的快照）—— 老 CLI 入口没有接通 stdin/stdout
+- 自定义 launcher / 手工打包脚本 —— 如果没有调用 bundled `runProxy(process.argv.slice(2))`，需要更新
+
+升级步骤：
+
+1. 升级到包含本次 stdio 修复的 VSCodeUEHelper 版本
+2. 重新构建：`npm run build`
+3. 重新启用 Proxy：`UE Helper: Disable Clangd LSP Proxy` → `UE Helper: Enable Clangd LSP Proxy`
+4. 重启 clangd 或 Reload Window
 
 ---
 

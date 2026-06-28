@@ -21,3 +21,8 @@ CLAUDE.md
 *.log
 *.vsix
 .DS_Store
+.omo/**
+.codewiki/**
+.hermes/**
+temp_writer.js
+temp_writer.mjs
