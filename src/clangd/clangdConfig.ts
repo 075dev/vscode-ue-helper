@@ -30,7 +30,8 @@
  * If:
  *   - PathMatch:
  *       - .vscode/vscodeuehelper/completionHelper.cpp
- *       - Source/.*\.(cpp|h)
+ *       - Source/.*\.(cpp|h|hpp|c)
+ *       - Plugins/<PluginName>/Source/.*\.(cpp|h|hpp|c)
  */
 
 import * as fs from 'node:fs/promises';
@@ -150,7 +151,8 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
   const pathMatch: string[] = [];
   if (opts.projectPath) {
     pathMatch.push('.vscode/vscodeuehelper/completionHelper.cpp');
-    pathMatch.push('Source/.*\\.(cpp|h)');
+    pathMatch.push('Source/.*\\.(cpp|h|hpp|c)');
+    pathMatch.push('Plugins/.*/Source/.*\\.(cpp|h|hpp|c)');
   }
 
   // If 块必须放在对象字面量的第一个属性位置，确保 YAML 序列化时 If 在 CompileFlags 之前

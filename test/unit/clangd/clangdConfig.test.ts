@@ -103,7 +103,8 @@ describe('defaultClangdConfig (模板风格)', () => {
     expect(cfg.If?.PathMatch).toBeDefined();
     const matches = cfg.If?.PathMatch as string[];
     expect(matches).toContain('.vscode/vscodeuehelper/completionHelper.cpp');
-    expect(matches).toContain('Source/.*\\.(cpp|h)');
+    expect(matches).toContain('Source/.*\\.(cpp|h|hpp|c)');
+    expect(matches).toContain('Plugins/.*/Source/.*\\.(cpp|h|hpp|c)');
   });
 
   it('omits If when projectPath is not provided', () => {
