@@ -35,6 +35,7 @@ import {
   getPrepareIncludesList,
 } from '@clangd';
 import { detectSystemIncludesWithEngineRecommendation } from '@clangd/windowsSdk';
+import { getUeClangdCompatPath } from '@clangd';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
 
@@ -148,6 +149,7 @@ export async function executeCreateProject(
           systemIncludeFlags,
           compilerPath,
           projectPath: project.path,
+          compatHeaderPath: getUeClangdCompatPath(project.path),
         });
         results.push({
           step: 'Write .clangd',

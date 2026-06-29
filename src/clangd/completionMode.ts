@@ -18,6 +18,7 @@ import { CompletionMode as Mode } from './types';
 import { writeClangdConfig } from './clangdConfig';
 import { getMacroCompletionHelperPath } from './completionFiles';
 import { getPrepareIncludesList } from './preparseIncludes';
+import { getUeClangdCompatPath } from './ueClangdCompat';
 
 export class CompletionModeController {
   private statusBarItem: vscode.StatusBarItem;
@@ -90,6 +91,7 @@ export class CompletionModeController {
         completionMode: currentMode,
         macroHelperPath,
         preparseHeaders,
+        compatHeaderPath: getUeClangdCompatPath(this.projectPath),
       });
     } catch {
       // .clangd write 失败不阻塞用户操作
