@@ -32,6 +32,10 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { EOL } from 'node:os';
+import {
+  FILENAME_UE_CLANGD_COMPAT,
+  getUeClangdCompatContent,
+} from '@clangd/ueClangdCompat';
 
 // ---- 文件名常量 ----
 
@@ -314,6 +318,7 @@ export async function createCompletionFiles(
     { name: FILENAME_ADD_COMPLETIONS, content: getAddCompletionsContent(), overwrite: false },
     { name: FILENAME_MACRO_COMP_HELPER, content: getMacroCompletionsHelperContent(), overwrite: true },
     { name: FILENAME_ADD_MACRO_COMPLETIONS, content: getAddMacroCompletionsContent(), overwrite: false },
+    { name: FILENAME_UE_CLANGD_COMPAT, content: getUeClangdCompatContent(), overwrite: true },
   ];
 
   const results: { name: string; path: string; created: boolean }[] = [];
