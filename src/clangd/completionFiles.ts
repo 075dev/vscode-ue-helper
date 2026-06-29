@@ -164,7 +164,7 @@ function getMacroCompletionsHelperContent(): string {
  *
  * 注意：此文件只影响 slow 模式（通过 macroCompletionHelper.h 间接引用）。
  */
-function getAddMacroCompletionsContent(): string {
+export function getAddMacroCompletionsContent(): string {
   const noWorkTill = [
     '* *** 注意：修改后需要重新加载文件或点击状态栏 UC 按钮两次才能使更改生效 ***',
   ].join(EOL);
@@ -261,6 +261,36 @@ function getAddMacroCompletionsContent(): string {
     '',
     '// ***** 模块: CQTest (自动化测试) *****',
     '// #include "CQTest.h"  // AFTER_EACH, BEFORE_EACH, TEST_CLASS_WITH_BASE_AND_FLAGS 等',
+    '',
+    '// ==== UE 宏签名 stub（供 clangd 在 slow 模式下提供参数补全 + 悬停提示）====',
+    '// 原理：UE 宏是开放的 variadic，clangd 即使 include 引擎头文件也无法推断参数。',
+    '// 社区做法是手写 __attribute__((annotate(...))) + inline 空声明作为 stub，',
+    '// clangd 只看 token 不执行宏，因此能看到这些 stub 并据此提供 SignatureHelp 和 Hover。',
+    '// 这些声明不参与真实编译，仅用于 clangd 解析。',
+    '',
+    '// -- UFUNCTION(Specifier, ...) 常见参数',
+    '__attribute__((annotate("UFUNCTION: BlueprintPure, BlueprintCallable, Category, meta, ..."))) inline void UE_UFUNCTION_Stub_BlueprintPure();',
+    '__attribute__((annotate("UFUNCTION: BlueprintCallable, Category, meta, ..."))) inline void UE_UFUNCTION_Stub_BlueprintCallable();',
+    '__attribute__((annotate("UFUNCTION: Category=\\"...\\", meta=(...)"))) inline void UE_UFUNCTION_Stub_Category(const char* InCategory);',
+    '__attribute__((annotate("UFUNCTION: meta=(DisplayName, Keywords, ...)"))) inline void UE_UFUNCTION_Stub_meta(const char* InMeta);',
+    '',
+    '// -- UPROPERTY(Specifier, ...) 常见参数',
+    '__attribute__((annotate("UPROPERTY: EditAnywhere, BlueprintReadWrite, Category, meta, ..."))) inline void UE_UPROPERTY_Stub_EditAnywhere();',
+    '__attribute__((annotate("UPROPERTY: BlueprintReadWrite, Category, meta, ..."))) inline void UE_UPROPERTY_Stub_BlueprintReadWrite();',
+    '__attribute__((annotate("UPROPERTY: Category=\\"...\\", meta=(...)"))) inline void UE_UPROPERTY_Stub_Category(const char* InCategory);',
+    '',
+    '// -- UCLASS(Specifier, ...) 常见参数',
+    '__attribute__((annotate("UCLASS: ClassGroup=\\"...\\", meta=(...), BlueprintType, ..."))) inline void UE_UCLASS_Stub_ClassGroup(const char* InGroup);',
+    '__attribute__((annotate("UCLASS: meta=(...), BlueprintType, ..."))) inline void UE_UCLASS_Stub_meta(const char* InMeta);',
+    '',
+    '// -- USTRUCT(Specifier, ...) 常见参数',
+    '__attribute__((annotate("USTRUCT: BlueprintType, meta=(...), ..."))) inline void UE_USTRUCT_Stub();',
+    '',
+    '// -- UENUM(Specifier, ...) 常见参数',
+    '__attribute__((annotate("UENUM: BlueprintType, meta=(...), ..."))) inline void UE_UENUM_Stub_BlueprintType();',
+    '',
+    '// -- UMETA(...) 常见参数',
+    '__attribute__((annotate("UMETA: DisplayName=\\"...\\", ToolTip=\\"...\\", ..."))) inline void UE_UMETA_Stub();',
     '',
   ];
 
