@@ -44,6 +44,8 @@ import { ClangdConfig, IfBlock } from './types';
 export interface ClangdConfigOptions {
   completionMode?: 'fast' | 'slow';
   macroHelperPath?: string;
+  /** ueClangdCompat.h 的绝对路径，通过 /FI 强制包含在所有其他头文件之前 */
+  compatHeaderPath?: string;
   preparseHeaders?: string[];
   /** 系统头文件 flag（/X + /imsvc + -fms-compatibility-version），由 setSystemIncludes 命令注入 */
   systemIncludeFlags?: string[];
@@ -56,6 +58,11 @@ export interface ClangdConfigOptions {
 /** 默认配置（对齐 unreal-clangd v3 模板风格） */
 export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfig {
   const addFlags: string[] = [];
+
+  // 0. /FI 强制包含 ueClangdCompat.h（必须位于所有 Add flag 之前，确保 clangd 优先解析兼容宏）
+  if (opts.compatHeaderPath) {
+    addFlags.push(`/FI${opts.compatHeaderPath}`);
+  }
 
   // 1. 系统头文件（/X + /imsvc，由 setSystemIncludes 注入）
   if (opts.systemIncludeFlags?.length) {

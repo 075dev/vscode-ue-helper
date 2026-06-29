@@ -119,6 +119,34 @@ describe('defaultClangdConfig (模板风格)', () => {
   });
 });
 
+describe('defaultClangdConfig (compatHeaderPath)', () => {
+  it('在 fast 模式下 Add[0] 为 /FI<compatHeaderPath>', () => {
+    const cfg = defaultClangdConfig({
+      completionMode: 'fast',
+      compatHeaderPath: '/path/to/ueClangdCompat.h',
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add[0]).toBe('/FI/path/to/ueClangdCompat.h');
+  });
+
+  it('在 slow 模式下 Add[0] 为 /FI<compatHeaderPath>（即使有 macroHelperPath）', () => {
+    const cfg = defaultClangdConfig({
+      completionMode: 'slow',
+      compatHeaderPath: '/path/to/ueClangdCompat.h',
+      macroHelperPath: '/path/to/macroCompletionHelper.h',
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add[0]).toBe('/FI/path/to/ueClangdCompat.h');
+  });
+
+  it('未提供 compatHeaderPath 时 Add 不含任何 /FI 开头的值', () => {
+    const cfg = defaultClangdConfig();
+    const add = cfg.CompileFlags?.Add ?? [];
+    const fiFlags = add.filter((f) => f.startsWith('/FI'));
+    expect(fiFlags).toHaveLength(0);
+  });
+});
+
 describe('replaceSystemIncludeBlock (yaml 替换)', () => {
   it('replaces system include flags in Add', () => {
     const input = renderClangdConfig({
