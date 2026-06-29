@@ -34,10 +34,31 @@ import {
   fillMissingCompileCommands,
   getPrepareIncludesList,
 } from '@clangd';
+import type { FillResult } from '@clangd/compileCommands';
 import { detectSystemIncludesWithEngineRecommendation } from '@clangd/windowsSdk';
 import { getUeClangdCompatPath } from '@clangd';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
+
+/**
+ * 将 fillMissingCompileCommands 的结构化结果格式化为人类可读的摘要文本
+ *
+ * @param result - FillResult 对象或 undefined（读取失败时）
+ * @returns 格式化的摘要字符串
+ */
+export function formatFillResultDetail(result: FillResult | undefined): string {
+  if (!result) {
+    return 'compile_commands.json not found or empty, skipped';
+  }
+  if (result.skippedReason) {
+    return `skipped: ${result.skippedReason}`;
+  }
+  if (result.added.length === 0) {
+    return `all scanned source files already covered (${result.scanned} files across ${result.roots.length} source root${result.roots.length !== 1 ? 's' : ''})`;
+  }
+  const rootLabel = result.roots.length === 1 ? 'source root' : 'source roots';
+  return `added ${result.added.length} missing entries from ${result.roots.length} ${rootLabel}`;
+}
 
 export async function executeCreateProject(
   config: Config,
@@ -207,11 +228,11 @@ export async function executeCreateProject(
 
         // 🔧 补全缺失的 compile_commands.json 条目（新文件、头文件等）
         try {
-          await fillMissingCompileCommands(linkPath, project.path, logger);
+          const fillResult = await fillMissingCompileCommands(linkPath, project.path, logger);
           results.push({
             step: 'Fill missing compile_commands entries',
             ok: true,
-            detail: 'All source files now have complete clang flags',
+            detail: formatFillResultDetail(fillResult),
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
