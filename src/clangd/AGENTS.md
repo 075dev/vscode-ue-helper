@@ -20,6 +20,7 @@
 | `preparseIncludes.ts` | 打包的头文件列表 (curated vs comprehensive) |
 | `workspaceBackup.ts` | 备份/恢复 .code-workspace 防 UBT 覆盖 |
 | `windowsSdk.ts` | MSVC + Windows SDK 路径发现 |
+| `ueClangdCompat.ts` | UE + clangd 兼容层（重写 BODY_MACRO_COMBINE） |
 
 ## 关键数据流
 
@@ -39,6 +40,10 @@ executeToggleCompletionMode()
        ├── 重写 .clangd 的 CompileFlags.Add
        └── refresh 状态栏
 ```
+
+### ueClangdCompat 兼容头
+
+`createCompletionFiles` 在 `.vscode/vscodeuehelper/` 下写入 `ueClangdCompat.h`，`.clangd` 通过 `/FI` 强制在 UE 头之前包含它。该头重写 `BODY_MACRO_COMBINE` 宏，使 `UCLASS()` / `GENERATED_BODY()` 在 `.generated.h` 过期或缺失时仍能展开为合法 C++，避免 clangd 报 `unknown_typename` 错误。
 
 ## Fast vs Slow 模式
 
