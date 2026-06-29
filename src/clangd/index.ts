@@ -63,6 +63,12 @@ export {
   renderClangdFlags,
   type SystemIncludeInfo,
 } from './windowsSdk';
+export {
+  FILENAME_UE_CLANGD_COMPAT,
+  getUeClangdCompatDir,
+  getUeClangdCompatPath,
+  getUeClangdCompatContent,
+} from './ueClangdCompat';
 export type { CompletionMode, CompileCommandsEntry, ClangdConfig } from './types';
 export { startModifyResponseFiles } from './modifyRspFiles';
 export { startCreateRspMatchers, type RspMatcher } from './createRspMatchers';
