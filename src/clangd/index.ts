@@ -21,6 +21,7 @@ import type { DetectionHandles } from '@detection';
 import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
 import { ClangdProxyManager } from './proxyManager';
+import { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 
 export {
   writeClangdConfig,
@@ -55,7 +56,7 @@ export {
   toIncludeFlags,
 } from './preparseIncludes';
 export { WorkspaceBackup } from './workspaceBackup';
-export { CompletionModeController } from './completionMode';
+export { CompletionModeController, type CompletionModeProjectContext, type RewriteResult, type ToggleResult } from './completionMode';
 export {
   discoverSystemIncludes,
   listMsvcVersions,
@@ -70,8 +71,18 @@ export {
   getUeClangdCompatContent,
 } from './ueClangdCompat';
 export type { CompletionMode, CompileCommandsEntry, ClangdConfig } from './types';
+export {
+  diagnoseProject,
+  formatDiagnosticReport,
+  type DiagnosticReport,
+  type DiagnosticCheck,
+  type CheckStatus,
+  type CheckSeverity,
+  type ReportStatus,
+} from './diagnoseProject';
 export { startModifyResponseFiles } from './modifyRspFiles';
 export { startCreateRspMatchers, type RspMatcher } from './createRspMatchers';
+export { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 
 export interface ClangdHandles {
   completionMode: CompletionModeController;
@@ -88,6 +99,23 @@ export function activateClangd(
   const completionMode = new CompletionModeController(config);
   const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
   const proxyManager = new ClangdProxyManager(context, config, logger);
+  const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
+
+  // detection.ready 完成后设置 projectPath/engineRoot，确保 toggle/rewrite 能定位 .clangd 写入位置
+  // 并能解析 preparse header 中的 $(EngineRoot) 占位符。
+  void detection.ready.then((result) => {
+    const project = result.projects[0];
+    const engine = result.engines[0];
+    if (project?.path) {
+      completionMode.setProjectContext({
+        projectPath: project.path,
+        ...(engine?.path ? { engineRoot: engine.path } : {}),
+      });
+      logger.info('[clangd] projectPath/engineRoot set from detection.ready');
+    } else {
+      logger.warn('[clangd] no projectPath available: toggle will skip .clangd rewrite');
+    }
+  });
 
   // Render the status bar item and listen for config changes.
   completionMode.show();
@@ -100,6 +128,7 @@ export function activateClangd(
     }),
   );
   context.subscriptions.push({ dispose: () => completionMode.dispose() });
+  context.subscriptions.push(ueMacroCompletionProvider);
 
   // TODO Phase 4: replace the WorkspaceBackup constructor argument with a real
   // projectPath sourced from the detection layer (after the user picks one).

@@ -76,6 +76,35 @@ export async function getPrepareIncludesList(
 }
 
 /**
+ * 解析 header 列表中的 $(EngineRoot) 占位符。
+ *
+ * 将 $(EngineRoot) 替换为实际引擎根路径（统一使用正斜杠）。
+ * engineRoot 缺失时，含未解析占位符的 header 会被过滤掉，
+ * 避免 clangd 收到无效路径。
+ *
+ * @param headers - 可能包含 $(EngineRoot) 占位符的 header 路径列表
+ * @param engineRoot - 引擎根目录的绝对路径
+ * @returns 解析后的有效路径列表（含占位符且无法解析的会被过滤）
+ */
+export function resolvePreparseHeaders(
+  headers: string[],
+  engineRoot: string,
+): string[] {
+  if (headers.length === 0) {
+    return [];
+  }
+
+  if (!engineRoot) {
+    // engineRoot 缺失：仅保留不含占位符的绝对/相对路径
+    return headers.filter((h) => !h.includes('$(EngineRoot)'));
+  }
+
+  // 统一为正斜杠（Windows 兼容）
+  const normalizedRoot = engineRoot.replace(/\\/g, '/');
+  return headers.map((h) => h.replace(/\$\(EngineRoot\)/g, normalizedRoot));
+}
+
+/**
  * Render a list of headers as a `compile_commands.json` patch entry.
  * Each header becomes a `-include <header>` flag prepended to every
  * compile command. This is the mechanism clangd understands.

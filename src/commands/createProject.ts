@@ -171,6 +171,7 @@ export async function executeCreateProject(
           compilerPath,
           projectPath: project.path,
           compatHeaderPath: getUeClangdCompatPath(project.path),
+          engineRoot: engine.path,
         });
         results.push({
           step: 'Write .clangd',

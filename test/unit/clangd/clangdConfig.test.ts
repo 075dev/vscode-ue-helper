@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as yaml from 'yaml';
 import { renderClangdConfig, defaultClangdConfig, replaceSystemIncludeBlock } from '@clangd/clangdConfig';
 
 describe('renderClangdConfig (yaml 序列化)', () => {
@@ -181,6 +182,79 @@ describe('replaceSystemIncludeBlock (yaml 替换)', () => {
   });
 });
 
+// ===== T2: preparseHeaders 与 EngineRoot 解析 =====
+
+describe('defaultClangdConfig (preparseHeaders with EngineRoot resolution)', () => {
+  it('engineRoot 提供时 preparseHeaders 的 $(EngineRoot) 被解析为实际路径', () => {
+    const cfg = defaultClangdConfig({
+      engineRoot: 'E:/UE_5.8',
+      preparseHeaders: [
+        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
+        '$(EngineRoot)/Source/Runtime/Engine/Public/EngineSharedPCH.h',
+      ],
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+
+    // 解析后不应含 $(EngineRoot)
+    const unresolved = add.filter((f) => f.includes('$(EngineRoot)'));
+    expect(unresolved).toHaveLength(0);
+
+    // 应包含解析后的 -include 标志
+    expect(add).toContain('-include');
+    expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+    expect(add).toContain('E:/UE_5.8/Source/Runtime/Engine/Public/EngineSharedPCH.h');
+  });
+
+  it('engineRoot 缺失时含 $(EngineRoot) 的 header 被过滤，绝对路径保留', () => {
+    const cfg = defaultClangdConfig({
+      preparseHeaders: [
+        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
+        '/absolute/external/header.h',
+      ],
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+
+    // $(EngineRoot) 占位符不应出现在输出中
+    expect(add).not.toContain('$(EngineRoot)');
+
+    // 不含占位符的绝对路径 header 应保留
+    expect(add).toContain('/absolute/external/header.h');
+  });
+
+  it('Diagnostics.MissingIncludes 设为 None', () => {
+    const cfg = defaultClangdConfig();
+    expect(cfg.Diagnostics?.MissingIncludes).toBe('None');
+  });
+
+  it('forced include 顺序: compatHeaderPath → systemInclude → std → macroHelper → preparseHeaders → MSVC', () => {
+    const cfg = defaultClangdConfig({
+      completionMode: 'slow',
+      engineRoot: 'E:/UE_5.8',
+      compatHeaderPath: '/path/to/ueClangdCompat.h',
+      macroHelperPath: '/path/to/macroCompletionHelper.h',
+      systemIncludeFlags: ['/X', '/imsvc"sys"'],
+      preparseHeaders: [
+        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
+      ],
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+
+    const compatIdx = add.findIndex((f) => f === '/FI/path/to/ueClangdCompat.h');
+    const sysIdx = add.findIndex((f) => f === '/X');
+    const stdIdx = add.findIndex((f) => f.includes('std:c++20'));
+    const macroIdx = add.findIndex((f) => f === '/FI/path/to/macroCompletionHelper.h');
+    const preparseIdx = add.findIndex((f) => f === '-include');
+    const msvcIdx = add.findIndex((f) => f === '/TP');
+
+    expect(compatIdx).toBeGreaterThanOrEqual(0);
+    expect(sysIdx).toBeGreaterThan(compatIdx);
+    expect(stdIdx).toBeGreaterThan(sysIdx);
+    expect(macroIdx).toBeGreaterThan(stdIdx);
+    expect(preparseIdx).toBeGreaterThan(macroIdx);
+    expect(msvcIdx).toBeGreaterThan(preparseIdx);
+  });
+});
+
 describe('YAML quoting', () => {
   it('handles strings with colons correctly', () => {
     const yaml = renderClangdConfig({
@@ -188,5 +262,84 @@ describe('YAML quoting', () => {
     });
     // yaml 库自动处理冒号
     expect(yaml).toContain("-DFOO=bar:baz");
+  });
+});
+
+// ===== T2 对抗测试: misleading_success_output, dirty_worktree, hung_commands =====
+
+describe('defaultClangdConfig (adversarial)', () => {
+  it('misleading_success: engineRoot 为空但 preparseHeaders 全为 $(EngineRoot) 时不写入无效路径', () => {
+    const cfg = defaultClangdConfig({
+      engineRoot: '',
+      preparseHeaders: [
+        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
+      ],
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+
+    // 不应含 $(EngineRoot) 或 -include（全部被过滤）
+    const unresolved = add.filter((f) => f.includes('$(EngineRoot)'));
+    expect(unresolved).toHaveLength(0);
+
+    const includeFlags = add.filter((f) => f.startsWith('-include'));
+    expect(includeFlags).toHaveLength(0);
+  });
+
+  it('misleading_success: preparseHeaders 为空数组时不写入任何 -include', () => {
+    const cfg = defaultClangdConfig({
+      engineRoot: 'E:/UE_5.8',
+      preparseHeaders: [],
+    });
+    const add = cfg.CompileFlags?.Add ?? [];
+    const includeFlags = add.filter((f) => f.startsWith('-include'));
+    expect(includeFlags).toHaveLength(0);
+  });
+
+  it('hung_commands: defaultClangdConfig 是纯同步函数，无异步 I/O', () => {
+    // 调用不应抛出或挂起
+    const start = Date.now();
+    const cfg = defaultClangdConfig({
+      engineRoot: 'E:/UE_5.8',
+      preparseHeaders: new Array(100).fill('$(EngineRoot)/Source/X.h'),
+    });
+    const elapsed = Date.now() - start;
+
+    // 100 个 header 应在 10ms 内完成（纯字符串操作）
+    expect(elapsed).toBeLessThan(100);
+    expect(cfg.CompileFlags?.Add?.length).toBeGreaterThan(0);
+  });
+
+  it('dirty_worktree: renderClangdConfig 输出可被 yaml.parse 还原', () => {
+    const cfg = defaultClangdConfig({
+      completionMode: 'slow',
+      engineRoot: 'E:/UE_5.8',
+      compatHeaderPath: '/fake/ueClangdCompat.h',
+      macroHelperPath: '/fake/macroCompletionHelper.h',
+      systemIncludeFlags: ['/X'],
+      preparseHeaders: [
+        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
+      ],
+    });
+    const yamlText = renderClangdConfig(cfg);
+
+    // 可被 yaml.parse 还原
+    let parsed: unknown;
+    expect(() => {
+      parsed = yaml.parse(yamlText);
+    }).not.toThrow();
+    expect(parsed).toBeDefined();
+    expect(typeof parsed).toBe('object');
+
+    const doc = parsed as Record<string, unknown>;
+    const cf = doc.CompileFlags as Record<string, unknown>;
+    const add = cf.Add as string[];
+
+    // 往返后 -include 标志仍存在
+    expect(add).toContain('-include');
+    expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+
+    // 往返后 MissingIncludes 仍存在
+    const diag = doc.Diagnostics as Record<string, string>;
+    expect(diag.MissingIncludes).toBe('None');
   });
 });

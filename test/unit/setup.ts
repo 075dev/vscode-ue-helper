@@ -58,6 +58,7 @@ vi.mock('vscode', () => ({
       clear: vi.fn(),
       dispose: vi.fn(),
     })),
+    registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
   },
   tasks: {
     registerTaskProvider: vi.fn(() => ({ dispose: vi.fn() })),
@@ -80,6 +81,30 @@ vi.mock('vscode', () => ({
     }
   },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+  CompletionItemKind: { Property: 9 },
+  CompletionItem: class {
+    label: string;
+    kind: unknown;
+    insertText: unknown;
+    detail: string | undefined;
+    documentation: unknown;
+    constructor(label: string, kind?: unknown) {
+      this.label = label;
+      this.kind = kind;
+    }
+  },
+  SnippetString: class {
+    value: string;
+    constructor(value: string) {
+      this.value = value;
+    }
+  },
+  MarkdownString: class {
+    value: string;
+    constructor(value: string) {
+      this.value = value;
+    }
+  },
   Range: class {
     start: unknown;
     end: unknown;
@@ -116,6 +141,7 @@ vi.mock('vscode', () => ({
       public pattern: string,
     ) {}
   },
+  StatusBarAlignment: { Left: 1, Right: 2 },
   ProgressLocation: { Notification: 10, Window: 15 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   ExtensionMode: { Production: 1, Development: 2, Test: 3 },

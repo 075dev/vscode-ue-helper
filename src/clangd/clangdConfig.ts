@@ -38,6 +38,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
 import { ClangdConfig, IfBlock } from './types';
+import { resolvePreparseHeaders, toIncludeFlags } from './preparseIncludes';
 
 // ===== 默认 .clangd 内容 =====
 
@@ -48,6 +49,8 @@ export interface ClangdConfigOptions {
   /** ueClangdCompat.h 的绝对路径，通过 /FI 强制包含在所有其他头文件之前 */
   compatHeaderPath?: string;
   preparseHeaders?: string[];
+  /** 引擎根目录，用于解析 preparseHeaders 中的 $(EngineRoot) 占位符 */
+  engineRoot?: string;
   /** 系统头文件 flag（/X + /imsvc + -fms-compatibility-version），由 setSystemIncludes 命令注入 */
   systemIncludeFlags?: string[];
   /** 编译器路径（模板风格，如 D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe） */
@@ -76,6 +79,18 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
   // 3. /FI 强制包含 macroCompletionHelper.h（模板用 /FI 而非 -include）
   if (opts.completionMode === 'slow' && opts.macroHelperPath) {
     addFlags.push(`/FI${opts.macroHelperPath}`);
+  }
+
+  // 3.5. 解析 preparseHeaders 中的 $(EngineRoot) 并作为 -include 标志插入
+  //      位置：在 macroHelperPath 之后、MSVC 兼容性 flag 之前
+  if (opts.preparseHeaders?.length) {
+    const resolved = resolvePreparseHeaders(
+      opts.preparseHeaders,
+      opts.engineRoot ?? '',
+    );
+    if (resolved.length > 0) {
+      addFlags.push(...toIncludeFlags(resolved));
+    }
   }
 
   // 4. MSVC 兼容性 flag（对齐模板的 WIN_COMPILER_FLAGS_TO_ADD）
@@ -171,6 +186,7 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
     },
     Diagnostics: {
       UnusedIncludes: 'None',
+      MissingIncludes: 'None',
     },
   };
 
