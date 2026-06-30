@@ -36,7 +36,11 @@
   2. Starting proxy without `--localization-enabled` produces no Chinese translations (backward compatible)
   3. Proxy diagnostics show translations for 30+ UE-specific patterns (up from 22)
   4. All new translation rules have corresponding unit tests passing
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Wire localization options from parseArgs into LspBridge constructor (CLI fix)
+- [ ] 04-02-PLAN.md — Expand rule table from 22 to 30 rules with UE-specific C++ diagnostic patterns
 
 ### Phase 5: Localization Mode Enhancement
 **Goal**: Users can choose between bilingual (append) and Chinese-only (zh-only) diagnostic modes
@@ -70,6 +74,6 @@
 | 1. 面板框架 + 操作按钮 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 2. 配置编辑区 + Proxy 设置 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 3. 状态展示 + 细节打磨 | v1.0 | 1/1 | Complete | 2026-07-01 |
-| 4. CLI Fix + Rule Expansion | v1.1 | 0/0 | Not started | - |
+| 4. CLI Fix + Rule Expansion | v1.1 | 0/2 | Planned | - |
 | 5. Localization Mode Enhancement | v1.1 | 0/0 | Not started | - |
 | 6. UI Update + E2E Verification | v1.1 | 0/0 | Not started | - |
