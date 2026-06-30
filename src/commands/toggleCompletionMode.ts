@@ -16,6 +16,14 @@ export async function executeToggleCompletionMode(
   logger: Logger,
   clangd: ClangdHandles,
 ): Promise<void> {
-  const next = await clangd.completionMode.toggle();
-  logger.info(`[toggleCompletionMode] → ${next}`);
+  const result = await clangd.completionMode.toggle();
+
+  if (result.skipped) {
+    logger.warn(
+      `[toggleCompletionMode] → ${result.mode}（.clangd 未写入：缺少项目路径，请先打开 .code-workspace）`,
+    );
+    return;
+  }
+
+  logger.info(`[toggleCompletionMode] → ${result.mode}（.clangd 已重写）`);
 }
