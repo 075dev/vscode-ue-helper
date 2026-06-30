@@ -4,12 +4,13 @@
  * 参考 unreal-clangd (boocs/unreal-clangd v3) 的 src/modules/completionFiles.ts，
  * 使用 curated header 系统提供 UE 代码补全，而非扫描 UHT 生成的 .generated.h。
  *
- * 在 .vscode/vscodeuehelper/ 下创建 5 个文件：
+ * 在 .vscode/vscodeuehelper/ 下创建 6 个文件：
  *   completionHelper.cpp    — 编译单元，被加入 compile_commands.json
  *   defaultCompletions.h    — 核心 UE PCH 头（不可编辑）
  *   addCompletions.h        — 用户可添加非宏补全头文件
  *   macroCompletionHelper.h — 被 .clangd 的 -include 引用，控制宏补全
- *   addMacroCompletions.h   — 精选 30+ UE 宏头文件，用户可添加自定义
+ *   addMacroCompletions.h   — 精选 30+ UE 宏头文件，托管刷新 + 用户区保留
+ *   ueClangdCompat.h        — UE + clangd 兼容层
  *
  * 原理：
  *   clangd 的代码补全分两种：
@@ -22,11 +23,19 @@
  *     -include <项目>/.vscode/vscodeuehelper/macroCompletionHelper.h
  *   这样 clangd 就能在任意 .cpp 中补全 UE 宏。
  *
+ * 托管区域刷新（T3）：
+ *   addMacroCompletions.h 使用 MANAGED/USER 区域标记：
+ *     - MANAGED 区由扩展自动生成/刷新，不可手动编辑
+ *     - USER 区供用户添加自定义 include，刷新时保留
+ *     - 无标记的旧文件会被安全迁移：原内容移入 USER 区，MANAGED 区追加当前内容
+ *
  * 主要导出：
- *   - createCompletionFiles: 创建 5 个补全文件
+ *   - createCompletionFiles: 创建/刷新补全文件
  *   - addCompletionHelperToCompileCommands: 把 completionHelper.cpp 加入 compile_commands.json
  *   - getMacroCompletionHelperPath: 返回 macroCompletionHelper.h 的绝对路径（供 .clangd 引用）
  *   - FILENAME_*: 文件名常量
+ *   - MANAGED_BEGIN_MARKER 等: 托管区域标记常量
+ *   - parseManagedRegions / buildManagedFile: 区域解析/组装工具
  */
 
 import * as fs from 'node:fs/promises';
@@ -48,12 +57,151 @@ export const FILENAME_ADD_MACRO_COMPLETIONS = 'addMacroCompletions.h';
 /** .vscode/vscodeuehelper/ 目录（相对于项目根） */
 const UNREAL_CLANGD_DIR = '.vscode/vscodeuehelper';
 
+// ---- 托管区域标记 ----
+
+/** 托管区起始标记：此标记之后为扩展自动生成的内容，刷新时会被替换 */
+export const MANAGED_BEGIN_MARKER = '/* ==== VSCodeUEHelper MANAGED BEGIN (DO NOT EDIT) ==== */';
+
+/** 托管区结束标记 */
+export const MANAGED_END_MARKER = '/* ==== VSCodeUEHelper MANAGED END ==== */';
+
+/** 用户区起始标记：此标记之后为用户自定义内容，刷新时保留 */
+export const USER_BEGIN_MARKER = '/* ==== VSCodeUEHelper USER BEGIN ==== */';
+
+/** 用户区结束标记 */
+export const USER_END_MARKER = '/* ==== VSCodeUEHelper USER END ==== */';
+
+/**
+ * 托管区域解析结果。
+ */
+export interface ManagedRegions {
+  /** 是否包含完整的 managed begin + end 标记 */
+  hasManagedMarkers: boolean;
+  /** 托管区内容（不含标记行） */
+  managedContent: string;
+  /** 用户区内容（不含标记行）；若无标记则为全文 */
+  userContent: string;
+}
+
+/**
+ * 解析文件内容中的托管/用户区域。
+ *
+ * 规则：
+ *  - MANAGED_BEGIN → MANAGED_END 之间的内容为 managed 区。
+ *  - USER_BEGIN → USER_END 之间的内容为 user 区。
+ *  - 如果缺少任一标记对，hasManagedMarkers = false，userContent = 全文。
+ *
+ * 标记行本身不会出现在 managedContent 或 userContent 中。
+ */
+export function parseManagedRegions(content: string): ManagedRegions {
+  const managedBeginIdx = content.indexOf(MANAGED_BEGIN_MARKER);
+  const managedEndIdx = content.indexOf(MANAGED_END_MARKER);
+  const userBeginIdx = content.indexOf(USER_BEGIN_MARKER);
+  const userEndIdx = content.indexOf(USER_END_MARKER);
+
+  // 需要四个标记都存在才算有效托管文件
+  if (
+    managedBeginIdx === -1 ||
+    managedEndIdx === -1 ||
+    userBeginIdx === -1 ||
+    userEndIdx === -1
+  ) {
+    return { hasManagedMarkers: false, managedContent: '', userContent: content };
+  }
+
+  // managed 区：MANAGED_BEGIN 行尾 → MANAGED_END 行首
+  const managedStart = managedBeginIdx + MANAGED_BEGIN_MARKER.length;
+  const managedAfterNewline = content.indexOf('\n', managedStart);
+  const managedContentStart = managedAfterNewline === -1 ? managedStart : managedAfterNewline + 1;
+  const managedContentEnd = managedEndIdx;
+  const managedContent = content.slice(managedContentStart, managedContentEnd).trimEnd();
+
+  // user 区：USER_BEGIN 行尾 → USER_END 行首
+  const userStart = userBeginIdx + USER_BEGIN_MARKER.length;
+  const userAfterNewline = content.indexOf('\n', userStart);
+  const userContentStart = userAfterNewline === -1 ? userStart : userAfterNewline + 1;
+  const userContentEnd = userEndIdx;
+  const userContent = content.slice(userContentStart, userContentEnd).trimEnd();
+
+  return { hasManagedMarkers: true, managedContent, userContent };
+}
+
+/**
+ * 将托管内容和用户内容组装为完整的文件内容。
+ *
+ * 格式：
+ *   MANAGED_BEGIN_MARKER
+ *   <managedContent>
+ *   MANAGED_END_MARKER
+ *   (空行)
+ *   USER_BEGIN_MARKER
+ *   <userContent>
+ *   USER_END_MARKER
+ */
+export function buildManagedFile(managedContent: string, userContent: string): string {
+  const parts = [
+    MANAGED_BEGIN_MARKER,
+    managedContent.trimEnd(),
+    MANAGED_END_MARKER,
+    '',
+    USER_BEGIN_MARKER,
+    userContent.trimEnd(),
+    USER_END_MARKER,
+    '',
+  ];
+  return parts.join(EOL);
+}
+
+/**
+ * 旧版 addMacroCompletions.h 样板头的第一行。
+ *
+ * 无标记迁移时只保留用户实际 include/注释，避免把旧样板说明重复塞进 USER 区。
+ */
+const ADD_MACRO_HEADER_TITLE = '* addMacroCompletions.h — 添加宏补全和非宏补全头文件';
+
+/**
+ * 从无标记旧文件中提取迁移到 USER 区的内容。
+ *
+ * 安全策略：
+ *  - 旧版扩展样板头丢弃，避免升级后出现两套说明头。
+ *  - 用户 include 与用户注释原样保留。
+ *  - 损坏/半标记文件按普通用户内容迁移，最大化避免数据丢失。
+ */
+function extractLegacyUserContent(content: string): string {
+  const normalized = content.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+  const titleIndex = lines.findIndex((line) => line.trim() === ADD_MACRO_HEADER_TITLE);
+
+  if (titleIndex === -1) {
+    return content.trimEnd();
+  }
+
+  const headerEndIndex = lines.findIndex((line, index) => index > titleIndex && line.trim() === '*/');
+  if (headerEndIndex === -1) {
+    return content.trimEnd();
+  }
+
+  // allow: SIZE_OK — T3 只在既有 completionFiles 模块内实现区域迁移，避免为一个私有迁移流程引入新文件扩大范围。
+  return lines.slice(headerEndIndex + 1).join('\n').trimStart().trimEnd();
+}
+
+/**
+ * 使用当前生成的 managed 区内容刷新 addMacroCompletions.h。
+ */
+function refreshManagedMacroContent(existingContent: string, generatedContent: string): string {
+  const generatedRegions = parseManagedRegions(generatedContent);
+  const existingRegions = parseManagedRegions(existingContent);
+  const userContent = existingRegions.hasManagedMarkers
+    ? existingRegions.userContent
+    : extractLegacyUserContent(existingContent);
+
+  return generatedContent.replace(generatedRegions.userContent, userContent);
+}
+
 // ---- 文件内容生成器 ----
 
 /**
  * completionHelper.cpp 的内容。
- * 它是一个编译单元，include 基础补全 + 用户自定义。
- * 会被加入到 compile_commands.json 中，让 clangd 索引这些头文件。
  */
 function getCompletionHelperContent(): string {
   const doNotModify = [
@@ -64,16 +212,14 @@ function getCompletionHelperContent(): string {
     '*/',
   ].join(EOL);
   const includes = [
-    `#include "defaultCompletions.h"`,
-    `#include "addCompletions.h"`,
+    '#include "defaultCompletions.h"',
+    '#include "addCompletions.h"',
   ].join(EOL);
-  return `${doNotModify}${EOL}${EOL}${includes}${EOL}`;
+  return doNotModify + EOL + EOL + includes + EOL;
 }
 
 /**
  * defaultCompletions.h 的内容。
- * 包含 UE 核心 PCH 头，提供基础符号补全（类名、函数等）。
- * 这些头文件覆盖了 UE 引擎的最常用模块。
  */
 function getDefaultCompletionsContent(): string {
   const header = [
@@ -88,8 +234,6 @@ function getDefaultCompletionsContent(): string {
     '* *** 注意：直接打开此文件会显示 IntelliSense 错误/警告 ***',
     '*/',
   ].join(EOL);
-  // SharedPCH 顺序按 UE 模块依赖链：Core → CoreUObject → Engine → Slate → UnrealEd
-  // UnrealEdSharedPCH 是 Editor-only，用 #if WITH_EDITOR 包裹（Game-only 项目不会编译 Editor 模块）
   const includes = [
     '#include "Runtime/Core/Public/CoreSharedPCH.h"',
     '#include "Runtime/CoreUObject/Public/CoreUObjectSharedPCH.h"',
@@ -99,13 +243,11 @@ function getDefaultCompletionsContent(): string {
     '#include "Editor/UnrealEd/Public/UnrealEdSharedPCH.h"',
     '#endif',
   ].join(EOL);
-  return `${header}${EOL}${EOL}${includes}${EOL}`;
+  return header + EOL + EOL + includes + EOL;
 }
 
 /**
  * addCompletions.h 的内容（模板文件，不覆盖已有）。
- * 用户可以在这里添加任何需要非宏补全的头文件。
- * 不会造成代码补全加载变慢。
  */
 function getAddCompletionsContent(): string {
   const header = [
@@ -126,17 +268,11 @@ function getAddCompletionsContent(): string {
     '// #include "Kismet/KismetMathLibrary.h"',
     '',
   ].join(EOL);
-  return `${header}${EOL}${includes}`;
+  return header + EOL + includes;
 }
 
 /**
  * macroCompletionHelper.h 的内容（会被覆盖）。
- * 在 slow 模式下，.clangd 通过 -include 引用此文件。
- * 它包含 addMacroCompletions.h，后者包含所有 UE 宏定义头文件。
- *
- * 注意：此文件本身包含 defaultCompletions.h 的引用被注释掉了，
- * 因为 defaultCompletions.h 已经通过 completionHelper.cpp 加载。
- * 取消注释会重复加载但不影响功能。
  */
 function getMacroCompletionsHelperContent(): string {
   const header = [
@@ -154,25 +290,24 @@ function getMacroCompletionsHelperContent(): string {
     '// #include "defaultCompletions.h"  // 已通过 completionHelper.cpp 加载',
     '#include "addMacroCompletions.h"',
   ].join(EOL);
-  return `${header}${EOL}${EOL}${includes}${EOL}`;
+  return header + EOL + EOL + includes + EOL;
 }
 
 /**
- * addMacroCompletions.h 的内容（模板文件，不覆盖已有）。
- * 包含 30+ 个 UE 宏定义头文件，覆盖 UPROPERTY、UFUNCTION、UE_LOG 等常用宏。
- * 用户可以添加自定义的宏头文件。
+ * addMacroCompletions.h 的内容（托管区域格式）。
+ *
+ * 文件结构：
+ *   1. 文件头注释
+ *   2. MANAGED_BEGIN → 自动生成区（30+ 精选 include + UE 宏签名 stub）
+ *   3. MANAGED_END
+ *   4. USER_BEGIN → 用户自定义区（示例注释，刷新时保留）
+ *   5. USER_END
  *
  * 注意：此文件只影响 slow 模式（通过 macroCompletionHelper.h 间接引用）。
  */
 export function getAddMacroCompletionsContent(): string {
-  const noWorkTill = [
-    '* *** 注意：修改后需要重新加载文件或点击状态栏 UC 按钮两次才能使更改生效 ***',
-  ].join(EOL);
-  const willHaveErrors = [
-    '* *** 注意：直接打开此文件会显示 IntelliSense 错误/警告 ***',
-  ].join(EOL);
-
-  const lines = [
+  // ---- 文件头 ----
+  const header = [
     '/*',
     '* addMacroCompletions.h — 添加宏补全和非宏补全头文件',
     '* 此文件中的 #include 在 slow 模式下被 clangd 预包含。',
@@ -181,12 +316,19 @@ export function getAddMacroCompletionsContent(): string {
     '* 提示：直接在源码中 #include 头文件也能获得该文件的所有补全（包括宏），',
     '* 所以通常只需在此添加常用但没直接 include 的模块头文件。',
     '*',
-    noWorkTill,
+    '* ==== VSCodeUEHelper 托管文件 ====',
+    '* MANAGED 区域由扩展自动生成/刷新，请勿手动编辑。',
+    '* USER 区域供用户添加自定义 include，刷新时保留。',
     '*',
-    willHaveErrors,
+    '* *** 注意：修改后需要重新加载文件或点击状态栏 UC 按钮两次才能使更改生效 ***',
+    '*',
+    '* *** 注意：直接打开此文件会显示 IntelliSense 错误/警告 ***',
     '*/',
-    '',
-    '// ==== 常用 UE 宏头文件（30+ 精选） ====',
+  ].join(EOL);
+
+  // ---- 托管区内容 ----
+  const managedLines = [
+    '// ==== 常用 UE 宏头文件（30+ 精选，由 VSCodeUEHelper 自动生成） ====',
     '',
     '// -- 核心对象宏：UPROPERTY, UFUNCTION, UCLASS, USTRUCT, UENUM 等',
     '#include "UObject/ObjectMacros.h"',
@@ -254,14 +396,6 @@ export function getAddMacroCompletionsContent(): string {
     '// -- 虚拟函数/纯虚函数宏：PURE_VIRTUAL',
     '#include "HAL/MemoryMisc.h"',
     '',
-    '// ==== 用户自定义宏补全（示例，取消注释以启用） ====',
-    '',
-    '// ***** 模块: GameplayAbilities *****',
-    '// #include "AttributeSet.h"  // GAMEPLAYATTRIBUTE_PROPERTY_GETTER, GAMEPLAYATTRIBUTE_VALUE_GETTER 等',
-    '',
-    '// ***** 模块: CQTest (自动化测试) *****',
-    '// #include "CQTest.h"  // AFTER_EACH, BEFORE_EACH, TEST_CLASS_WITH_BASE_AND_FLAGS 等',
-    '',
     '// ==== UE 宏签名 stub（供 clangd 在 slow 模式下提供参数补全 + 悬停提示）====',
     '// 原理：UE 宏是开放的 variadic，clangd 即使 include 引擎头文件也无法推断参数。',
     '// 社区做法是手写 __attribute__((annotate(...))) + inline 空声明作为 stub，',
@@ -294,14 +428,29 @@ export function getAddMacroCompletionsContent(): string {
     '',
   ];
 
-  return lines.join(EOL) + EOL;
+  const managedContent = managedLines.join(EOL);
+
+  // ---- 用户区内容（示例注释，刷新时保留） ----
+  const userLines = [
+    '// ==== 用户自定义宏补全（示例，取消注释以启用） ====',
+    '',
+    '// ***** 模块: GameplayAbilities *****',
+    '// #include "AttributeSet.h"  // GAMEPLAYATTRIBUTE_PROPERTY_GETTER, GAMEPLAYATTRIBUTE_VALUE_GETTER 等',
+    '',
+    '// ***** 模块: CQTest (自动化测试) *****',
+    '// #include "CQTest.h"  // AFTER_EACH, BEFORE_EACH, TEST_CLASS_WITH_BASE_AND_FLAGS 等',
+    '',
+  ];
+
+  const userContent = userLines.join(EOL);
+
+  return header + EOL + EOL + buildManagedFile(managedContent, userContent);
 }
 
 // ---- 路径工具函数 ----
 
 /**
  * 返回项目的 .vscode/vscodeuehelper/ 目录的绝对路径。
- * projectPath 是 .uproject 的绝对路径，项目根 = path.dirname(projectPath)。
  */
 function getUnrealClangdDir(projectPath: string): string {
   return path.join(path.dirname(projectPath), UNREAL_CLANGD_DIR);
@@ -309,7 +458,6 @@ function getUnrealClangdDir(projectPath: string): string {
 
 /**
  * 返回 macroCompletionHelper.h 的绝对路径。
- * 供 .clangd 的 -include 标志使用。
  */
 export function getMacroCompletionHelperPath(projectPath: string): string {
   return path.join(getUnrealClangdDir(projectPath), FILENAME_MACRO_COMP_HELPER);
@@ -317,7 +465,6 @@ export function getMacroCompletionHelperPath(projectPath: string): string {
 
 /**
  * 返回 completionHelper.cpp 的绝对路径。
- * 供 compile_commands.json 新增条目使用。
  */
 export function getCompletionHelperPath(projectPath: string): string {
   return path.join(getUnrealClangdDir(projectPath), FILENAME_COMPLETION_HELPER);
@@ -326,13 +473,17 @@ export function getCompletionHelperPath(projectPath: string): string {
 // ---- 主要导出函数 ----
 
 /**
- * 在 .vscode/vscodeuehelper/ 下创建 5 个补全文件。
+ * 在 .vscode/vscodeuehelper/ 下创建/刷新补全文件。
  *
  * 安全策略：
- *   - completionHelper.cpp / defaultCompletions.h / macroCompletionHelper.h：
+ *   - completionHelper.cpp / defaultCompletions.h / macroCompletionHelper.h / ueClangdCompat.h：
  *     每次都覆盖（这些由扩展管理）。
- *   - addCompletions.h / addMacroCompletions.h：
- *     仅在不存在时创建模板（保留用户编辑）。
+ *   - addCompletions.h：
+ *     仅在不存在时创建模板（保留用户编辑，纯用户文件）。
+ *   - addMacroCompletions.h（托管刷新）：
+ *     如果已存在且包含 MANAGED/USER 标记 → 替换 MANAGED 区，保留 USER 区。
+ *     如果已存在但无标记（旧版本） → 原内容移入 USER 区，MANAGED 区写入当前内容。
+ *     如果不存在 → 创建新文件。
  *
  * @returns 创建的每个文件的信息数组
  */
@@ -342,35 +493,47 @@ export async function createCompletionFiles(
   const dir = getUnrealClangdDir(projectPath);
   await fs.mkdir(dir, { recursive: true });
 
-  const fileDefs: { name: string; content: string; overwrite: boolean }[] = [
-    { name: FILENAME_COMPLETION_HELPER, content: getCompletionHelperContent(), overwrite: true },
-    { name: FILENAME_DEFAULT_COMP, content: getDefaultCompletionsContent(), overwrite: true },
-    { name: FILENAME_ADD_COMPLETIONS, content: getAddCompletionsContent(), overwrite: false },
-    { name: FILENAME_MACRO_COMP_HELPER, content: getMacroCompletionsHelperContent(), overwrite: true },
-    { name: FILENAME_ADD_MACRO_COMPLETIONS, content: getAddMacroCompletionsContent(), overwrite: false },
-    { name: FILENAME_UE_CLANGD_COMPAT, content: getUeClangdCompatContent(), overwrite: true },
-  ];
-
   const results: { name: string; path: string; created: boolean }[] = [];
 
-  for (const def of fileDefs) {
+  // 1) 纯覆盖文件
+  const overwriteDefs: { name: string; content: string }[] = [
+    { name: FILENAME_COMPLETION_HELPER, content: getCompletionHelperContent() },
+    { name: FILENAME_DEFAULT_COMP, content: getDefaultCompletionsContent() },
+    { name: FILENAME_MACRO_COMP_HELPER, content: getMacroCompletionsHelperContent() },
+    { name: FILENAME_UE_CLANGD_COMPAT, content: getUeClangdCompatContent() },
+  ];
+
+  for (const def of overwriteDefs) {
     const filePath = path.join(dir, def.name);
-    let created = false;
+    await fs.writeFile(filePath, def.content, 'utf-8');
+    results.push({ name: def.name, path: filePath, created: true });
+  }
 
-    if (def.overwrite) {
-      await fs.writeFile(filePath, def.content, 'utf-8');
-      created = true;
-    } else {
-      try {
-        await fs.access(filePath);
-        // 文件已存在，不覆盖
-      } catch {
-        await fs.writeFile(filePath, def.content, 'utf-8');
-        created = true;
-      }
-    }
+  // 2) addCompletions.h：仅首次创建
+  const addCompletionsPath = path.join(dir, FILENAME_ADD_COMPLETIONS);
+  try {
+    await fs.access(addCompletionsPath);
+    // 已存在，不覆盖
+    results.push({ name: FILENAME_ADD_COMPLETIONS, path: addCompletionsPath, created: false });
+  } catch {
+    await fs.writeFile(addCompletionsPath, getAddCompletionsContent(), 'utf-8');
+    results.push({ name: FILENAME_ADD_COMPLETIONS, path: addCompletionsPath, created: true });
+  }
 
-    results.push({ name: def.name, path: filePath, created });
+  // 3) addMacroCompletions.h：托管刷新
+  const macroPath = path.join(dir, FILENAME_ADD_MACRO_COMPLETIONS);
+  const generatedMacroContent = getAddMacroCompletionsContent();
+
+  try {
+    const existing = await fs.readFile(macroPath, 'utf-8');
+    const refreshed = refreshManagedMacroContent(existing, generatedMacroContent);
+    await fs.writeFile(macroPath, refreshed, 'utf-8');
+    // 已存在，非首次创建
+    results.push({ name: FILENAME_ADD_MACRO_COMPLETIONS, path: macroPath, created: false });
+  } catch {
+    // 文件不存在，创建新文件
+    await fs.writeFile(macroPath, generatedMacroContent, 'utf-8');
+    results.push({ name: FILENAME_ADD_MACRO_COMPLETIONS, path: macroPath, created: true });
   }
 
   return results;
@@ -380,15 +543,6 @@ export async function createCompletionFiles(
 
 /**
  * 把 completionHelper.cpp 作为新条目添加到 compile_commands.json 中。
- *
- * 做法：复制已有条目的结构（directory / arguments / command），
- * 替换 file 为 completionHelper.cpp 的路径。
- *
- * 如果 compile_commands.json 不存在或为空，则跳过（先运行 generateCompileCommands）。
- *
- * @param projectPath .uproject 的绝对路径
- * @param ccJsonPath compile_commands.json 的路径（可选，默认 projectDir/compile_commands.json）。由 generateCompileCommands 返回。
- * @returns true 表示成功添加（或已存在），false 表示跳过
  */
 export async function addCompletionHelperToCompileCommands(
   projectPath: string,
@@ -410,19 +564,15 @@ export async function addCompletionHelperToCompileCommands(
     return false;
   }
 
-  // 检查是否已经存在 completionHelper.cpp 的条目
   const normalizedHelper = helperPath.replace(/\\/g, '/');
   if (entries.some((e) => String(e.file ?? '').replace(/\\/g, '/') === normalizedHelper)) {
-    return true; // 已存在
+    return true;
   }
 
-  // 复制第一个条目作为模板
   const template = { ...entries[0] };
   template.file = helperPath;
 
-  // 如果模板用 command 而非 arguments，保持一致性
   if (typeof template.command === 'string') {
-    // command 中包含了 file 路径，需要替换
     const oldFile = entries[0]?.file as string | undefined;
     if (oldFile) {
       template.command = template.command.replace(oldFile, helperPath);
@@ -435,12 +585,10 @@ export async function addCompletionHelperToCompileCommands(
   return true;
 }
 
-// ---- 向后兼容：保留 populateAddCompletions（已废弃的 .generated.h 扫描方式） ----
-// 保留原有导出，避免破坏现有调用方。标记为 @deprecated。
+// ---- 向后兼容 ----
 
 /**
  * @deprecated 请使用 createCompletionFiles() 代替。
- * 旧的 .generated.h 扫描方式已废弃。
  */
 export interface PopulateOptions {
   projectPath: string;
@@ -459,11 +607,8 @@ export interface PopulateResult {
 
 /**
  * @deprecated 请使用 createCompletionFiles() 代替。
- * 旧的实现扫描 Intermediate/Build 中的 .generated.h，已不再推荐。
- * 现在直接返回 mock 结果。
  */
 export async function populateAddCompletions(opts: PopulateOptions): Promise<PopulateResult> {
-  // 确保目录存在并调用新的系统
   await createCompletionFiles(opts.projectPath);
 
   const dir = getUnrealClangdDir(opts.projectPath);
