@@ -19,9 +19,10 @@
 
 import { spawn } from 'node:child_process';
 import { ProcessBridge } from './processBridge';
-import { LspBridge } from './bridge';
+import { LspBridge, type LocalizationOptions } from './bridge';
 import { createProxyLogFn, realIo, realStdio, wireBridgeStdio } from './cliRuntime';
 import { parseArgs } from './cliArgs';
+import { createDefaultLocalizationTable } from './localization';
 import type { CliIo, CliStdio } from './cliRuntime';
 
 export { parseArgs } from './cliArgs';
@@ -81,6 +82,11 @@ export function runProxy(
 ): DoneClaim {
   const { options, errors } = parseArgs(argv);
 
+  // 构造本地化选项（D-01, D-02, LOC-01-01 ~ LOC-01-04）
+  const localization: LocalizationOptions | undefined = options.localizationEnabled
+    ? { enabled: true, mode: options.localizationMode, targets: options.localizationTargets, table: createDefaultLocalizationTable() }
+    : undefined;
+
   if (errors.length > 0) {
     for (const err of errors) {
       io.stderrWrite(`[clangd-proxy] ERROR: ${err}`);
@@ -139,6 +145,7 @@ export function runProxy(
   const bridge = new LspBridge(processBridge, {
     keepaliveMax: options.keepaliveMax,
     keepaliveTtlSec: options.keepaliveTtlSec,
+    localization,
     hooks: {
       onServerResponse: (msg, method) => {
         if (method === 'initialize' && msg.error === undefined) {
