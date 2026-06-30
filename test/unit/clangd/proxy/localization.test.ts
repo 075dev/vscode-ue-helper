@@ -23,9 +23,9 @@ import {
 // ===== 默认规则表 =====
 
 describe('createDefaultLocalizationTable', () => {
-  it('应包含 22 条默认规则', () => {
+  it('应包含 30 条默认规则', () => {
     const table = createDefaultLocalizationTable();
-    expect(table.rules).toHaveLength(22);
+    expect(table.rules).toHaveLength(30);
   });
 
   it('每条规则应有有效的 pattern、replacement、mode 和 target', () => {
@@ -98,7 +98,7 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe("使用了未声明的标识符 'Foo'");
   });
 
-  it('应处理所有 22 种 clangd 消息', () => {
+  it('应处理所有 30 种 clangd 消息', () => {
     const table = createDefaultLocalizationTable();
     const testCases: Array<{ input: string; expectedContains: string }> = [
       // 原 7 条
@@ -190,6 +190,39 @@ describe('applyLocalizationToDiagnostic', () => {
       {
         input: "out-of-line definition of 'Foo' does not match any declaration in 'MyClass'",
         expectedContains: "[类外定义 'Foo' 与 'MyClass' 中的任何声明都不匹配]",
+      },
+      // Phase 4 新增 8 条
+      {
+        input: "overriding 'BeginPlay' must have 'override' specifier",
+        expectedContains: "[覆盖 'BeginPlay' 必须使用 'override' 说明符]",
+      },
+      {
+        input: "cast from 'double' to 'float' loses precision",
+        expectedContains: "[从 'double' 转换到 'float' 丢失精度]",
+      },
+      {
+        input: "calling a protected constructor of class 'AActor'",
+        expectedContains: "[调用了类 'AActor' 的保护构造函数]",
+      },
+      {
+        input: "return type of selected overload is 'int32' but expected 'float'",
+        expectedContains: "[选择的重载返回类型为 'int32' 但期望 'float']",
+      },
+      {
+        input: "explicit instantiation of 'FMyTemplate' does not refer to a function template",
+        expectedContains: "['FMyTemplate' 的显式实例化不引用函数模板]",
+      },
+      {
+        input: "taking address of a temporary",
+        expectedContains: "[获取临时对象的地址]",
+      },
+      {
+        input: "'UProperty' is deprecated",
+        expectedContains: "['UProperty' 已弃用]",
+      },
+      {
+        input: "calling a private constructor of class 'FScopedEvent'",
+        expectedContains: "[调用了类 'FScopedEvent' 的私有构造函数]",
       },
     ];
     for (const { input, expectedContains } of testCases) {
