@@ -1,8 +1,5 @@
 /**
  * controlPanelMessages —— WebView ↔ Extension 消息协议类型定义
- *
- * 定义 ControlPanel WebView 和 VS Code 扩展进程之间的双向消息格式。
- * 所有消息使用 discriminated union，通过 type 字段区分。
  */
 
 /** Config Tab 配置项定义 */
@@ -28,18 +25,14 @@ export interface ProxyConfigValues {
   localizationTargets: string[];
 }
 
-/** Status Tab 状态信息 —— 覆盖项目信息 + 代理状态全部详情 */
+/** Status Tab 状态信息 */
 export interface StatusValues {
-  // 项目
   projectName: string;
   projectPath: string;
-  // 引擎
   engineVersion: string;
   enginePath: string;
-  // 工作区
   hasWorkspaceFile: boolean;
   workspaceFilePath: string;
-  // 配置
   configuration: string;
   target: string;
   platform: string;
@@ -48,7 +41,6 @@ export interface StatusValues {
   mcpMode: string;
   mcpHost: string;
   logLevel: string;
-  // 代理
   proxyEnabled: boolean;
   proxyActive: boolean;
   proxyLauncherPath: string;
@@ -99,15 +91,6 @@ export type PanelMessage =
   | { type: 'statusValues'; values: StatusValues }
   | { type: 'saveResult'; scope: 'config' | 'proxy'; result: SaveResult };
 
-/** 面板状态 */
-export interface PanelState {
-  projectName: string;
-  engineVersion: string;
-}
-
-/**
- * VS Code 命令 ID 与面板显示名的映射。
- */
 export const COMMAND_MAP: Record<string, string> = {
   build: 'vscodeUEHelper.build',
   rebuild: 'vscodeUEHelper.rebuild',
@@ -127,7 +110,6 @@ export const COMMAND_MAP: Record<string, string> = {
   uninstall: 'vscodeUEHelper.uninstall',
 } as const;
 
-/** 面板按钮分组定义 */
 export interface ButtonGroup {
   id: string;
   i18nKey: string;
@@ -140,7 +122,6 @@ export interface ButtonDef {
   icon: string;
 }
 
-/** 按钮分组配置 */
 export const BUTTON_GROUPS: ButtonGroup[] = [
   {
     id: 'build',
@@ -196,13 +177,12 @@ export const BUTTON_GROUPS: ButtonGroup[] = [
   },
 ];
 
-/** 可选择的枚举值定义 */
 export interface SelectOption {
   value: string;
   label: string;
+  labelKey?: string;
 }
 
-/** Config Tab 枚举字段定义 */
 export const CONFIG_SELECTS: Record<string, SelectOption[]> = {
   configuration: [
     { value: 'Debug', label: 'Debug' },
@@ -239,7 +219,6 @@ export const CONFIG_SELECTS: Record<string, SelectOption[]> = {
   ],
 };
 
-/** Proxy Tab 枚举字段定义 */
 export const PROXY_SELECTS: Record<string, SelectOption[]> = {
   localizationMode: [
     { value: 'append', label: 'Append' },
@@ -252,36 +231,20 @@ export const PROXY_SELECTS: Record<string, SelectOption[]> = {
   ],
 };
 
-/** Config Tab 中哪些字段是布尔开关 */
 export const CONFIG_BOOLEANS: string[] = ['autoBackupWorkspace'];
-
-/** Proxy Tab 中哪些字段是布尔开关 */
 export const PROXY_BOOLEANS: string[] = ['clangdProxyEnabled', 'localizationEnabled'];
 
-/** Config Tab 字段列表（决定渲染顺序） */
 export const CONFIG_FIELDS: string[] = [
-  'configuration',
-  'target',
-  'platform',
-  'completionMode',
-  'useMCP',
-  'lspLoggingLevel',
-  'autoBackupWorkspace',
+  'configuration', 'target', 'platform',
+  'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace',
 ];
 
-/** Proxy Tab 字段列表 */
 export const PROXY_FIELDS: string[] = [
-  'clangdProxyEnabled',
-  'clangdProxyKeepaliveMax',
-  'clangdProxyKeepaliveTtlSec',
-  'clangdProxyRealClangdPath',
-  'clangdProxyLogPath',
-  'localizationEnabled',
-  'localizationMode',
-  'localizationTargets',
+  'clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec',
+  'clangdProxyRealClangdPath', 'clangdProxyLogPath',
+  'localizationEnabled', 'localizationMode', 'localizationTargets',
 ];
 
-/** 字段类型：select / boolean / number / text */
 export type FieldType = 'select' | 'boolean' | 'number' | 'text';
 
 export function getFieldType(field: string, isProxy: boolean): FieldType {
@@ -293,12 +256,7 @@ export function getFieldType(field: string, isProxy: boolean): FieldType {
   return 'text';
 }
 
-/**
- * WebView 字段名 → VS Code config key 映射。
- * WebView 中字段名是驼峰简写，但 VS Code settings.json 的 key 是点号路径。
- */
 export const CONFIG_KEY_MAP: Record<string, string> = {
-  // Config Tab — keys match directly (no prefix needed)
   configuration: 'configuration',
   target: 'target',
   platform: 'platform',
@@ -306,7 +264,6 @@ export const CONFIG_KEY_MAP: Record<string, string> = {
   useMCP: 'useMCP',
   autoBackupWorkspace: 'autoBackupWorkspace',
   lspLoggingLevel: 'lspLoggingLevel',
-  // Proxy Tab — mapped to clangdProxy.* keys
   clangdProxyEnabled: 'clangdProxy.enabled',
   clangdProxyKeepaliveMax: 'clangdProxy.keepaliveMax',
   clangdProxyKeepaliveTtlSec: 'clangdProxy.keepaliveTtlSec',

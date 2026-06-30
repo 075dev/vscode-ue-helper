@@ -1,17 +1,5 @@
 /**
  * commands —— 模块入口
- *
- * 把 package.json manifest 里的每个命令绑到实现。从 extension.ts 在激活时调用。
- *
- * 注册的命令(vscodeUEHelper.*):
- *   - build / rebuild / clean
- *   - launchEditor / liveCoding
- *   - generateCompileCommands / createProject
- *   - diagnoseProject / toggleCompletionMode / showProjectInfo
- *   - setSystemIncludes / installRules / uninstall
- *   - openWorkspaceFile / regenerateWorkspace
- *   - selectConfig / selectTarget
- *   - enableClangdProxy / disableClangdProxy / showClangdProxyStatus
  */
 
 import * as vscode from 'vscode';
