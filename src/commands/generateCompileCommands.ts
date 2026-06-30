@@ -89,7 +89,10 @@ export async function executeGenerateCompileCommands(
           message: 'Adding completion helper...',
           increment: 20,
         });
-        await addCompletionHelperToCompileCommands(project.path);
+        const helperAdded = await addCompletionHelperToCompileCommands(project.path, linkPath);
+        if (!helperAdded) {
+          throw new Error(`Unable to add completion helper entry to ${linkPath}`);
+        }
 
         progress.report({ increment: 20 });
 
