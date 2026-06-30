@@ -193,6 +193,39 @@ describe('parseArgs — CLI 参数解析', () => {
     ]);
   });
 
+  // ─── 本地化启用 ───────────────────────────────────────────
+
+  it('--localization-enabled 启用本地化并指定模式与目标', () => {
+    const result = parseArgs([
+      'node', 'proxy.js',
+      '--real-clangd', '/usr/bin/clangd',
+      '--localization-enabled',
+      '--localization-mode', 'append',
+      '--localization-targets', 'diagnostics,codeActions',
+    ]);
+
+    expect(result.options.localizationEnabled).toBe(true);
+    expect(result.options.localizationMode).toBe('append');
+    expect(result.options.localizationTargets).toEqual(['diagnostics', 'codeActions']);
+  });
+
+  // ─── 本地化默认禁用 ───────────────────────────────────────
+
+  it('未指定 --localization-enabled 时本地化默认禁用', () => {
+    const result = parseArgs([
+      'node', 'proxy.js',
+      '--real-clangd', '/usr/bin/clangd',
+    ]);
+
+    expect(result.options.localizationEnabled).toBe(false);
+    expect(result.options.localizationMode).toBe('append');
+    expect(result.options.localizationTargets).toEqual([
+      'diagnostics',
+      'codeActions',
+      'hover',
+    ]);
+  });
+
   // ─── 仅 --real-clangd 路径 ────────────────────────────────────
 
   it('最简参数：仅 --real-clangd', () => {
