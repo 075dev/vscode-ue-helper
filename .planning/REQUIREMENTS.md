@@ -66,17 +66,17 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOC-01-01 ~ LOC-01-04 | Phase 1 | Pending |
-| LOC-02-01 ~ LOC-02-05 | Phase 2 | Pending |
-| LOC-02-06 ~ LOC-02-07 | Phase 3 | Pending |
-| LOC-03-01 ~ LOC-03-03 | Phase 1 | Pending |
-| LOC-04-01 ~ LOC-04-04 | Phase 3 | Pending |
+| LOC-01-01 ~ LOC-01-04 | Phase 4 | Pending |
+| LOC-03-01 ~ LOC-03-03 | Phase 4 | Pending |
+| LOC-02-01 ~ LOC-02-05 | Phase 5 | Pending |
+| LOC-02-06 ~ LOC-02-07 | Phase 6 | Pending |
+| LOC-04-01 ~ LOC-04-04 | Phase 6 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 14 total
-- Mapped to phases: 14
+- v1.1 requirements: 18 sub-items total
+- Mapped to phases: 18
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-01*
-*Last updated: 2026-07-01 after initial definition*
+*Last updated: 2026-07-01 — updated traceability for Phase 4-6 roadmap*

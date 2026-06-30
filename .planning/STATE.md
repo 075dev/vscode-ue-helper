@@ -1,10 +1,16 @@
 ---
-milestone: v1.0
-milestone_name: 控制面板
-status: archived
+gsd_state_version: 1.0
+milestone: v1.1
+milestone_name: Proxy 本地化增强
+status: planning
+last_updated: "2026-07-01T18:00:00.000Z"
+last_activity: 2026-07-01
 progress:
-  current_phase: 3
   total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 ## Project Reference
@@ -12,7 +18,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-01)
 
 **Core value:** UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换到 Rider 或 Visual Studio。
-**Current focus:** Planning next milestone
+**Current focus:** Planning v1.1 roadmap
 
 ## Milestone Summary
 
@@ -20,7 +26,9 @@ See: .planning/PROJECT.md (updated 2026-07-01)
 
 All 3 phases implemented, 28 requirements covered, 498 tests passing across 35 test files.
 
-See: [v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for full details.
+**v1.1 — Proxy 本地化增强** 🔄 Planning
+
+3 phases (Phase 4-6), 18 requirement sub-items across 4 categories (LOC-01 ~ LOC-04). Core fix is ~10 lines in cli.ts to pass localization options to LspBridge.
 
 ## Key Files Created (v1.0)
 
@@ -57,3 +65,28 @@ See: [v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for full details.
 | 4 Tab 分区 | ✓ Good |
 | Unicode 图标 | ✓ Good |
 | 分 3 阶段交付 | ✓ Good |
+
+## Current Position
+
+Phase: Phase 4 - CLI Fix + Rule Expansion (not started)
+Plan: — (TBD)
+Status: Planning roadmap
+Last activity: 2026-07-01 — Roadmap defined for v1.1
+
+## Phase Dependencies
+
+- **Phase 4**: CLI Fix + Rule Expansion — blocks everything else
+- **Phase 5**: Localization Mode Enhancement — depends on Phase 4
+- **Phase 6**: UI Update + E2E Verification — depends on Phase 5
+
+## Known Context
+
+- Root bug: cli.ts line 139-149 never passes parsed --localization-* args to LspBridge
+- Fix scope: ~10 lines of TypeScript in cli.ts
+- Rule expansion: 22 -> 30+ rules in localization.ts
+- Mode mapping: zh-only -> replace, append -> append (getAdaptedTable() already correct)
+- All localization logic exists and is correct — it simply lacks the input connection
+
+## Blockers
+
+None.
