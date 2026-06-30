@@ -9,10 +9,10 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 
 ### LOC-01: CLI 层传递 localization 配置给 LspBridge
 
-- [ ] **LOC-01-01**: `cli.ts` 在创建 LspBridge 时构造 `LocalizationOptions` 对象并传递
-- [ ] **LOC-01-02**: 从 `CliOptions` 读取 `localizationEnabled` / `localizationMode` / `localizationTargets` 构建选项
-- [ ] **LOC-01-03**: 调用 `createDefaultLocalizationTable()` 作为规则表
-- [ ] **LOC-01-04**: localization 禁用时传递 `undefined`，保持向后兼容
+- [x] **LOC-01-01**: `cli.ts` 在创建 LspBridge 时构造 `LocalizationOptions` 对象并传递
+- [x] **LOC-01-02**: 从 `CliOptions` 读取 `localizationEnabled` / `localizationMode` / `localizationTargets` 构建选项
+- [x] **LOC-01-03**: 调用 `createDefaultLocalizationTable()` 作为规则表
+- [x] **LOC-01-04**: localization 禁用时传递 `undefined`，保持向后兼容
 
 ### LOC-02: 两种汉化模式支持
 
@@ -73,6 +73,7 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 | LOC-04-01 ~ LOC-04-04 | Phase 6 | Pending |
 
 **Coverage:**
+
 - v1.1 requirements: 18 sub-items total
 - Mapped to phases: 18
 - Unmapped: 0 ✓

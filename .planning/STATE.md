@@ -5,15 +5,15 @@ milestone_name: Proxy 本地化增强
 current_phase: 4
 status: active
 stopped_at: "Plan 04-02 complete: localization table expanded from 22 to 30 rules"
-last_updated: "2026-07-01T19:07:00.000Z"
+last_updated: "2026-06-30T19:10:20.602Z"
 last_activity: 2026-07-01
-last_activity_desc: Plan 04-02 executed - rule table expanded 22->30 rules
+last_activity_desc: Plan 04-02 executed
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 3
-  completed_plans: 3
-  percent: 100
+  completed_plans: 2
+  percent: 50
 ---
 
 ## Project Reference
@@ -96,6 +96,18 @@ None.
 
 ## Session
 
-**Last session:** 2026-06-30T19:09:01.426Z
+**Last session:** 2026-06-30T19:10:20.594Z
 **Stopped at:** Phase 4 planned: 2 plans in wave 1
 **Resume file:** .planning/phases/04-cli-fix-rule-expansion/04-CONTEXT.md
+
+## Performance Metrics
+
+| Phase | Plan | Duration | Notes |
+|-------|------|----------|-------|
+| Phase 04-cli-fix-rule-expansion P01 | 5m | 2 tasks | 2 files |
+
+## Decisions
+
+- [Phase 04-cli-fix-rule-expansion]: localization field placed between keepaliveTtlSec and hooks in LspBridge options for related-field grouping — Keeps related fields grouped together in the constructor options object
+- [Phase 04-cli-fix-rule-expansion]: When localization is disabled, undefined is passed (backward compatible per LOC-01-04) — Spreading undefined into object literal is safe and keeps the bridge default behavior unchanged
+- [Phase 04-cli-fix-rule-expansion]: createDefaultLocalizationTable called eagerly at construction time — Function is synchronous and infallible, so eager construction is safe
