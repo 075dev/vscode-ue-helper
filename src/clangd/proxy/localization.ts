@@ -42,7 +42,7 @@ export interface LocalizationTable {
 /**
  * 创建默认的 clangd 诊断消息中文本地化规则表。
  *
- * 覆盖 22 种常见 clangd 错误消息，分 7 类：
+ * 覆盖 30 种常见 clangd 错误消息，分 8 类：
  *
  * **已存在（7 条）：**
  * 1. incomplete type
@@ -69,6 +69,17 @@ export interface LocalizationTable {
  * 20. no matching constructor
  * 21. not a member of
  * 22. out-of-line definition mismatch
+ *
+ *
+ * **Phase 4 新增（8 条）：**
+ * 23. override specifier
+ * 24. cast precision loss
+ * 25. protected constructor
+ * 26. return type mismatch
+ * 27. template instantiation mismatch
+ * 28. temporary address
+ * 29. deprecated API
+ * 30. private constructor
  *
  * 所有规则默认使用 append 模式，同时应用于 diagnostics、codeActions 和 hover。
  */
@@ -251,6 +262,72 @@ export function createDefaultLocalizationTable(): LocalizationTable {
       {
         pattern: "out-of-line definition of '([^']+)' does not match any declaration in '([^']+)'",
         replacement: "[类外定义 '$1' 与 '$2' 中的任何声明都不匹配]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== 新增 UE 特定规则（Phase 4 扩展） =====
+
+      // 23. override specifier
+      {
+        pattern: "overriding '([^']+)' must have 'override' specifier",
+        replacement: "[覆盖 '$1' 必须使用 'override' 说明符]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 24. cast precision loss
+      {
+        pattern: "cast from '([^']+)' to '([^']+)' loses precision",
+        replacement: "[从 '$1' 转换到 '$2' 丢失精度]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 25. protected constructor
+      {
+        pattern: "calling a protected constructor of class '([^']+)'",
+        replacement: "[调用了类 '$1' 的保护构造函数]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 26. return type mismatch
+      {
+        pattern: "return type of selected overload is '([^']+)' but expected '([^']+)'",
+        replacement: "[选择的重载返回类型为 '$1' 但期望 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 27. template instantiation mismatch
+      {
+        pattern: "explicit instantiation of '([^']+)' does not refer to a function template",
+        replacement: "['$1' 的显式实例化不引用函数模板]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 28. temporary address
+      {
+        pattern: "taking address of a temporary",
+        replacement: "[获取临时对象的地址]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 29. deprecated API
+      {
+        pattern: "'([^']+)' is deprecated",
+        replacement: "['$1' 已弃用]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 30. private constructor
+      {
+        pattern: "calling a private constructor of class '([^']+)'",
+        replacement: "[调用了类 '$1' 的私有构造函数]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
