@@ -31,7 +31,8 @@
     "workspaceContains:**/*.uproject",
     "onCommand:vscodeUEHelper.build",
     "onCommand:vscodeUEHelper.liveCoding",
-    "onCommand:vscodeUEHelper.showProjectInfo"
+    "onCommand:vscodeUEHelper.showProjectInfo",
+    "onCommand:vscodeUEHelper.diagnoseProject"
   ],
   "main": "out/extension.js",
   "files": [
@@ -82,6 +83,13 @@
         "title": "Generate compile_commands.json",
         "title@zh": "生成 compile_commands.json",
         "category": "UE Helper"
+      },
+      {
+        "command": "vscodeUEHelper.diagnoseProject",
+        "title": "Diagnose Clangd Project",
+        "title@zh": "诊断 Clangd 项目",
+        "category": "UE Helper",
+        "icon": "$(checklist)"
       },
       {
         "command": "vscodeUEHelper.createProject",
@@ -366,6 +374,9 @@
         },
         {
           "command": "vscodeUEHelper.showClangdProxyStatus"
+        },
+        {
+          "command": "vscodeUEHelper.diagnoseProject"
         }
       ]
     },

@@ -5,6 +5,7 @@
   "cmd.launchEditor": "启动 Unreal 编辑器",
   "cmd.liveCoding": "Live Coding 热重载",
   "cmd.generateCompileCommands": "生成 compile_commands.json",
+  "cmd.diagnoseProject": "诊断 Clangd 项目",
   "cmd.createProject": "创建 Unreal Clangd 项目",
   "cmd.toggleCompletionMode": "切换 Clangd 补全模式(快速/慢速)",
   "cmd.showProjectInfo": "显示项目信息",
@@ -87,6 +88,10 @@
 
   "systemIncludes.placeholder": "设置系统包含路径 — Phase 6 实现(仅 Windows)。",
 
+  "diagnoseProject.noProject": "未选择用于 clangd 诊断的 Unreal 项目。",
+  "diagnoseProject.summary.ok": "Clangd 项目诊断：所有检查通过。",
+  "diagnoseProject.summary.failed": "Clangd 项目诊断发现 {count} 个失败检查。详情见 Output。",
+
   "common.yes": "是",
   "common.no": "否",
   "common.autoDetect": "(自动检测)",
@@ -111,5 +116,12 @@
   "proxy.status.keepaliveTtlSec": "Keepalive TTL: {value}s",
   "proxy.status.logPath": "日志路径:     {value}",
   "proxy.status.backupExists": "备份存在:     {value}",
-  "proxy.status.summary": "Clangd LSP Proxy: 启用={enabled}, 激活={active}"
+  "proxy.status.summary": "Clangd LSP Proxy: 启用={enabled}, 激活={active}",
+
+  "diagnose.noProject": "未找到 .uproject 文件，无法进行诊断。",
+  "diagnose.ok": "Clangd 项目诊断完成：状态正常",
+  "diagnose.warning": "Clangd 项目诊断完成：存在警告",
+  "diagnose.error": "Clangd 项目诊断完成：存在错误",
+  "diagnose.failed": "诊断失败: {error}",
+  "diagnose.openOutput": "查看详情"
 }

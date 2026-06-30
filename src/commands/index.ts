@@ -7,7 +7,7 @@
  *   - build / rebuild / clean
  *   - launchEditor / liveCoding
  *   - generateCompileCommands / createProject
- *   - toggleCompletionMode / showProjectInfo
+ *   - diagnoseProject / toggleCompletionMode / showProjectInfo
  *   - setSystemIncludes / installRules / uninstall
  *   - openWorkspaceFile / regenerateWorkspace
  *   - selectConfig / selectTarget
@@ -37,6 +37,7 @@ import { executeSelectTarget } from './selectTarget';
 import { executeEnableClangdProxy } from './enableClangdProxy';
 import { executeDisableClangdProxy } from './disableClangdProxy';
 import { executeShowClangdProxyStatus } from './showClangdProxyStatus';
+import { executeDiagnoseProject } from './diagnoseProject';
 
 export function activateCommands(
   context: vscode.ExtensionContext,
@@ -65,6 +66,9 @@ export function activateCommands(
   );
   registerCommand(context, 'vscodeUEHelper.generateCompileCommands', () =>
     executeGenerateCompileCommands(logger, detection),
+  );
+  registerCommand(context, 'vscodeUEHelper.diagnoseProject', () =>
+    executeDiagnoseProject(logger, detection),
   );
   registerCommand(context, 'vscodeUEHelper.toggleCompletionMode', () =>
     executeToggleCompletionMode(logger, clangd),
@@ -98,5 +102,5 @@ export function activateCommands(
   registerCommand(context, 'vscodeUEHelper.showClangdProxyStatus', () =>
     executeShowClangdProxyStatus(config, logger, clangd),
   );
-  logger.info(`[commands] registered 19 commands`);
+  logger.info(`[commands] registered 20 commands`);
 }
