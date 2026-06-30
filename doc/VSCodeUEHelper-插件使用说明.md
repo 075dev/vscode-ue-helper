@@ -487,6 +487,38 @@ VSCodeUEHelper
 
 如果 Output 面板里反复出现 `Server process exited with code 0` 重启循环，参考 §9.7 的修复说明与升级步骤。
 
+### 12.3 诊断 Clangd 项目
+
+当 clangd 索引异常（macro 不识别、跳转失效、completion 全 `__builtin_*`、报红一片等）但又说不清是 `.uproject`、`compile_commands.json`、preparse 头、clangd 路径、还是补全辅助文件出了问题时，优先执行：
+
+```text
+UE Helper: Diagnose Clangd Project
+```
+
+执行后会在 VS Code Output 面板的 `VSCodeUEHelper` 通道中写入一份结构化报告，每条检查项均按 `PASS` / `WARN` / `FAIL` / `INFO` 输出，典型内容包括：
+
+- `.uproject` 与工作区根的解析
+- `.clangd` 是否存在、是否包含预期的 `CompileFlags.Add` 段
+- `compile_commands.json` 是否存在、是否覆盖所有模块
+- 当前 fast/slow 模式下 preparse headers 列表是否完整、是否解析成功
+- clangd 可执行文件是否可解析（`clangdPath`、`PATH`、LLVM 默认目录）
+- `.vscode/unreal-clangd/addCompletions.h` / `addMacroCompletions.h` 是否存在、是否被 UE Header Tool 引用
+- 切换 fast/slow 时是否实际重写了 `.clangd`
+
+#### 典型失败模式与建议
+
+| 报告中的标记 | 含义 | 推荐下一步 |
+|---|---|---|
+| `FAIL: .clangd missing` | 未生成 clangd 配置 | 重新执行 `UE Helper: Create Unreal Clangd Project` |
+| `FAIL: compile_commands.json missing` | 未生成编译数据库 | 重新执行 `UE Helper: Generate compile_commands.json` |
+| `FAIL: preparse header missing` | preparse 头被删除或路径错误 | 重新执行 `UE Helper: Toggle Clangd Completion Mode` 或 `Create Unreal Clangd Project` |
+| `FAIL: clangd binary not found` | clangd 不可解析 | 设置 `vscodeUEHelper.clangdPath`，或安装 LLVM 并加入 PATH |
+| `FAIL: addMacroCompletions.h missing` | UE 宏补全辅助文件缺失 | `Create Unreal Clangd Project` 会重新生成，并保留 `// USER:` 区段 |
+| `WARN: .clangd ParseFlags stripped` | UBT 刷新后 `.clangd` 被覆盖 | 重新执行 `Toggle Clangd Completion Mode` 让插件重写完整文件 |
+| `WARN: slow mode switch did not rewrite .clangd` | T1 已修复，升级后该 warn 不应再出现 | 升级后若仍出现，请提 issue 并附 report |
+
+报告不会修改任何文件，仅做只读扫描。可以直接复制 Output 中的内容附在 issue 或给 AI 助手排查。
+
 ---
 
 ## 13. 推荐工作流\n\n### 13.1 第一次打开项目\n\n1. 打开 `.code-workspace`\n2. 执行 `UE Helper: Show Project Info`\n3. 执行 `UE Helper: Create Unreal Clangd Project`\n4. 执行 `UE Helper: Generate compile_commands.json`\n5. 等待 clangd 索引\n6. 执行 `UE Helper: Build`\n\n### 13.2 日常开发\n\n1. 写代码\n2. `UE Helper: Build`\n3. Windows 下可用 `UE Helper: Live Coding (Hot Reload)`\n4. 修改模块依赖后重新生成 `compile_commands.json`\n\n### 13.3 Proxy 推荐使用场景\n\n适合希望减少 clangd 关闭文件后丢失解析状态、并希望常见英文诊断附带中文说明的用户。**`vscodeUEHelper.clangdProxy.realClangdPath` 是可选覆盖**，普通用户保持为空即可，插件会自动复用 `vscodeUEHelper.clangdPath` 或系统 PATH 中的 clangd。启用后建议重启 clangd 或 Reload Window。\n","filePath":"D:\AIWorkSpace\VScodePlugin\VSCodeUEHelper\doc\VSCodeUEHelper-插件使用说明.md"}નલоҳи)rayele... (truncated)        

@@ -51,7 +51,9 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 - Preparse-includes for UE macros:
   - **Fast** mode (`UE⚡`): curated 18-header list — fast indexing
   - **Slow** mode (`UE⌚`): comprehensive 49-header list — complete coverage
+- UE macro parameter completion (`UCLASS`, `UPROPERTY`, `UFUNCTION`, `USTRUCT`, `UENUM`) via managed `addMacroCompletions.h` — user code is preserved across refreshes
 - Workspace backup: `.code-workspace` survives UBT's `-ProjectFiles` refresh
+- `Diagnose Clangd Project` command: scans `.clangd`, `compile_commands.json`, preparse headers, clangd binary, addCompletions / addMacroCompletions files and writes a structured report (pass/warn/fail) to the Output channel — first stop when clangd indexing is broken
 
 ### MCP AI Agent Integration
 - Auto-starts in Cursor / Claude Code (detected via env vars)
@@ -102,6 +104,7 @@ Settings live under the `vscodeUEHelper.*` namespace.
 | `vscodeUEHelper.liveCoding` | Live Coding (Hot Reload) | Windows only |
 | `vscodeUEHelper.generateCompileCommands` | Generate compile_commands.json | For clangd |
 | `vscodeUEHelper.createProject` | Create Unreal Clangd Project | Scaffold `.clangd` + customization |
+| `vscodeUEHelper.diagnoseProject` | Diagnose Clangd Project | Reports `.clangd` / `compile_commands.json` / preparse / clangd binary / addCompletions + addMacroCompletions status — first stop when clangd indexing is broken |
 | `vscodeUEHelper.toggleCompletionMode` | Toggle Clangd Completion Mode | Fast ⇄ Slow |
 | `vscodeUEHelper.showProjectInfo` | Show Project Info | Detect results |
 | `vscodeUEHelper.setSystemIncludes` | Set System Includes (Windows) | Phase 6 placeholder |
