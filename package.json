@@ -176,8 +176,34 @@
         "title@zh": "显示 Clangd 代理状态",
         "category": "UE Helper",
         "icon": "$(info)"
+      },
+      {
+        "command": "vscodeUEHelper.showControlPanel",
+        "title": "Show Control Panel",
+        "title@zh": "显示控制面板",
+        "category": "UE Helper",
+        "icon": "$(dashboard)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ueHelper",
+          "title": "UE Helper",
+          "icon": "$(tools)"
+        }
+      ]
+    },
+    "views": {
+      "ueHelper": [
+        {
+          "type": "webview",
+          "id": "vscodeUEHelper.controlPanel",
+          "name": "Control Panel",
+          "name@zh": "控制面板"
+        }
+      ]
+    },
     "configuration": {
       "title": "VSCode UE Helper",
       "title@zh": "VSCode UE Helper",

@@ -2,7 +2,7 @@
  * localization —— 规则表本地化引擎
  *
  * 职责：
- * - 提供默认的 clangd 诊断消息中文本地化规则表（7 条规则）
+ * - 提供默认的 clangd 诊断消息中文本地化规则表（22 条规则）
  * - 支持 append（原文 + 翻译）和 replace（仅翻译）两种模式
  * - 按目标过滤：diagnostics / codeActions / hover
  * - Hover 内容中保护围栏代码块（`...`）和内联代码跨度（...）不被修改
@@ -42,7 +42,9 @@ export interface LocalizationTable {
 /**
  * 创建默认的 clangd 诊断消息中文本地化规则表。
  *
- * 覆盖 7 种常见 clangd 错误消息：
+ * 覆盖 22 种常见 clangd 错误消息，分 7 类：
+ *
+ * **已存在（7 条）：**
  * 1. incomplete type
  * 2. unknown type name
  * 3. undeclared identifier
@@ -51,50 +53,204 @@ export interface LocalizationTable {
  * 6. file not found
  * 7. macro redefined
  *
+ * **新增（15 条）：**
+ * 8.  cannot initialize variable
+ * 9.  no viable conversion
+ * 10. cannot convert
+ * 11. expected identifier
+ * 12. redefinition
+ * 13. too many arguments
+ * 14. too few arguments
+ * 15. not declared in scope
+ * 16. does not name a type
+ * 17. cannot bind to value
+ * 18. ambiguous call
+ * 19. deleted function
+ * 20. no matching constructor
+ * 21. not a member of
+ * 22. out-of-line definition mismatch
+ *
  * 所有规则默认使用 append 模式，同时应用于 diagnostics、codeActions 和 hover。
  */
 export function createDefaultLocalizationTable(): LocalizationTable {
   return {
     rules: [
+      // ===== 已存在的规则（保留向后兼容） =====
+
+      // 1. incomplete type 'T' named ...
       {
         pattern: "incomplete type '([^']+)' named",
         replacement: "[不完整的类型 '$1']",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
+
+      // 2. unknown type name 'T'
       {
         pattern: "unknown type name '([^']+)'",
         replacement: "[未知的类型名称 '$1']",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
+
+      // 3. use of undeclared identifier 'X'
       {
         pattern: "use of undeclared identifier '([^']+)'",
         replacement: "[使用了未声明的标识符 '$1']",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
+
+      // 4. no member named 'X' in 'Y'
       {
         pattern: "no member named '([^']+)' in '([^']+)'",
         replacement: "[在 '$2' 中没有名为 '$1' 的成员]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
+
+      // 5. no matching function for call to 'F'
       {
         pattern: "no matching function for call to '([^']+)'",
         replacement: "[没有匹配的 function 可调用 '$1']",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
+
+      // 6. 'path/file.h' file not found
       {
         pattern: "'([^']+)' file not found",
         replacement: "[找不到文件 '$1']",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
+
+      // 7. 'MACRO' macro redefined
       {
         pattern: "'([^']+)' macro redefined",
         replacement: "[宏 '$1' 被重定义]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== 新增规则 =====
+
+      // 8. cannot initialize a variable of type 'T' with ...
+      {
+        pattern: "cannot initialize a variable of type '([^']+)' with",
+        replacement: "[无法初始化类型 '$1' 的变量]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 9. no viable conversion from 'T' to 'U'
+      {
+        pattern: "no viable conversion from '([^']+)' to '([^']+)'",
+        replacement: "[无法从 '$1' 转换到 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 10. cannot convert 'T' to 'U'
+      {
+        pattern: "cannot convert '([^']+)' to '([^']+)'",
+        replacement: "[无法将 '$1' 转换为 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 11. expected identifier / expected unqualified-id
+      {
+        pattern: "expected (identifier|unqualified-id)",
+        replacement: "[期望标识符]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 12. redefinition of 'X'
+      {
+        pattern: "redefinition of '([^']+)'",
+        replacement: "[重定义 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 13. too many arguments to function call
+      {
+        pattern: "too many arguments to function call",
+        replacement: "[函数调用的实参过多]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 14. too few arguments to function call
+      {
+        pattern: "too few arguments to function call",
+        replacement: "[函数调用的实参过少]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 15. 'X' was not declared in this scope
+      {
+        pattern: "'([^']+)' was not declared in this scope",
+        replacement: "[未在此作用域中声明 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 16. 'X' does not name a type
+      {
+        pattern: "'([^']+)' does not name a type",
+        replacement: "[不是一个类型名 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 17. cannot bind to a value of type 'T'
+      {
+        pattern: "cannot bind to a value of type '([^']+)'",
+        replacement: "[无法绑定到类型 '$1' 的值]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 18. call to 'F' is ambiguous
+      {
+        pattern: "call to '([^']+)' is ambiguous",
+        replacement: "[对 '$1' 的调用有歧义]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 19. attempting to reference a deleted function
+      {
+        pattern: "attempting to reference a deleted function",
+        replacement: "[试图引用已删除的函数]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 20. no matching constructor for initialization of 'T'
+      {
+        pattern: "no matching constructor for initialization of '([^']+)'",
+        replacement: "[没有匹配的构造函数来初始化 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 21. 'X' is not a member of 'Y'
+      {
+        pattern: "'([^']+)' is not a member of '([^']+)'",
+        replacement: "[不是 '$2' 的成员 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 22. out-of-line definition of 'X' does not match any declaration in 'Y'
+      {
+        pattern: "out-of-line definition of '([^']+)' does not match any declaration in '([^']+)'",
+        replacement: "[类外定义 '$1' 与 '$2' 中的任何声明都不匹配]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },

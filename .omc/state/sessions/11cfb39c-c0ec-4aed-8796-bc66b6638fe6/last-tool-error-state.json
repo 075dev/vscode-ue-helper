@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd d:/AIWorkSpace/VScodePlugin/VSCodeUEHelper && npm run build 2>&1 && npm run test:unit -- --run test/unit/ui/controlPanel.test.ts 2>&1\",\"timeout\":60000,\"description\":\"Build and run contr...",
+  "error": "Exit code 1\n\n> vscode-ue-helper@0.1.0 build\n> node esbuild.config.mjs\n\n\n  out\\extension.js      559.1kb\n  out\\extension.js.map    1.1mb\n\nDone in 49ms\n[esbuild] extension build complete → out/extension.js\n\n  out\\clangdProxy.js       32.9kb\n  out\\clangdProxy.js.map  102.1kb\n\nDone in 7ms\n[esbuild] proxy build complete → out/clangdProxy.js\n[esbuild] launcher generated → out/launcher/proxy-launcher.bat\n[esbuild] launcher generated → out/launcher/proxy-launcher.sh\n\n> vscode-ue-helper@0.1.0 test:unit\n>...",
+  "timestamp": "2026-06-30T14:50:35.985Z",
+  "retry_count": 1
+}

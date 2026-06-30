@@ -42,6 +42,17 @@ export function executeShowClangdProxyStatus(
     }),
     t('proxy.status.keepaliveMax', { value: String(status.keepaliveMax) }),
     t('proxy.status.keepaliveTtlSec', { value: String(status.keepaliveTtlSec) }),
+    t('proxy.status.localizationEnabled', {
+      value: status.localizationEnabled ? t('common.yes') : t('common.no'),
+    }),
+    ...(status.localizationEnabled
+      ? [
+          t('proxy.status.localizationDetail', {
+            mode: status.localizationMode,
+            targets: status.localizationTargets.join(', '),
+          }),
+        ]
+      : []),
     t('proxy.status.logPath', {
       value: status.logPath ?? t('common.notSet'),
     }),

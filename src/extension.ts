@@ -36,6 +36,7 @@ import { activateUI } from '@ui';
 import { activateCommands } from '@commands';
 import { showProjectInfo } from '@commands/showProjectInfo';
 import { initI18n, t } from '@i18n';
+import { ControlPanelProvider } from '@ui/controlPanel';
 
 // 模块级变量 —— 由 activate() 初始化,deactivate() 清理
 let logger: Logger;
@@ -85,6 +86,9 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 
     // 命令: 注册 15 个命令到 VS Code
     activateCommands(context, config, logger, detection, clangd);
+
+    // 侧边栏: 注册 ControlPanel WebviewViewProvider
+    ControlPanelProvider.register({ context, config, logger, detection, clangd });
 
     // 报告启动耗时
     const elapsed = Date.now() - activationStart;

@@ -38,6 +38,7 @@ import { executeEnableClangdProxy } from './enableClangdProxy';
 import { executeDisableClangdProxy } from './disableClangdProxy';
 import { executeShowClangdProxyStatus } from './showClangdProxyStatus';
 import { executeDiagnoseProject } from './diagnoseProject';
+import { executeShowControlPanel } from './showControlPanel';
 
 export function activateCommands(
   context: vscode.ExtensionContext,
@@ -102,5 +103,8 @@ export function activateCommands(
   registerCommand(context, 'vscodeUEHelper.showClangdProxyStatus', () =>
     executeShowClangdProxyStatus(config, logger, clangd),
   );
-  logger.info(`[commands] registered 20 commands`);
+  registerCommand(context, 'vscodeUEHelper.showControlPanel', () =>
+    executeShowControlPanel(),
+  );
+  logger.info(`[commands] registered 21 commands`);
 }

@@ -12,6 +12,7 @@ vi.mock('vscode', () => ({
       update: vi.fn(),
     })),
     workspaceFolders: [],
+    workspaceFile: undefined,
     onDidChangeConfiguration: vi.fn(),
     onDidSaveTextDocument: vi.fn(),
     createFileSystemWatcher: vi.fn(() => ({
@@ -46,6 +47,26 @@ vi.mock('vscode', () => ({
     withProgress: vi.fn((_opts: unknown, task: (p: unknown) => unknown) =>
       Promise.resolve(task({ report: vi.fn() })),
     ),
+    registerWebviewViewProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    createWebviewPanel: vi.fn(() => ({
+      webview: {
+        html: '',
+        cspSource: 'vscode-webview://test',
+        onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
+        postMessage: vi.fn(() => Promise.resolve(true)),
+        asWebviewUri: vi.fn(),
+        options: {},
+      },
+      onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
+      onDidChangeViewState: vi.fn(() => ({ dispose: vi.fn() })),
+      dispose: vi.fn(),
+      reveal: vi.fn(),
+      title: '',
+      visible: true,
+      active: true,
+      viewColumn: 1,
+      viewType: 'vscodeUEHelper.controlPanel',
+    })),
   },
   commands: {
     registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
@@ -145,6 +166,7 @@ vi.mock('vscode', () => ({
   ProgressLocation: { Notification: 10, Window: 15 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   ExtensionMode: { Production: 1, Development: 2, Test: 3 },
+  ViewColumn: { One: 1, Two: 2, Three: 3, Four: 4, Five: 5, Six: 6, Seven: 7, Eight: 8, Nine: 9 },
   extensions: { getExtension: vi.fn() },
   env: {
     isWindows: process.platform === 'win32',

@@ -63,13 +63,13 @@ Requirements for milestone v1.0. Each maps to a roadmap phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CTRL-01 ~ CTRL-10 | Phase 1 | Pending |
-| CTRL-11 ~ CTRL-21 | Phase 2 | Pending |
-| CTRL-22 ~ CTRL-28 | Phase 3 | Pending |
+| CTRL-01 ~ CTRL-10 | Phase 1 | ✅ Done |
+| CTRL-11 ~ CTRL-21 | Phase 2 | ✅ Done |
+| CTRL-22 ~ CTRL-28 | Phase 3 | ✅ Done |
 
 **Coverage:**
 - v1 requirements: 28 total
-- Mapped to phases: 28
+- Completed: 28
 - Unmapped: 0 ✓
 
 ---

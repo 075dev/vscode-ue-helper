@@ -228,4 +228,84 @@ describe('LspBridge — 本地化集成', () => {
     expect(result?.[0]?.title).toContain("[使用了未声明的标识符 'Foo']");
     expect(result?.[1]?.title).toContain("[未知的类型名称 'FMyClass']");
   });
+
+  // ===== 新规则集成测试 =====
+
+  it('diagnostics 新规则：初始化变量失败被翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+    const clientOutput = collectClientOutput(bridge);
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "cannot initialize a variable of type 'FString' with an rvalue of type 'int'" }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    expect(diags?.[0]?.message).toContain("[无法初始化类型 'FString' 的变量]");
+  });
+
+  it('diagnostics 新规则：作用域声明被翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+    const clientOutput = collectClientOutput(bridge);
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "'Foo' was not declared in this scope" }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    expect(diags?.[0]?.message).toContain("[未在此作用域中声明 'Foo']");
+  });
+
+  it('diagnostics 新规则：ambiguous call 被翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+    const clientOutput = collectClientOutput(bridge);
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "call to 'FindObject' is ambiguous" }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    expect(diags?.[0]?.message).toContain("[对 'FindObject' 的调用有歧义]");
+  });
+
+  it('diagnostics 新规则：deleted function 被翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+    const clientOutput = collectClientOutput(bridge);
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "attempting to reference a deleted function" }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    expect(diags?.[0]?.message).toContain("[试图引用已删除的函数]");
+  });
+
+  it('diagnostics 新规则：not a member of 被翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+    const clientOutput = collectClientOutput(bridge);
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "'GetWorld' is not a member of 'AActor'" }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    expect(diags?.[0]?.message).toContain("[不是 'AActor' 的成员 'GetWorld']");
+  });
+
+  it('diagnostics 新规则：too few arguments 被翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+    const clientOutput = collectClientOutput(bridge);
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "too few arguments to function call" }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    expect(diags?.[0]?.message).toContain("[函数调用的实参过少]");
+  });
 });

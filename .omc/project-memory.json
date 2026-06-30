@@ -1,0 +1,468 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1782827340236,
+  "projectRoot": "D:\\AIWorkSpace\\VScodePlugin\\VSCodeUEHelper",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">=18.0.0",
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "esbuild",
+        "version": "0.20.0",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "1.3.0",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": "Node.js 18.0.0"
+  },
+  "build": {
+    "buildCommand": "cd d:/AIWorkSpace/VScodePlugin/VSCodeUEHelper && npm run build 2>&1 | tail -5",
+    "testCommand": "cd d:/AIWorkSpace/VScodePlugin/VSCodeUEHelper && npx vitest run --run test/unit/ui/controlPanel.test.ts 2>&1 | tail -15",
+    "lintCommand": "npm run lint",
+    "devCommand": null,
+    "scripts": {
+      "build": "node esbuild.config.mjs",
+      "watch": "node esbuild.config.mjs --watch",
+      "typecheck": "tsc --noEmit",
+      "typecheck:watch": "tsc --noEmit --watch",
+      "lint": "eslint src test --ext .ts",
+      "lint:fix": "eslint src test --ext .ts --fix",
+      "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"*.{json,md,mjs}\"",
+      "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"*.{json,md,mjs}\"",
+      "test:unit": "vitest run",
+      "test:unit:watch": "vitest",
+      "test:integration": "node test/integration/runTests.js",
+      "test": "npm run test:unit && npm run test:integration",
+      "package": "vsce package",
+      "publish": "vsce publish"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts",
+      "src",
+      "test"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "analysis": {
+      "path": "analysis",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1782827340180,
+      "keyFiles": [
+        "commands_module_analysis.md"
+      ]
+    },
+    "doc": {
+      "path": "doc",
+      "purpose": null,
+      "fileCount": 12,
+      "lastAccessed": 1782827340215,
+      "keyFiles": [
+        "01-architecture.md",
+        "02-modules.md",
+        "03-user-guide.md",
+        "04-developer-guide.md",
+        "05-code-reference.md"
+      ]
+    },
+    "out": {
+      "path": "out",
+      "purpose": "Build output",
+      "fileCount": 4,
+      "lastAccessed": 1782827340215,
+      "keyFiles": [
+        "clangdProxy.js",
+        "clangdProxy.js.map",
+        "extension.js",
+        "extension.js.map"
+      ]
+    },
+    "resources": {
+      "path": "resources",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1782827340216,
+      "keyFiles": [
+        "icon.png",
+        "README.md"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 0,
+      "lastAccessed": 1782827340216,
+      "keyFiles": []
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 1,
+      "lastAccessed": 1782827340216,
+      "keyFiles": [
+        "extension.ts"
+      ]
+    },
+    "test": {
+      "path": "test",
+      "purpose": "Test files",
+      "fileCount": 0,
+      "lastAccessed": 1782827340216,
+      "keyFiles": []
+    },
+    "src\\build": {
+      "path": "src\\build",
+      "purpose": "Build output",
+      "fileCount": 8,
+      "lastAccessed": 1782827340218,
+      "keyFiles": [
+        "AGENTS.md",
+        "buildRunner.ts",
+        "index.ts"
+      ]
+    },
+    "test\\fixtures": {
+      "path": "test\\fixtures",
+      "purpose": "Test fixtures",
+      "fileCount": 0,
+      "lastAccessed": 1782827340219,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "test\\unit\\ui\\controlPanel.test.ts",
+      "accessCount": 30,
+      "lastAccessed": 1782834937066,
+      "type": "file"
+    },
+    {
+      "path": "src\\ui\\controlPanel.html.ts",
+      "accessCount": 29,
+      "lastAccessed": 1782835015882,
+      "type": "file"
+    },
+    {
+      "path": "src\\ui\\controlPanel.ts",
+      "accessCount": 19,
+      "lastAccessed": 1782835013923,
+      "type": "file"
+    },
+    {
+      "path": "src\\ui\\controlPanelMessages.ts",
+      "accessCount": 19,
+      "lastAccessed": 1782835015895,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 12,
+      "lastAccessed": 1782834925874,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 10,
+      "lastAccessed": 1782835012686,
+      "type": "directory"
+    },
+    {
+      "path": "src\\i18n\\locales\\zh.json",
+      "accessCount": 8,
+      "lastAccessed": 1782834924095,
+      "type": "file"
+    },
+    {
+      "path": "src\\i18n\\locales\\en.json",
+      "accessCount": 8,
+      "lastAccessed": 1782834926609,
+      "type": "file"
+    },
+    {
+      "path": "src\\extension.ts",
+      "accessCount": 7,
+      "lastAccessed": 1782834921369,
+      "type": "file"
+    },
+    {
+      "path": ".planning\\REQUIREMENTS.md",
+      "accessCount": 6,
+      "lastAccessed": 1782834916901,
+      "type": "file"
+    },
+    {
+      "path": "test\\unit\\setup.ts",
+      "accessCount": 6,
+      "lastAccessed": 1782834925334,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\settings.json",
+      "accessCount": 5,
+      "lastAccessed": 1782831120922,
+      "type": "file"
+    },
+    {
+      "path": "src",
+      "accessCount": 5,
+      "lastAccessed": 1782831738809,
+      "type": "directory"
+    },
+    {
+      "path": ".planning\\STATE.md",
+      "accessCount": 5,
+      "lastAccessed": 1782834917578,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\index.ts",
+      "accessCount": 5,
+      "lastAccessed": 1782834920695,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\showClangdProxyStatus.ts",
+      "accessCount": 4,
+      "lastAccessed": 1782834921868,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\showControlPanel.ts",
+      "accessCount": 4,
+      "lastAccessed": 1782834922500,
+      "type": "file"
+    },
+    {
+      "path": ".planning\\phases\\phase-1\\PLAN.md",
+      "accessCount": 3,
+      "lastAccessed": 1782829301555,
+      "type": "file"
+    },
+    {
+      "path": "src\\core\\config.ts",
+      "accessCount": 3,
+      "lastAccessed": 1782830729116,
+      "type": "file"
+    },
+    {
+      "path": ".planning\\ROADMAP.md",
+      "accessCount": 3,
+      "lastAccessed": 1782834905147,
+      "type": "file"
+    },
+    {
+      "path": "src\\core\\command-registry.ts",
+      "accessCount": 2,
+      "lastAccessed": 1782829253196,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\templates\\project.md",
+      "accessCount": 2,
+      "lastAccessed": 1782834896788,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\templates\\requirements.md",
+      "accessCount": 2,
+      "lastAccessed": 1782834897662,
+      "type": "file"
+    },
+    {
+      "path": ".planning\\PROJECT.md",
+      "accessCount": 2,
+      "lastAccessed": 1782834902642,
+      "type": "file"
+    },
+    {
+      "path": "src\\clangd",
+      "accessCount": 2,
+      "lastAccessed": 1782834938390,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.15.1\\skills\\omc-setup\\phases\\01-install-claude-md.md",
+      "accessCount": 1,
+      "lastAccessed": 1782827458047,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.15.1\\skills\\omc-setup\\phases\\02-configure.md",
+      "accessCount": 1,
+      "lastAccessed": 1782827578715,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\workflows\\new-milestone.md",
+      "accessCount": 1,
+      "lastAccessed": 1782828388081,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.15.1\\skills\\omc-setup\\phases\\03-integrations.md",
+      "accessCount": 1,
+      "lastAccessed": 1782828441756,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\selectConfig.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782828568176,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\selectTarget.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782828568289,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\liveCoding.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782828568357,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\launchEditor.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782828568446,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\setSystemIncludes.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782828569009,
+      "type": "file"
+    },
+    {
+      "path": "src\\ui\\quickPicks.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782828569448,
+      "type": "file"
+    },
+    {
+      "path": "src\\ui\\notifications.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829265982,
+      "type": "file"
+    },
+    {
+      "path": "src\\ui\\statusBar.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829267546,
+      "type": "file"
+    },
+    {
+      "path": "src\\core\\logger.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829270163,
+      "type": "file"
+    },
+    {
+      "path": "src\\i18n\\index.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829385363,
+      "type": "file"
+    },
+    {
+      "path": "test\\unit\\commands\\clangdProxyCommands.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829393196,
+      "type": "file"
+    },
+    {
+      "path": "test\\unit\\core\\config.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829393991,
+      "type": "file"
+    },
+    {
+      "path": "vitest.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782829630533,
+      "type": "file"
+    },
+    {
+      "path": "test",
+      "accessCount": 1,
+      "lastAccessed": 1782829637366,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.15.1\\skills\\omc-setup\\phases\\04-welcome.md",
+      "accessCount": 1,
+      "lastAccessed": 1782830027325,
+      "type": "file"
+    },
+    {
+      "path": "src\\clangd\\index.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782831729394,
+      "type": "file"
+    },
+    {
+      "path": "src\\commands\\showProjectInfo.ts",
+      "accessCount": 1,
+      "lastAccessed": 1782832819617,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\workflows\\new-project.md",
+      "accessCount": 1,
+      "lastAccessed": 1782834896153,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\references\\questioning.md",
+      "accessCount": 1,
+      "lastAccessed": 1782834896415,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\references\\ui-brand.md",
+      "accessCount": 1,
+      "lastAccessed": 1782834898436,
+      "type": "file"
+    },
+    {
+      "path": ".planning\\phases\\phase-2-plan.md",
+      "accessCount": 1,
+      "lastAccessed": 1782834964565,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

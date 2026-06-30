@@ -23,9 +23,9 @@ import {
 // ===== 默认规则表 =====
 
 describe('createDefaultLocalizationTable', () => {
-  it('应包含 7 条默认规则', () => {
+  it('应包含 22 条默认规则', () => {
     const table = createDefaultLocalizationTable();
-    expect(table.rules).toHaveLength(7);
+    expect(table.rules).toHaveLength(22);
   });
 
   it('每条规则应有有效的 pattern、replacement、mode 和 target', () => {
@@ -65,6 +65,21 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe('some random diagnostic message');
   });
 
+  it('新规则不匹配无关消息', () => {
+    const table = createDefaultLocalizationTable();
+    // 这些消息不应被任何新规则错误匹配
+    const safeMessages = [
+      'build started',
+      'linking...',
+      '1 warning generated',
+      'Scanning dependencies',
+      'Built target UE5Game',
+    ];
+    for (const msg of safeMessages) {
+      expect(applyLocalizationToDiagnostic(msg, table)).toBe(msg);
+    }
+  });
+
   it('replace 模式：替换为中文翻译', () => {
     const table: LocalizationTable = {
       rules: [
@@ -83,9 +98,10 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe("使用了未声明的标识符 'Foo'");
   });
 
-  it('应处理所有 7 种 clangd 消息', () => {
+  it('应处理所有 22 种 clangd 消息', () => {
     const table = createDefaultLocalizationTable();
     const testCases: Array<{ input: string; expectedContains: string }> = [
+      // 原 7 条
       {
         input: "incomplete type 'FBar' named",
         expectedContains: "[不完整的类型 'FBar']",
@@ -113,6 +129,67 @@ describe('applyLocalizationToDiagnostic', () => {
       {
         input: "'SOME_MACRO' macro redefined",
         expectedContains: "[宏 'SOME_MACRO' 被重定义]",
+      },
+      // 新增 15 条
+      {
+        input: "cannot initialize a variable of type 'FString' with an rvalue of type 'int'",
+        expectedContains: "[无法初始化类型 'FString' 的变量]",
+      },
+      {
+        input: "no viable conversion from 'int32' to 'FString'",
+        expectedContains: "[无法从 'int32' 转换到 'FString']",
+      },
+      {
+        input: "cannot convert 'float' to 'int32'",
+        expectedContains: "[无法将 'float' 转换为 'int32']",
+      },
+      {
+        input: "expected identifier",
+        expectedContains: "[期望标识符]",
+      },
+      {
+        input: "redefinition of 'MyClass'",
+        expectedContains: "[重定义 'MyClass']",
+      },
+      {
+        input: "too many arguments to function call",
+        expectedContains: "[函数调用的实参过多]",
+      },
+      {
+        input: "too few arguments to function call",
+        expectedContains: "[函数调用的实参过少]",
+      },
+      {
+        input: "'Foo' was not declared in this scope",
+        expectedContains: "[未在此作用域中声明 'Foo']",
+      },
+      {
+        input: "'MyType' does not name a type",
+        expectedContains: "[不是一个类型名 'MyType']",
+      },
+      {
+        input: "cannot bind to a value of type 'TUniquePtr<AActor>'",
+        expectedContains: "[无法绑定到类型 'TUniquePtr<AActor>' 的值]",
+      },
+      {
+        input: "call to 'FindObject' is ambiguous",
+        expectedContains: "[对 'FindObject' 的调用有歧义]",
+      },
+      {
+        input: "attempting to reference a deleted function",
+        expectedContains: "[试图引用已删除的函数]",
+      },
+      {
+        input: "no matching constructor for initialization of 'FMyStruct'",
+        expectedContains: "[没有匹配的构造函数来初始化 'FMyStruct']",
+      },
+      {
+        input: "'GetWorld' is not a member of 'AActor'",
+        expectedContains: "[不是 'AActor' 的成员 'GetWorld']",
+      },
+      {
+        input: "out-of-line definition of 'Foo' does not match any declaration in 'MyClass'",
+        expectedContains: "[类外定义 'Foo' 与 'MyClass' 中的任何声明都不匹配]",
       },
     ];
     for (const { input, expectedContains } of testCases) {
