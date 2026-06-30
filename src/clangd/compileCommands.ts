@@ -642,7 +642,7 @@ async function scanDirRecursive(
       if (entry.isDirectory()) {
         const subFiles = await scanDirRecursive(fullPath, logger);
         files.push(...subFiles);
-      } else if (entry.isFile() && /\.(cpp|h|hpp|c)$/i.test(entry.name)) {
+      } else if (entry.isFile() && /\.(cpp|c)$/i.test(entry.name)) {
         files.push(path.normalize(fullPath));
       }
     }

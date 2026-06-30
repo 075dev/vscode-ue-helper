@@ -85,40 +85,30 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
   });
 
   /* ================================================================ */
-  /*  红测：当前实现不会为插件 header 补条目                              */
+  /*  头文件不补独立条目：头文件不应有独立编译条目，                        */
+  /*  它们应通过包含它们的 .cpp 文件获得解析上下文。                       */
+  /*  给头文件克隆编译参数会断开 .h 与 .cpp 的关联，                      */
+  /*  导致 clangd 导航失效（函数跳转失败）。                             */
   /* ================================================================ */
 
-  it('RED: 当前实现不会为插件 header 补条目（测试应失败直到实现）', async () => {
+  it('头文件不被扫描或添加到 compile_commands.json', async () => {
     const result = await fillMissingCompileCommands(fixture.jsonPath, fixture.projectPath);
 
-    // 当前 fillMissingCompileCommands 返回 void，所以 result 是 undefined
-    // 实现后应返回 FillResult，且 added 包含插件 header
-    expect(result).toBeDefined();
-    expect(typeof result).toBe('object');
-
-    // 断言 added 中包含 MyPluginComponent.h
+    // 不应为头文件添加条目
     const r = result as { added: string[] };
     const hasPluginHeader = r.added.some(
       (f) => f.endsWith('MyPluginComponent.h'),
     );
-    expect(hasPluginHeader).toBe(true);
-  });
+    expect(hasPluginHeader).toBe(false);
 
-  /* ================================================================ */
-  /*  绿测：插件 header 被添加                                           */
-  /* ================================================================ */
-
-  it('插件 header 被添加到 compile_commands.json', async () => {
-    await fillMissingCompileCommands(fixture.jsonPath, fixture.projectPath);
-
-    // 读取写回的文件
+    // 读取写回的文件验证
     const content = await fs.readFile(fixture.jsonPath, 'utf-8');
     const entries = JSON.parse(content) as { file: string }[];
 
-    const hasPluginHeader = entries.some(
+    const headerInJson = entries.some(
       (e) => e.file.endsWith('MyPluginComponent.h'),
     );
-    expect(hasPluginHeader).toBe(true);
+    expect(headerInJson).toBe(false);
   });
 
   /* ================================================================ */
@@ -142,7 +132,7 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
   /*  绿测：Windows 大小写路径不重复添加                                  */
   /* ================================================================ */
 
-  it('Windows 大小写路径不重复添加且可找到模板', async () => {
+  it('Windows 大小写路径不重复添加且头文件不被扫描', async () => {
     const jsonPath = fixture.jsonPath;
 
     // 用大写盘符重写 compile_commands.json 的 file 路径
@@ -180,18 +170,18 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
     );
     expect(gameCppMatches).toHaveLength(1);
 
-    // 插件 header 应被添加
+    // 插件 header 不应被添加（头文件没有独立编译条目）
     const pluginHeaderMatches = finalEntries.filter(
       (e) => e.file.replace(/\\/g, '/').toLowerCase().includes('myplugincomponent.h'),
     );
-    expect(pluginHeaderMatches).toHaveLength(1);
+    expect(pluginHeaderMatches).toHaveLength(0);
   });
 
   /* ================================================================ */
-  /*  绿测：插件 header 使用插件模板                                     */
+  /*  绿测：插件 header 不再有独立条目                                     */
   /* ================================================================ */
 
-  it('插件 header 使用插件模板（-DPLUGIN_TEMPLATE）而非游戏模板', async () => {
+  it('插件 header 不被添加为独立编译条目', async () => {
     await fillMissingCompileCommands(fixture.jsonPath, fixture.projectPath);
 
     const content = await fs.readFile(fixture.jsonPath, 'utf-8');
@@ -200,12 +190,8 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
     const pluginHeaderEntry = entries.find(
       (e) => e.file.endsWith('MyPluginComponent.h'),
     );
-    expect(pluginHeaderEntry).toBeDefined();
-
-    const args = pluginHeaderEntry!.arguments ?? [];
-    const argsJoined = args.join(' ');
-    expect(argsJoined).toContain('-DPLUGIN_TEMPLATE');
-    expect(argsJoined).not.toContain('-DGAME_TEMPLATE');
+    // 头文件不应有独立编译条目
+    expect(pluginHeaderEntry).toBeUndefined();
   });
 
   /* ================================================================ */
@@ -257,8 +243,8 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
     // 不应抛出，应正常返回
     expect(result).toBeDefined();
     const r = result as { scanned: number; added: string[] };
-    // 插件源中有 2 个文件（MyPlugin.cpp + MyPluginComponent.h），MyPlugin.cpp 已在 JSON 中
-    expect(r.scanned).toBe(2);
-    expect(r.added).toHaveLength(1);
+    // 插件源中只有 MyPlugin.cpp（头文件不被扫描），已在 JSON 中
+    expect(r.scanned).toBe(1);
+    expect(r.added).toHaveLength(0);
   });
 });
