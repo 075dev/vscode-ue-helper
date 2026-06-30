@@ -26,9 +26,9 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 
 ### LOC-03: 完善汉化规则
 
-- [ ] **LOC-03-01**: 新增 UE 常见诊断规则（虚函数覆盖未标记 override、隐式转换丢失精度等）
-- [ ] **LOC-03-02**: 规则总数从 22 条扩展至 30+ 条
-- [ ] **LOC-03-03**: 为新增规则添加单元测试
+- [x] **LOC-03-01**: 新增 UE 常见诊断规则（虚函数覆盖未标记 override、隐式转换丢失精度等）
+- [x] **LOC-03-02**: 规则总数从 22 条扩展至 30+ 条
+- [x] **LOC-03-03**: 为新增规则添加单元测试
 
 ### LOC-04: 端到端验证
 
@@ -67,7 +67,7 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | LOC-01-01 ~ LOC-01-04 | Phase 4 | Pending |
-| LOC-03-01 ~ LOC-03-03 | Phase 4 | Pending |
+| LOC-03-01 ~ LOC-03-03 | Phase 4 | Complete |
 | LOC-02-01 ~ LOC-02-05 | Phase 5 | Pending |
 | LOC-02-06 ~ LOC-02-07 | Phase 6 | Pending |
 | LOC-04-01 ~ LOC-04-04 | Phase 6 | Pending |
