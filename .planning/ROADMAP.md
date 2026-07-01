@@ -20,7 +20,7 @@
 <summary>🔄 v1.1 Proxy 本地化增强 (Phases 4-6) — IN PROGRESS</summary>
 
 - [x] **Phase 4: CLI Fix + Rule Expansion** - Fix CLI-to-bridge localization wiring, expand rule table to 30+ rules (completed 2026-06-30)
-- [ ] **Phase 5: Localization Mode Enhancement** - Add zh-only mode, support append/zh-only switching
+- [x] **Phase 5: Localization Mode Enhancement** - Add zh-only mode, support append/zh-only switching (completed 2026-07-01)
 - [ ] **Phase 6: UI Update + E2E Verification** - Update control panel labels, add restart prompt, integration tests
 
 </details>
@@ -63,7 +63,7 @@ Plans:
 Plans:
 
 - [x] 05-01-PLAN.md — Replace override with zh-only in cliArgs, bridge, config types and package.json enums (source type + logic changes)
-- [ ] 05-02-PLAN.md — Update tests for zh-only mode, add config backward compat test, full suite verification
+- [x] 05-02-PLAN.md — Update tests for zh-only mode, add config backward compat test, full suite verification
 
 ### Phase 6: UI Update + E2E Verification
 
@@ -79,7 +79,12 @@ Plans:
   5. Integration test confirms zh-only mode produces only translated output
   6. All 498 existing tests pass with zero regressions
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+
+- [ ] 06-01-PLAN.md — Update control panel labels and add restart notice bar (LOC-02-06, LOC-02-07)
+- [ ] 06-02-PLAN.md — Add behavioral tests and verify full suite zero regressions (LOC-04-01 ~ LOC-04-04)
 **UI hint**: yes
 
 ## Progress
@@ -90,5 +95,5 @@ Plans:
 | 2. 配置编辑区 + Proxy 设置 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 3. 状态展示 + 细节打磨 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
-| 5. Localization Mode Enhancement | v1.1 | 1/2 | In Progress|  |
+| 5. Localization Mode Enhancement | v1.1 | 2/2 | Complete    | 2026-07-01 |
 | 6. UI Update + E2E Verification | v1.1 | 0/0 | Not started | - |
