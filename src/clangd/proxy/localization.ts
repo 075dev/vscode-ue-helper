@@ -1769,8 +1769,8 @@ function applyRules(
     }
   }
 
-  // 精确规则未命中时，尝试通用翻译引擎（仅 diagnostics）
-  if (result === text && target === 'diagnostics') {
+  // 精确规则未命中时，尝试通用翻译引擎
+  if (result === text && (target === 'diagnostics' || target === 'hover')) {
     const generic = genericTranslate(text);
     if (generic !== null) {
       result = generic;
