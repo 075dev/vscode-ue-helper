@@ -56,8 +56,8 @@ export type MCPMode = 'auto' | 'always' | 'never';
 /** Clangd Proxy 本地化目标类型 */
 export type ClangdProxyLocalizationTarget = "diagnostics" | "codeActions" | "hover";
 
-/** Clangd Proxy 本地化模式：append = 追加到 clangd 输出，override = 完全替换 */
-export type ClangdProxyLocalizationMode = "append" | "override";
+/** Clangd Proxy 本地化模式：append = 追加到 clangd 输出，zh-only = 仅中文替换 */
+export type ClangdProxyLocalizationMode = "append" | "zh-only";
 
 /** Clangd Proxy 本地化目标有效值集合，用于过滤 */
 const VALID_LOCALIZATION_TARGETS: readonly ClangdProxyLocalizationTarget[] = [
@@ -179,7 +179,9 @@ export class Config {
 
   /** clangd Proxy 本地化模式，默认 append（追加到 clangd 输出） */
   get clangdProxyLocalizationMode(): ClangdProxyLocalizationMode {
-    return this.root.get<ClangdProxyLocalizationMode>("clangdProxy.localization.mode") ?? "append";
+    const raw = this.root.get<string>("clangdProxy.localization.mode");
+    if (raw === "override") return "zh-only";
+    return (raw as ClangdProxyLocalizationMode) ?? "append";
   }
 
   /**

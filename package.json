@@ -348,18 +348,18 @@
         "vscodeUEHelper.clangdProxy.localization.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable clangd output localization (Chinese append/override).",
-          "description@zh": "启用 clangd 输出汉化（追加/替换模式）。"
+          "description": "Enable clangd output localization (Chinese append/zh-only).",
+          "description@zh": "启用 clangd 输出汉化（追加/仅中文模式）。"
         },
         "vscodeUEHelper.clangdProxy.localization.mode": {
           "type": "string",
           "enum": [
             "append",
-            "override"
+            "zh-only"
           ],
           "default": "append",
-          "description": "Localization mode: append = add Chinese after English, override = replace English.",
-          "description@zh": "汉化模式：append = 在英文后追加中文，override = 替换英文。"
+          "description": "Localization mode: append = add Chinese after English, zh-only = Chinese only.",
+          "description@zh": "汉化模式：append = 在英文后追加中文，zh-only = 仅中文替换。"
         },
         "vscodeUEHelper.clangdProxy.localization.targets": {
           "type": "array",
