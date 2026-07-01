@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 控制面板** — Phases 1-3 (shipped 2026-07-01)
-- 🔄 **v1.1 Proxy 本地化增强** — Phases 4-6 (in progress)
+- ✅ **v1.1 Proxy 本地化增强** — Phases 4-6 (completed 2026-07-01)
+- 🔄 **v1.2 汉化规则覆盖完善** — Phases 7-9 (in progress)
 
 ## Phases
 
@@ -17,11 +18,20 @@
 </details>
 
 <details open>
-<summary>🔄 v1.1 Proxy 本地化增强 (Phases 4-6) — IN PROGRESS</summary>
+<summary>🔄 v1.1 Proxy 本地化增强 (Phases 4-6) — SHIPPED 2026-07-01</summary>
 
 - [x] **Phase 4: CLI Fix + Rule Expansion** - Fix CLI-to-bridge localization wiring, expand rule table to 30+ rules (completed 2026-06-30)
 - [x] **Phase 5: Localization Mode Enhancement** - Add zh-only mode, support append/zh-only switching (completed 2026-07-01)
 - [x] **Phase 6: UI Update + E2E Verification** - Update control panel labels, add restart prompt, integration tests (completed 2026-07-01)
+
+</details>
+
+<details open>
+<summary>🔄 v1.2 汉化规则覆盖完善 (Phases 7-9) — IN PROGRESS</summary>
+
+- [ ] **Phase 7: Diagnostics 规则系统性扩展** - 从 58 条扩展到 150+ 条，覆盖 clangd/clang-cl 常见诊断
+- [ ] **Phase 8: Hover 内容汉化** - 添加 hover 专用规则，覆盖 C++ 关键字、UE 类型、函数签名等
+- [ ] **Phase 9: 规则表维护 + 测试完善** - 规则分类优化、边界测试、性能验证
 
 </details>
 
@@ -88,6 +98,45 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 7: Diagnostics 规则系统性扩展
+
+**Goal**: 将诊断消息规则表从 58 条扩展到 150+ 条，系统性覆盖 clangd/clang-cl 常见诊断消息
+**Depends on**: Phase 6 (v1.1 proxy localization pipeline)
+**Requirements**: LOC-05-01, LOC-05-02, LOC-05-03
+**Success Criteria** (what must be TRUE):
+  1. `createDefaultLocalizationTable()` 返回 150+ 条规则
+  2. 覆盖 clangd 全部常见诊断类别（类型错误、语法错误、模板错误等）
+  3. 覆盖 clang-cl/MSVC 特有诊断（编译器选项、pragma 等）
+  4. 每条新规则有对应的单元测试
+  5. 现有 492 个测试全部通过
+**Plans**: TBD
+
+### Phase 8: Hover 内容汉化
+
+**Goal**: 添加 hover 专用规则，覆盖 C++ 关键字、UE 类型名、函数签名关键词等
+**Depends on**: Phase 7
+**Requirements**: LOC-06-01, LOC-06-02, LOC-06-03
+**Success Criteria** (what must be TRUE):
+  1. hover 内容中的 C++ 关键字（public/private/static/virtual/const/override 等）被翻译
+  2. hover 内容中的常见 UE 类型前缀（TSoftClassPtr、FName、TArray 等）不被误翻译
+  3. 代码块和内联代码保护机制正常工作
+  4. hover 规则不影响 diagnostics 输出
+  5. 所有测试通过
+**Plans**: TBD
+
+### Phase 9: 规则表维护 + 测试完善
+
+**Goal**: 规则分类优化、边界测试、性能验证，确保规则表可维护
+**Depends on**: Phase 8
+**Requirements**: LOC-07-01, LOC-07-02, LOC-07-03
+**Success Criteria** (what must be TRUE):
+  1. 规则按类别分组（类型错误/语法错误/模板/MSVC/其他）
+  2. 每条规则有类别标签
+  3. 边界测试覆盖空输入、特殊字符、混合语言
+  4. 规则表加载性能 < 5ms
+  5. 所有测试通过
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -98,3 +147,6 @@ Plans:
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 5. Localization Mode Enhancement | v1.1 | 2/2 | Complete    | 2026-07-01 |
 | 6. UI Update + E2E Verification | v1.1 | 2/2 | Complete    | 2026-07-01 |
+| 7. Diagnostics 规则系统性扩展 | v1.2 | 0/0 | Not started | - |
+| 8. Hover 内容汉化 | v1.2 | 0/0 | Not started | - |
+| 9. 规则表维护 + 测试完善 | v1.2 | 0/0 | Not started | - |

@@ -176,6 +176,12 @@
       "type": "directory"
     },
     {
+      "path": ".planning\\ROADMAP.md",
+      "accessCount": 36,
+      "lastAccessed": 1782897697385,
+      "type": "file"
+    },
+    {
       "path": "src\\ui\\controlPanelMessages.ts",
       "accessCount": 33,
       "lastAccessed": 1782877746719,
@@ -188,9 +194,9 @@
       "type": "file"
     },
     {
-      "path": ".planning\\ROADMAP.md",
-      "accessCount": 30,
-      "lastAccessed": 1782874148664,
+      "path": ".planning\\STATE.md",
+      "accessCount": 31,
+      "lastAccessed": 1782897841746,
       "type": "file"
     },
     {
@@ -212,15 +218,9 @@
       "type": "file"
     },
     {
-      "path": ".planning\\STATE.md",
-      "accessCount": 27,
-      "lastAccessed": 1782874159159,
-      "type": "file"
-    },
-    {
       "path": ".planning\\REQUIREMENTS.md",
-      "accessCount": 25,
-      "lastAccessed": 1782873069332,
+      "accessCount": 28,
+      "lastAccessed": 1782897784305,
       "type": "file"
     },
     {
@@ -236,15 +236,15 @@
       "type": "file"
     },
     {
-      "path": "src\\i18n\\locales\\zh.json",
-      "accessCount": 16,
-      "lastAccessed": 1782878005227,
+      "path": ".planning\\PROJECT.md",
+      "accessCount": 17,
+      "lastAccessed": 1782897539173,
       "type": "file"
     },
     {
-      "path": ".planning\\PROJECT.md",
-      "accessCount": 15,
-      "lastAccessed": 1782869890539,
+      "path": "src\\i18n\\locales\\zh.json",
+      "accessCount": 16,
+      "lastAccessed": 1782878005227,
       "type": "file"
     },
     {
@@ -326,15 +326,15 @@
       "type": "file"
     },
     {
-      "path": "src\\core\\command-registry.ts",
-      "accessCount": 2,
-      "lastAccessed": 1782829253196,
+      "path": "C:\\Users\\075\\.claude\\gsd-core\\workflows\\new-milestone.md",
+      "accessCount": 3,
+      "lastAccessed": 1782897417200,
       "type": "file"
     },
     {
-      "path": "C:\\Users\\075\\.claude\\gsd-core\\workflows\\new-milestone.md",
+      "path": "src\\core\\command-registry.ts",
       "accessCount": 2,
-      "lastAccessed": 1782841142091,
+      "lastAccessed": 1782829253196,
       "type": "file"
     },
     {

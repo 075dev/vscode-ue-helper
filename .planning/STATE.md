@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Proxy 本地化增强
-current_phase: 06
-status: completed
+milestone: v1.2
+milestone_name: 汉化规则覆盖完善
+current_phase: 7
+status: planning
 stopped_at: Plan 06-01 complete — labels + restart notice
-last_updated: "2026-07-01T02:56:36.890Z"
+last_updated: "2026-07-01T17:00:00.000Z"
 last_activity: 2026-07-01
-last_activity_desc: Phase 06 complete
+last_activity_desc: v1.2 milestone created - rule expansion
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 6
-  percent: 75
-current_phase_name: UI Update + E2E Verification
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+current_phase_name: Diagnostics 规则系统性扩展
 ---
 
 ## Project Reference

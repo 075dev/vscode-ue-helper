@@ -62,20 +62,46 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 | 自动检测语言环境启用本地化 | 依赖 VS Code API，推迟到 v1.2 |
 | Phase 4+ 面板增强 | 推迟到 v1.2 |
 
+## v1.2 Requirements
+
+Requirements for milestone v1.2. Each maps to a roadmap phase.
+
+### LOC-05: Diagnostics 规则系统性扩展
+
+- [ ] **LOC-05-01**: 规则表从 58 条扩展到 150+ 条，覆盖 clangd/clang-cl 常见诊断
+- [ ] **LOC-05-02**: 覆盖类型错误、语法错误、模板错误、语义错误等类别
+- [ ] **LOC-05-03**: 覆盖 clang-cl/MSVC 特有诊断（编译器选项、pragma 等）
+
+### LOC-06: Hover 内容汉化
+
+- [ ] **LOC-06-01**: C++ 关键字（public/private/static/virtual/const/override）hover 中翻译
+- [ ] **LOC-06-02**: 代码块和内联代码保护机制正常工作
+- [ ] **LOC-06-03**: hover 规则不影响 diagnostics 输出
+
+### LOC-07: 规则表维护 + 测试
+
+- [ ] **LOC-07-01**: 规则按类别分组，每类有明确标签
+- [ ] **LOC-07-02**: 边界测试覆盖空输入、特殊字符、混合语言
+- [ ] **LOC-07-03**: 规则表加载性能 < 5ms
+
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOC-01-01 ~ LOC-01-04 | Phase 4 | Pending |
+| LOC-01-01 ~ LOC-01-04 | Phase 4 | Complete |
+| LOC-02-01 ~ LOC-02-05 | Phase 5 | Complete |
+| LOC-02-06 ~ LOC-02-07 | Phase 6 | Complete |
 | LOC-03-01 ~ LOC-03-03 | Phase 4 | Complete |
-| LOC-02-01 ~ LOC-02-05 | Phase 5 | Pending |
-| LOC-02-06 ~ LOC-02-07 | Phase 6 | Pending |
-| LOC-04-01 ~ LOC-04-04 | Phase 6 | Pending |
+| LOC-04-01 ~ LOC-04-04 | Phase 6 | Complete |
+| LOC-05-01 ~ LOC-05-03 | Phase 7 | Pending |
+| LOC-06-01 ~ LOC-06-03 | Phase 8 | Pending |
+| LOC-07-01 ~ LOC-07-03 | Phase 9 | Pending |
 
 **Coverage:**
 
-- v1.1 requirements: 18 sub-items total
-- Mapped to phases: 18
+- v1.1 requirements: 18 sub-items total — ✅ Complete
+- v1.2 requirements: 9 sub-items total
+- Mapped to phases: 9
 - Unmapped: 0 ✓
 
 ---

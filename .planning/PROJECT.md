@@ -19,15 +19,17 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - Full i18n (Chinese/English) support
 - Timeline: 2026-06-30 → 2026-07-01
 
-## Current Milestone: v1.1 Proxy 本地化增强
+## Current Milestone: v1.2 汉化规则覆盖完善
 
-**Goal:** 修复 clangd Proxy 本地化功能 Bug，支持两种汉化模式（仅中文 / 中英双语），完善汉化规则覆盖。
+**Goal:** 系统性扩展汉化规则覆盖范围，从 58 条扩展到 200+ 条，覆盖 UE C++ 开发中的常见 clangd/clang-cl 诊断消息和 hover 内容。
 
 **Target features:**
-- 修复 CLI 层 localization 配置未传递给 LspBridge 的 Bug
-- 新增"仅中文"汉化模式（目前仅支持 append 追加翻译）
-- 完善 clangd 诊断消息汉化规则表
-- 端到端验证本地化功能正常工作
+- 系统性收集并添加 clangd/clang-cl 常见诊断规则（目标 200+ 条）
+- hover 内容结构化关键词汉化（C++ 关键字、UE 类型名等）
+- 用户通过日志反馈持续迭代规则
+- 所有规则有对应的单元测试
+
+## Previous Milestone: v1.1 Proxy 本地化增强 ✅
 
 ## Requirements
 

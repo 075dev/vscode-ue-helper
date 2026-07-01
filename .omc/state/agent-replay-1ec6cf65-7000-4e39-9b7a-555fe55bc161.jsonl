@@ -38,3 +38,4 @@
 {"t":0,"agent":"accbf5f","agent_type":"gsd-verifier","event":"agent_stop","success":true,"duration_ms":358916}
 {"t":0,"agent":"system","event":"skill_invoked","skill_name":"gsd-progress"}
 {"t":0,"agent":"system","event":"skill_invoked","skill_name":"gsd-complete-milestone"}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"gsd-new-milestone"}
