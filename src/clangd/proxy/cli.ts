@@ -23,6 +23,7 @@ import { LspBridge, type LocalizationOptions } from './bridge';
 import { createProxyLogFn, realIo, realStdio, wireBridgeStdio } from './cliRuntime';
 import { parseArgs } from './cliArgs';
 import { createDefaultLocalizationTable } from './localization';
+import { loadLocalizationFromSettings } from './settingsReader';
 import type { CliIo, CliStdio } from './cliRuntime';
 
 export { parseArgs } from './cliArgs';
@@ -82,11 +83,6 @@ export function runProxy(
 ): DoneClaim {
   const { options, errors } = parseArgs(argv);
 
-  // 构造本地化选项（D-01, D-02, LOC-01-01 ~ LOC-01-04）
-  const localization: LocalizationOptions | undefined = options.localizationEnabled
-    ? { enabled: true, mode: options.localizationMode, targets: ['diagnostics', 'codeActions', 'hover'], table: createDefaultLocalizationTable() }
-    : undefined;
-
   if (errors.length > 0) {
     for (const err of errors) {
       io.stderrWrite(`[clangd-proxy] ERROR: ${err}`);
@@ -103,6 +99,11 @@ export function runProxy(
   }
 
   const logFn = createProxyLogFn(options.logPath, io);
+
+  // 构造本地化选项：优先级 CLI 参数 > settings.json > 不启用
+  const localization: LocalizationOptions | undefined = options.localizationEnabled
+    ? { enabled: true, mode: options.localizationMode, targets: ['diagnostics', 'codeActions', 'hover'], table: createDefaultLocalizationTable() }
+    : loadLocalizationFromSettings(logFn);
 
   // 信号处理器清理
   let cleanupSignalHandlers: (() => void) | null = null;
