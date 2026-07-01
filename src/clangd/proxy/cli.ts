@@ -84,7 +84,7 @@ export function runProxy(
 
   // 构造本地化选项（D-01, D-02, LOC-01-01 ~ LOC-01-04）
   const localization: LocalizationOptions | undefined = options.localizationEnabled
-    ? { enabled: true, mode: options.localizationMode, targets: options.localizationTargets, table: createDefaultLocalizationTable() }
+    ? { enabled: true, mode: options.localizationMode, targets: ['diagnostics', 'codeActions', 'hover'], table: createDefaultLocalizationTable() }
     : undefined;
 
   if (errors.length > 0) {

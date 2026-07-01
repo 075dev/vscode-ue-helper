@@ -22,7 +22,6 @@ export interface ProxyConfigValues {
   clangdProxyLogPath: string;
   localizationEnabled: boolean;
   localizationMode: string;
-  localizationTargets: string[];
 }
 
 /** Status Tab 状态信息 */
@@ -52,7 +51,6 @@ export interface StatusValues {
   proxyLastKnownProblem: string;
   proxyLocalizationEnabled: boolean;
   proxyLocalizationMode: string;
-  proxyLocalizationTargets: string[];
 }
 
 /** 单条配置更新 */
@@ -225,11 +223,6 @@ export const PROXY_SELECTS: Record<string, SelectOption[]> = {
     { value: 'append', label: '中英双语 / Bilingual' },
     { value: 'zh-only', label: '仅中文 / Chinese Only' },
   ],
-  localizationTargets: [
-    { value: 'diagnostics', label: 'Diagnostics' },
-    { value: 'codeActions', label: 'Code Actions' },
-    { value: 'hover', label: 'Hover' },
-  ],
 };
 
 export const CONFIG_BOOLEANS: string[] = ['autoBackupWorkspace'];
@@ -243,7 +236,7 @@ export const CONFIG_FIELDS: string[] = [
 export const PROXY_FIELDS: string[] = [
   'clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec',
   'clangdProxyRealClangdPath', 'clangdProxyLogPath',
-  'localizationEnabled', 'localizationMode', 'localizationTargets',
+  'localizationEnabled', 'localizationMode',
 ];
 
 export type FieldType = 'select' | 'boolean' | 'number' | 'text';
@@ -272,5 +265,4 @@ export const CONFIG_KEY_MAP: Record<string, string> = {
   clangdProxyLogPath: 'clangdProxy.logPath',
   localizationEnabled: 'clangdProxy.localization.enabled',
   localizationMode: 'clangdProxy.localization.mode',
-  localizationTargets: 'clangdProxy.localization.targets',
 };

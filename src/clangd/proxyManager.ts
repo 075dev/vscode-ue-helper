@@ -87,7 +87,6 @@ export class ClangdProxyManager {
       keepaliveTtlSec: this.config.clangdProxyKeepaliveTtlSec,
       localizationEnabled: this.config.clangdProxyLocalizationEnabled,
       localizationMode: this.config.clangdProxyLocalizationMode,
-      localizationTargets: this.config.clangdProxyLocalizationTargets,
       logPath: this.logPath,
       hasBackup: this.hasBackup,
     });
@@ -182,10 +181,6 @@ export class ClangdProxyManager {
     if (this.config.clangdProxyLocalizationEnabled) {
       args.push('--localization-enabled');
       args.push('--localization-mode', this.config.clangdProxyLocalizationMode);
-      args.push(
-        '--localization-targets',
-        this.config.clangdProxyLocalizationTargets.join(','),
-      );
     }
 
     return args;

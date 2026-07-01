@@ -4,7 +4,6 @@
  * 验证：
  * - 默认值正确（enabled=false, max=20, ttl=900, append mode）
  * - 无效数值被 clamp 到安全默认值
- * - 无效 localization targets 被过滤
  * - 配置 schema 在 package.json 中存在
  */
 
@@ -68,15 +67,6 @@ describe('ClangdProxyConfig', () => {
       const config = new Config();
       expect(config.clangdProxyLocalizationMode).toBe('append');
     });
-
-    it('clangdProxyLocalizationTargets 默认包含 diagnostics/codeActions/hover', () => {
-      const config = new Config();
-      expect(config.clangdProxyLocalizationTargets).toEqual([
-        'diagnostics',
-        'codeActions',
-        'hover',
-      ]);
-    });
   });
 
   describe('正常值读取', () => {
@@ -134,16 +124,6 @@ describe('ClangdProxyConfig', () => {
       expect(config.clangdProxyLocalizationMode).toBe('append');
     });
 
-    it('读取 clangdProxyLocalizationTargets 自定义值', () => {
-      setupMockConfig({
-        'clangdProxy.localization.targets': ['diagnostics', 'hover'],
-      });
-      const config = new Config();
-      expect(config.clangdProxyLocalizationTargets).toEqual([
-        'diagnostics',
-        'hover',
-      ]);
-    });
   });
 
   describe('clamp 逻辑：无效数值 clamp 到安全默认值', () => {
@@ -187,56 +167,6 @@ describe('ClangdProxyConfig', () => {
       setupMockConfig({ 'clangdProxy.keepaliveTtlSec': 'xyz' });
       const config = new Config();
       expect(config.clangdProxyKeepaliveTtlSec).toBe(900);
-    });
-  });
-
-  describe('localization targets 过滤逻辑', () => {
-    it('过滤无效 target，保留有效值', () => {
-      setupMockConfig({
-        'clangdProxy.localization.targets': [
-          'diagnostics',
-          'invalidTarget',
-          'hover',
-          'completions',
-        ],
-      });
-      const config = new Config();
-      expect(config.clangdProxyLocalizationTargets).toEqual([
-        'diagnostics',
-        'hover',
-      ]);
-    });
-
-    it('全部无效时返回默认值', () => {
-      setupMockConfig({
-        'clangdProxy.localization.targets': ['bad1', 'bad2'],
-      });
-      const config = new Config();
-      expect(config.clangdProxyLocalizationTargets).toEqual([
-        'diagnostics',
-        'codeActions',
-        'hover',
-      ]);
-    });
-
-    it('空数组返回默认值', () => {
-      setupMockConfig({ 'clangdProxy.localization.targets': [] });
-      const config = new Config();
-      expect(config.clangdProxyLocalizationTargets).toEqual([
-        'diagnostics',
-        'codeActions',
-        'hover',
-      ]);
-    });
-
-    it('非数组值返回默认值', () => {
-      setupMockConfig({ 'clangdProxy.localization.targets': 'not-an-array' });
-      const config = new Config();
-      expect(config.clangdProxyLocalizationTargets).toEqual([
-        'diagnostics',
-        'codeActions',
-        'hover',
-      ]);
     });
   });
 

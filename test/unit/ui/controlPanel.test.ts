@@ -90,7 +90,7 @@ function createMockClangdHandles() {
         enabled: false, active: false, launcherPath: '',
         realClangdPath: undefined, keepaliveMax: 20, keepaliveTtlSec: 900,
         localizationEnabled: false, localizationMode: 'append',
-        localizationTargets: [], logPath: undefined, backupExists: false,
+        logPath: undefined, backupExists: false,
         lastKnownProblem: undefined,
       }),
       enable: vi.fn(), disable: vi.fn(),
@@ -143,7 +143,7 @@ describe('Config/Proxy field definitions', () => {
     expect(CONFIG_FIELDS).toEqual(['configuration', 'target', 'platform', 'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace']);
   });
   it('PROXY_FIELDS has expected fields', () => {
-    expect(PROXY_FIELDS).toEqual(['clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec', 'clangdProxyRealClangdPath', 'clangdProxyLogPath', 'localizationEnabled', 'localizationMode', 'localizationTargets']);
+    expect(PROXY_FIELDS).toEqual(['clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec', 'clangdProxyRealClangdPath', 'clangdProxyLogPath', 'localizationEnabled', 'localizationMode']);
   });
   it('getFieldType returns correct types', () => {
     expect(getFieldType('configuration', false)).toBe('select');
@@ -183,8 +183,7 @@ describe('getControlPanelHtml', () => {
     expect(html).toContain('id="proxy-clangdProxyKeepaliveMax"');
     expect(html).toContain('id="proxy-clangdProxyRealClangdPath"');
     expect(html).toContain('id="proxy-localizationMode"');
-    expect(html).toContain('name="proxy-localizationTargets"');
-    expect(html).toContain('id="proxy-save-btn"');
+        expect(html).toContain('id="proxy-save-btn"');
   });
   it('status tab shows all sections', () => {
     const html = getControlPanelHtml('vscode-webview://test', '', '');

@@ -270,7 +270,7 @@ export function getControlPanelHtml(
     </div>
     <div class="form-section">
       <div class="section-title">${escapeHtml(t('panel.section.localization'))}</div>
-      ${renderProxyFields(['localizationEnabled', 'localizationMode', 'localizationTargets'])}
+      ${renderProxyFields(['localizationEnabled', 'localizationMode'])}
     </div>
     <button class="save-btn" id="proxy-save-btn" disabled>💾 ${escapeHtml(t('panel.save'))}</button>
   </div>
@@ -375,10 +375,7 @@ export function getControlPanelHtml(
           let value;
           if (el.type === 'checkbox') value = el.checked;
           else if (el.type === 'number') value = Number(el.value);
-          else if (field === 'localizationTargets') {
-            value = [];
-            document.querySelectorAll('#content-proxy input[name="proxy-localizationTargets"]:checked').forEach(cb => value.push(cb.value));
-          } else value = el.value;
+          else value = el.value;
           updates.push({ key: field, value });
         }
         this.disabled = true;
@@ -437,11 +434,6 @@ export function getControlPanelHtml(
         const fields = ${JSON.stringify(PROXY_FIELDS)};
         const booleans = ${JSON.stringify(PROXY_BOOLEANS)};
         for (const field of fields) {
-          if (field === 'localizationTargets') {
-            const checked = values[field] || [];
-            document.querySelectorAll('#content-proxy input[name="proxy-localizationTargets"]').forEach(cb => { cb.checked = checked.includes(cb.value); });
-            continue;
-          }
           const el = document.getElementById('proxy-' + field);
           if (!el) continue;
           if (booleans.includes(field)) el.checked = !!values[field];
@@ -473,8 +465,7 @@ export function getControlPanelHtml(
         setBadge('st-proxy-backup', values.proxyBackupExists, 'Exists', 'None');
         if (values.proxyLocalizationEnabled) {
           const mode = values.proxyLocalizationMode === 'zh-only' ? '仅中文' : '中英双语';
-          const targets = (values.proxyLocalizationTargets || []).join(', ');
-          setText('st-localization', mode + ' — ' + targets);
+          setText('st-localization', mode);
         } else setText('st-localization', 'Disabled');
       }
       function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
@@ -535,11 +526,6 @@ function renderFormField(prefix: string, field: string, isProxy: boolean): strin
       return `<option value="${escapeHtml(opt.value)}">${escapeHtml(label)}</option>`;
     }).join('\n        ');
     return `<div class="form-field"><label class="form-label" for="${prefix}${field}">${escapeHtml(t(labelKey))}</label><select id="${prefix}${field}">${optsHtml}</select></div>`;
-  }
-  if (field === 'localizationTargets') {
-    const options = selects['localizationTargets'];
-    const optsHtml = options.map((opt) => `<label><input type="checkbox" name="${prefix}${field}" value="${escapeHtml(opt.value)}"> ${escapeHtml(opt.label)}</label>`).join('\n        ');
-    return `<div class="form-field"><label class="form-label">${escapeHtml(t(labelKey))}</label><div class="checkbox-group">${optsHtml}</div></div>`;
   }
   const isNumber = field.includes('Max') || field.includes('Ttl') || field.includes('Sec');
   return `<div class="form-field"><label class="form-label" for="${prefix}${field}">${escapeHtml(t(labelKey))}</label><input type="${isNumber ? 'number' : 'text'}" id="${prefix}${field}"></div>`;

@@ -27,7 +27,6 @@ describe('parseArgs — CLI 参数解析', () => {
       '--log-path', '/tmp/proxy.log',
       '--localization-enabled',
       '--localization-mode', 'zh-only',
-      '--localization-targets', 'diagnostics,hover',
       '--',
       '--background-index',
       '--header-insertion=never',
@@ -40,7 +39,6 @@ describe('parseArgs — CLI 参数解析', () => {
     expect(result.options.logPath).toBe('/tmp/proxy.log');
     expect(result.options.localizationEnabled).toBe(true);
     expect(result.options.localizationMode).toBe('zh-only');
-    expect(result.options.localizationTargets).toEqual(['diagnostics', 'hover']);
     expect(result.options.realClangdArgs).toEqual([
       '--background-index',
       '--header-insertion=never',
@@ -89,11 +87,6 @@ describe('parseArgs — CLI 参数解析', () => {
     expect(result.options.logPath).toBeUndefined();
     expect(result.options.localizationEnabled).toBe(false);
     expect(result.options.localizationMode).toBe('append');
-    expect(result.options.localizationTargets).toEqual([
-      'diagnostics',
-      'codeActions',
-      'hover',
-    ]);
   });
 
   // ─── 未知参数 ─────────────────────────────────────────────
@@ -179,18 +172,14 @@ describe('parseArgs — CLI 参数解析', () => {
 
   // ─── --localization-targets 空值 ──────────────────────────────
 
-  it('--localization-targets 空字符串时使用默认值', () => {
+  it('--localization-targets 参数已移除（默认全开）', () => {
     const result = parseArgs([
       'node', 'proxy.js',
-      '--localization-targets', '',
       '--real-clangd', '/usr/bin/clangd',
     ]);
 
-    expect(result.options.localizationTargets).toEqual([
-      'diagnostics',
-      'codeActions',
-      'hover',
-    ]);
+    // --localization-targets 参数已删除，--localization-enabled 未传时默认禁用
+    expect(result.options.localizationEnabled).toBe(false);
   });
 
   // ─── 本地化启用 ───────────────────────────────────────────
@@ -201,29 +190,10 @@ describe('parseArgs — CLI 参数解析', () => {
       '--real-clangd', '/usr/bin/clangd',
       '--localization-enabled',
       '--localization-mode', 'append',
-      '--localization-targets', 'diagnostics,codeActions',
-    ]);
+          ]);
 
     expect(result.options.localizationEnabled).toBe(true);
     expect(result.options.localizationMode).toBe('append');
-    expect(result.options.localizationTargets).toEqual(['diagnostics', 'codeActions']);
-  });
-
-  // ─── 本地化默认禁用 ───────────────────────────────────────
-
-  it('未指定 --localization-enabled 时本地化默认禁用', () => {
-    const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', '/usr/bin/clangd',
-    ]);
-
-    expect(result.options.localizationEnabled).toBe(false);
-    expect(result.options.localizationMode).toBe('append');
-    expect(result.options.localizationTargets).toEqual([
-      'diagnostics',
-      'codeActions',
-      'hover',
-    ]);
   });
 
   // ─── 仅 --real-clangd 路径 ────────────────────────────────────

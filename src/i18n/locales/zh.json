@@ -115,7 +115,7 @@
   "proxy.status.keepaliveMax": "Keepalive Max: {value}",
   "proxy.status.keepaliveTtlSec": "Keepalive TTL: {value}s",
   "proxy.status.localizationEnabled": "汉化启用:    {value}",
-  "proxy.status.localizationDetail": "                 模式={mode}, 目标={targets}",
+  "proxy.status.localizationDetail": "                 模式={mode}",
   "proxy.status.logPath": "日志路径:     {value}",
   "proxy.status.backupExists": "备份存在:     {value}",
   "proxy.status.summary": "Clangd LSP Proxy: 启用={enabled}, 激活={active}",
@@ -171,7 +171,6 @@
   "panel.field.clangdProxyLogPath": "日志路径",
   "panel.field.localizationEnabled": "启用汉化",
   "panel.field.localizationMode": "汉化模式",
-  "panel.field.localizationTargets": "汉化目标",
 
   "panel.notice.restartProxyTitle": "需要重启代理",
   "panel.notice.restartProxy": "重启代理后汉化模式修改才能生效。",

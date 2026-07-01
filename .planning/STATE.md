@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Proxy 本地化增强
-current_phase: 6
-current_phase_name: UI Update + E2E Verification
+current_phase: 06
 status: completed
-stopped_at: "Phase 4 planned: 2 plans in wave 1"
-last_updated: "2026-07-01T02:48:00.000Z"
+stopped_at: Plan 06-01 complete — labels + restart notice
+last_updated: "2026-07-01T02:56:36.890Z"
 last_activity: 2026-07-01
-last_activity_desc: Phase 05 complete, transitioned to Phase 6
+last_activity_desc: Phase 06 complete
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 7
-  completed_plans: 7
-  percent: 86
+  completed_plans: 6
+  percent: 75
+current_phase_name: UI Update + E2E Verification
 ---
 
 ## Project Reference
@@ -72,10 +72,10 @@ All 3 phases implemented, 28 requirements covered, 498 tests passing across 35 t
 
 ## Current Position
 
-Phase: 6 — UI Update + E2E Verification
-Plan: 01 — Complete (labels + restart notice)
+Phase: 06
+Plan: Not started
 Status: Plan 06-01 complete — control panel labels updated, restart notice bar added
-Last activity: 2026-07-01 — Plan 06-01 complete
+Last activity: 2026-07-01 — Phase 06 complete
 
 ## Phase Dependencies
 

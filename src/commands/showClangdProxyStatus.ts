@@ -49,7 +49,6 @@ export function executeShowClangdProxyStatus(
       ? [
           t('proxy.status.localizationDetail', {
             mode: status.localizationMode,
-            targets: status.localizationTargets.join(', '),
           }),
         ]
       : []),

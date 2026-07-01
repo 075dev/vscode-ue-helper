@@ -160,7 +160,6 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
             clangdProxyLogPath: config.clangdProxyLogPath ?? '',
             localizationEnabled: config.clangdProxyLocalizationEnabled,
             localizationMode: config.clangdProxyLocalizationMode,
-            localizationTargets: config.clangdProxyLocalizationTargets,
           },
         });
         break;
@@ -276,7 +275,6 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       proxyLastKnownProblem: ps.lastKnownProblem ?? '',
       proxyLocalizationEnabled: ps.localizationEnabled,
       proxyLocalizationMode: ps.localizationMode,
-      proxyLocalizationTargets: ps.localizationTargets,
     };
   }
 }

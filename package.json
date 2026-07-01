@@ -360,25 +360,6 @@
           "default": "append",
           "description": "Localization mode: append = add Chinese after English, zh-only = Chinese only.",
           "description@zh": "汉化模式：append = 在英文后追加中文，zh-only = 仅中文替换。"
-        },
-        "vscodeUEHelper.clangdProxy.localization.targets": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "diagnostics",
-              "codeActions",
-              "hover"
-            ]
-          },
-          "default": [
-            "diagnostics",
-            "codeActions",
-            "hover"
-          ],
-          "uniqueItems": true,
-          "description": "Localization targets. Invalid values are filtered out.",
-          "description@zh": "汉化目标。无效值将被过滤。"
         }
       }
     },

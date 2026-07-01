@@ -31,8 +31,7 @@ describe('buildStatus — 状态构建', () => {
     keepaliveTtlSec: 900,
     localizationEnabled: false,
     localizationMode: 'append',
-    localizationTargets: ['diagnostics', 'codeActions', 'hover'],
-    logPath: undefined,
+        logPath: undefined,
     hasBackup: false,
   };
 
@@ -48,7 +47,6 @@ describe('buildStatus — 状态构建', () => {
     expect(status.keepaliveTtlSec).toBe(900);
     expect(status.localizationEnabled).toBe(false);
     expect(status.localizationMode).toBe('append');
-    expect(status.localizationTargets).toEqual(['diagnostics', 'codeActions', 'hover']);
     expect(status.logPath).toBeUndefined();
     expect(status.backupExists).toBe(false);
     expect(status.lastKnownProblem).toBeUndefined();
@@ -96,11 +94,9 @@ describe('buildStatus — 状态构建', () => {
       ...defaultDeps,
       localizationEnabled: true,
       localizationMode: 'zh-only',
-      localizationTargets: ['diagnostics'],
-    });
+          });
     expect(status.localizationEnabled).toBe(true);
     expect(status.localizationMode).toBe('zh-only');
-    expect(status.localizationTargets).toEqual(['diagnostics']);
   });
 
   // ─── JSON 可序列化 ──────────────────────────────────────────
@@ -125,7 +121,6 @@ describe('buildStatus — 状态构建', () => {
     expect(parsed.keepaliveTtlSec).toBe(900);
     expect(parsed.localizationEnabled).toBe(false);
     expect(parsed.localizationMode).toBe('append');
-    expect(parsed.localizationTargets).toEqual(['diagnostics', 'codeActions', 'hover']);
     expect(parsed.logPath).toBe('/tmp/proxy.log');
     expect(parsed.backupExists).toBe(true);
     expect(parsed.lastKnownProblem).toBe('测试问题');
@@ -135,13 +130,12 @@ describe('buildStatus — 状态构建', () => {
 
   it('buildStatus 不修改输入对象', () => {
     const deps: StatusDependencies = { ...defaultDeps };
-    const depsSnapshot = { ...deps, localizationTargets: [...deps.localizationTargets] };
+    const depsSnapshot = { ...deps };
 
     buildStatus(deps);
 
     expect(deps.enabled).toBe(depsSnapshot.enabled);
     expect(deps.launcherPath).toBe(depsSnapshot.launcherPath);
-    expect(deps.localizationTargets).toEqual(depsSnapshot.localizationTargets);
   });
 });
 

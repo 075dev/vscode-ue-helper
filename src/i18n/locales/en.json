@@ -115,7 +115,7 @@
   "proxy.status.keepaliveMax": "Keepalive Max:   {value}",
   "proxy.status.keepaliveTtlSec": "Keepalive TTL:   {value}s",
   "proxy.status.localizationEnabled": "Localization:    {value}",
-  "proxy.status.localizationDetail": "                 mode={mode}, targets={targets}",
+  "proxy.status.localizationDetail": "                 mode={mode}",
   "proxy.status.logPath": "Log Path:        {value}",
   "proxy.status.backupExists": "Backup Exists:   {value}",
   "proxy.status.summary": "Clangd LSP Proxy: enabled={enabled}, active={active}",
@@ -171,7 +171,6 @@
   "panel.field.clangdProxyLogPath": "Log Path",
   "panel.field.localizationEnabled": "Enable Localization",
   "panel.field.localizationMode": "Localization Mode",
-  "panel.field.localizationTargets": "Localization Targets",
 
   "panel.notice.restartProxyTitle": "Proxy Restart Required",
   "panel.notice.restartProxy": "Restart the proxy for localization mode changes to take effect.",

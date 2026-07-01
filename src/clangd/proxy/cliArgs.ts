@@ -23,8 +23,6 @@ export interface CliOptions {
   localizationEnabled: boolean;
   /** 本地化模式 */
   localizationMode: 'append' | 'zh-only';
-  /** 本地化目标 */
-  localizationTargets: string[];
   /** 传递给真实 clangd 的参数（-- 分隔符之后） */
   realClangdArgs: string[];
 }
@@ -40,7 +38,6 @@ export interface ParseArgsResult {
 const DEFAULT_KEEPALIVE_MAX = 20;
 const DEFAULT_KEEPALIVE_TTL_SEC = 900;
 const DEFAULT_LOCALIZATION_MODE = 'append';
-const DEFAULT_LOCALIZATION_TARGETS = ['diagnostics', 'codeActions', 'hover'];
 
 /**
  * 解析 CLI 参数。
@@ -56,7 +53,6 @@ export function parseArgs(argv: string[]): ParseArgsResult {
     logPath: undefined,
     localizationEnabled: false,
     localizationMode: DEFAULT_LOCALIZATION_MODE,
-    localizationTargets: [...DEFAULT_LOCALIZATION_TARGETS],
     realClangdArgs: [],
   };
 
@@ -117,14 +113,6 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         const val = proxyArgs[i];
         if (val === 'append' || val === 'zh-only') {
           options.localizationMode = val;
-        }
-        break;
-      }
-      case '--localization-targets': {
-        i++;
-        const val = proxyArgs[i];
-        if (val !== undefined && val.length > 0) {
-          options.localizationTargets = val.split(',').filter((t) => t.length > 0);
         }
         break;
       }

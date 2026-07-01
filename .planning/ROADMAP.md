@@ -21,7 +21,7 @@
 
 - [x] **Phase 4: CLI Fix + Rule Expansion** - Fix CLI-to-bridge localization wiring, expand rule table to 30+ rules (completed 2026-06-30)
 - [x] **Phase 5: Localization Mode Enhancement** - Add zh-only mode, support append/zh-only switching (completed 2026-07-01)
-- [ ] **Phase 6: UI Update + E2E Verification** - Update control panel labels, add restart prompt, integration tests
+- [x] **Phase 6: UI Update + E2E Verification** - Update control panel labels, add restart prompt, integration tests (completed 2026-07-01)
 
 </details>
 
@@ -97,4 +97,4 @@ Plans:
 | 3. 状态展示 + 细节打磨 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 5. Localization Mode Enhancement | v1.1 | 2/2 | Complete    | 2026-07-01 |
-| 6. UI Update + E2E Verification | v1.1 | 2/2 | Complete   | 2026-07-01 |
+| 6. UI Update + E2E Verification | v1.1 | 2/2 | Complete    | 2026-07-01 |

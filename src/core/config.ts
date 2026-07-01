@@ -53,18 +53,10 @@ export type CompletionMode = 'fast' | 'slow';
 export type MCPMode = 'auto' | 'always' | 'never';
 
 
-/** Clangd Proxy 本地化目标类型 */
-export type ClangdProxyLocalizationTarget = "diagnostics" | "codeActions" | "hover";
+
 
 /** Clangd Proxy 本地化模式：append = 追加到 clangd 输出，zh-only = 仅中文替换 */
 export type ClangdProxyLocalizationMode = "append" | "zh-only";
-
-/** Clangd Proxy 本地化目标有效值集合，用于过滤 */
-const VALID_LOCALIZATION_TARGETS: readonly ClangdProxyLocalizationTarget[] = [
-  "diagnostics",
-  "codeActions",
-  "hover",
-] as const;
 
 /** Clangd Proxy keepaliveMax 安全默认值 */
 const DEFAULT_KEEPALIVE_MAX = 20;
@@ -184,23 +176,6 @@ export class Config {
     return (raw as ClangdProxyLocalizationMode) ?? "append";
   }
 
-  /**
-   * clangd Proxy 本地化目标列表。
-   * - 过滤掉无效值，只保留 'diagnostics' | 'codeActions' | 'hover'
-   * - 如果过滤后为空，返回默认值 ['diagnostics', 'codeActions', 'hover']
-   */
-  get clangdProxyLocalizationTargets(): ClangdProxyLocalizationTarget[] {
-    const raw = this.root.get<unknown>("clangdProxy.localization.targets");
-    if (!Array.isArray(raw)) {
-      return [...VALID_LOCALIZATION_TARGETS];
-    }
-    const filtered = raw.filter(
-      (item): item is ClangdProxyLocalizationTarget =>
-        typeof item === "string" &&
-        (VALID_LOCALIZATION_TARGETS as readonly string[]).includes(item),
-    );
-    return filtered.length > 0 ? filtered : [...VALID_LOCALIZATION_TARGETS];
-  }
 // ===== 写入 / 监听 =====
 
   /**

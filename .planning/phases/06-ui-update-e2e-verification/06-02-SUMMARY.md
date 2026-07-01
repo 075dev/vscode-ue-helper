@@ -76,3 +76,11 @@ None — all three tests verify against the real localization pipeline with conc
 ## Threat Flags
 
 None — no new production code introduced; test-only changes.
+
+## Self-Check: PASSED
+
+| Check | Result |
+|-------|--------|
+| File exists: `test/unit/clangd/proxy/bridgeLocalization.test.ts` | FOUND |
+| Commit exists: `4545e98` | FOUND |
+| Final metadata commit: `c41a16d` | FOUND |

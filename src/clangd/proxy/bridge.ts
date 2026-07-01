@@ -328,11 +328,11 @@ export class LspBridge {
       return msg;
     }
 
-    if (method === 'textDocument/codeAction' && this.localization.targets.includes('codeActions')) {
+    if (method === 'textDocument/codeAction') {
       return this.localizeCodeActionResult(msg);
     }
 
-    if (method === 'textDocument/hover' && this.localization.targets.includes('hover')) {
+    if (method === 'textDocument/hover') {
       return this.localizeHoverResult(msg);
     }
 
@@ -361,7 +361,7 @@ export class LspBridge {
    * 修改 diagnostics[].message 和 diagnostics[].relatedInformation[].message。
    */
   private localizeDiagnosticsNotification(msg: JsonRpcMessage): JsonRpcMessage {
-    if (!this.localization || !this.localization.enabled || !this.localization.targets.includes('diagnostics')) {
+    if (!this.localization || !this.localization.enabled) {
       return msg;
     }
 

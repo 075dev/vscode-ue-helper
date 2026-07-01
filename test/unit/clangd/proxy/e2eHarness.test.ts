@@ -603,7 +603,6 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
         '--keepalive-ttl-sec', '60',
         '--real-clangd', '/fake/clangd',
         '--localization-enabled',
-        '--localization-targets', 'hover',
         '--',
         '--background-index',
       ],

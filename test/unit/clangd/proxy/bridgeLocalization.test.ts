@@ -152,15 +152,14 @@ describe('LspBridge — 本地化集成', () => {
     expect(contents?.[1]).toContain("[使用了未声明的标识符 'Foo']");
   });
 
-  it('disabled target：diagnostics 禁用时 diagnostics 通知透传不修改', () => {
-    const bridge = createLocalizedBridge(transport, ['codeActions']);
+  it('localization 启用时 diagnostics 通知总是被翻译（已移除 targets 过滤）', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics']);
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] } }));
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toBe("use of undeclared identifier 'Foo'");
-    expect(diags?.[0]?.message).not.toContain('[使用了未声明的标识符');
+    expect(diags?.[0]?.message).toContain('[使用了未声明的标识符');
   });
 
   it('localization 完全禁用时所有消息透传不修改', () => {

@@ -32,8 +32,6 @@ export interface ClangdProxyStatus {
   localizationEnabled: boolean;
   /** 本地化模式：append 或 override */
   localizationMode: string;
-  /** 本地化目标列表 */
-  localizationTargets: readonly string[];
   /** 日志文件路径（配置中指定，undefined = 未设置） */
   logPath: string | undefined;
   /** 是否有 clangd 设置备份存在 */
@@ -62,8 +60,6 @@ export interface StatusDependencies {
   localizationEnabled: boolean;
   /** 本地化模式 */
   localizationMode: string;
-  /** 本地化目标 */
-  localizationTargets: readonly string[];
   /** 日志路径 */
   logPath: string | undefined;
   /** 是否有备份 */
@@ -94,7 +90,6 @@ export function buildStatus(deps: StatusDependencies): ClangdProxyStatus {
     keepaliveTtlSec: deps.keepaliveTtlSec,
     localizationEnabled: deps.localizationEnabled,
     localizationMode: deps.localizationMode,
-    localizationTargets: deps.localizationTargets,
     logPath: deps.logPath,
     backupExists: deps.hasBackup,
     lastKnownProblem: deps.lastKnownProblem,

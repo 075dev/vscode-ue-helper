@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\\\" && npm run build 2>&1\",\"timeout\":60000,\"description\":\"Build to check for errors\"}",
+  "error": "Exit code 1\nnpm error code EJSONPARSE\nnpm error JSON.parse Invalid package.json: JSONParseError: Expected double-quoted property name in JSON at position 11502 (line 364 column 7) while parsing near \"...\\r\\n        },\\r\\n      }\\r\\n    },\\r\\n    \\\"menu...\"\nnpm error JSON.parse Failed to parse JSON data.\nnpm error JSON.parse Note: package.json must be actual JSON, not just JavaScript.\nnpm error A complete log of this run can be found in: C:\\Users\\075\\AppData\\Local\\npm-cache\\_logs\\2026-07-01T03_55...",
+  "timestamp": "2026-07-01T03:55:37.533Z",
+  "retry_count": 1
+}

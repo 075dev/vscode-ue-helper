@@ -19,11 +19,15 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - Full i18n (Chinese/English) support
 - Timeline: 2026-06-30 → 2026-07-01
 
-## Next Milestone Goals
+## Current Milestone: v1.1 Proxy 本地化增强
 
-- Phase 4+ 增强功能（快捷键绑定、自定义按钮排序、构建历史查看）
-- 用户反馈驱动的迭代优化
-- 潜在的性能优化和体验打磨
+**Goal:** 修复 clangd Proxy 本地化功能 Bug，支持两种汉化模式（仅中文 / 中英双语），完善汉化规则覆盖。
+
+**Target features:**
+- 修复 CLI 层 localization 配置未传递给 LspBridge 的 Bug
+- 新增"仅中文"汉化模式（目前仅支持 append 追加翻译）
+- 完善 clangd 诊断消息汉化规则表
+- 端到端验证本地化功能正常工作
 
 ## Requirements
 
@@ -35,12 +39,16 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 
 ### Active
 
-(None — next milestone to define fresh requirements)
+- [ ] **LOC-01**: CLI 层传递 localization 配置给 LspBridge
+- [ ] **LOC-02**: 新增"仅中文"本地化模式（当前为 append 模式，需支持 replace 替换英文）
+- [ ] **LOC-03**: 完善汉化规则覆盖范围
+- [ ] **LOC-04**: 端到端验证本地化功能
 
 ### Out of Scope
 
 - 替换现有的状态栏 UI — 状态栏和控制面板共存互补
 - 实时构建日志输出到面板 — 构建日志在 Output 通道更合适
+- Phase 4+ 面板增强功能（快捷键、排序、构建历史）— 推迟到 v1.2
 
 ## Context
 
@@ -50,13 +58,14 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - 所有配置项已在 `package.json` 的 `contributes.configuration` 中定义
 - 已有 i18n 系统（`src/i18n/index.ts`，中英双语）
 - **v1.0 新增**: WebView 控制面板（4 Tab，16 按钮，15 配置字段）
-- 代码库映射已完成（`.planning/codebase/` 含 7 个文档）
+- **已知问题**: clangd Proxy 本地化功能因 CLI 层未传递配置而静默失效
 
 ## Constraints
 
 - **Tech Stack**: 纯 VS Code WebView API（HTML/CSS/JS），不引入前端框架
 - **Pattern**: 消息协议双向通信（postMessage / onDidReceiveMessage）
 - **i18n**: 所有用户可见文本必须通过 t() 函数
+- **Proxy 协议**: 代理 CLI 必须通过 --localization-* 参数传递本地化配置
 
 ## Key Decisions
 
@@ -87,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-01 after v1.0 milestone*
+*Last updated: 2026-07-01 after v1.1 milestone start*
