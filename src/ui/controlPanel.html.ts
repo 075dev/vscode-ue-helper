@@ -212,6 +212,21 @@ export function getControlPanelHtml(
     #result-toast.show { opacity: 1; transform: translateY(0); }
     #result-toast.success { background: var(--c-success); color: #1e1e1e; }
     #result-toast.failure { background: var(--c-error); color: #fff; }
+    .warning-notice {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; margin: 8px 12px 0 12px;
+      background: #856404; color: #fff; border-radius: var(--radius-md);
+      font-size: 12px; line-height: 1.4; box-shadow: var(--shadow-sm);
+      animation: slideDown var(--transition-normal);
+    }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .warning-notice .notice-icon { font-size: 16px; flex-shrink: 0; }
+    .warning-notice .notice-text { flex: 1; }
+    .warning-notice .notice-close {
+      background: none; border: none; color: #fff; cursor: pointer;
+      font-size: 16px; padding: 0 4px; opacity: 0.7; line-height: 1;
+    }
+    .warning-notice .notice-close:hover { opacity: 1; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
@@ -299,6 +314,11 @@ export function getControlPanelHtml(
     <button class="status-refresh-btn" id="status-refresh-btn">↻ ${escapeHtml(t('panel.status.refresh'))}</button>
   </div>
   <div id="result-toast"></div>
+  <div id="proxy-restart-notice" class="warning-notice" style="display:none">
+    <span class="notice-icon">&#9888;</span>
+    <span class="notice-text" data-i18n="panel.notice.restartProxy"></span>
+    <button class="notice-close" id="notice-close-btn">&times;</button>
+  </div>
   <script>
     (function() {
       const vscode = acquireVsCodeApi();
@@ -388,12 +408,18 @@ export function getControlPanelHtml(
               showToast('✗ ' + msg.result.saved + ' saved, ' + msg.result.failed + ' failed' + (msg.result.firstError ? ': ' + msg.result.firstError : ''), 'failure');
               document.getElementById(msg.scope === 'config' ? 'config-save-btn' : 'proxy-save-btn').disabled = false;
             }
+            if (msg.result.localizationModeChanged) {
+              document.getElementById('proxy-restart-notice').style.display = 'flex';
+            }
             break;
         }
       });
       document.getElementById('status-refresh-btn').addEventListener('click', function() {
         vscode.postMessage({ type: 'getStatus' });
         showToast('⟳ ${escapeHtml(t('panel.status.refreshing'))}', '');
+      });
+      document.getElementById('notice-close-btn').addEventListener('click', function() {
+        document.getElementById('proxy-restart-notice').style.display = 'none';
       });
       function applyConfigValues(values) {
         const fields = ${JSON.stringify(CONFIG_FIELDS)};

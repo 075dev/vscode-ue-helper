@@ -173,6 +173,9 @@
   "panel.field.localizationMode": "Localization Mode",
   "panel.field.localizationTargets": "Localization Targets",
 
+  "panel.notice.restartProxyTitle": "Proxy Restart Required",
+  "panel.notice.restartProxy": "Restart the proxy for localization mode changes to take effect.",
+
   "panel.section.project": "Project",
   "panel.status.projectName": "Name",
   "panel.status.projectPath": "Path",

@@ -79,6 +79,7 @@ export interface SaveResult {
   saved: number;
   failed: number;
   firstError?: string;
+  localizationModeChanged?: boolean;
 }
 
 /** Extension → WebView 消息 */

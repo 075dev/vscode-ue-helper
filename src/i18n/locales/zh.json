@@ -173,6 +173,9 @@
   "panel.field.localizationMode": "汉化模式",
   "panel.field.localizationTargets": "汉化目标",
 
+  "panel.notice.restartProxyTitle": "需要重启代理",
+  "panel.notice.restartProxy": "重启代理后汉化模式修改才能生效。",
+
   "panel.section.project": "项目",
   "panel.status.projectName": "名称",
   "panel.status.projectPath": "路径",

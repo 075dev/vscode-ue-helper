@@ -206,6 +206,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   ): Promise<import('./controlPanelMessages').SaveResult> {
     const { logger, config } = this.deps;
     let saved = 0, failed = 0, firstError: string | undefined;
+    const localizationModeChanged = updates.some(u => u.key === 'localizationMode');
     for (const u of updates) {
       const configKey = CONFIG_KEY_MAP[u.key] ?? u.key;
       try {
@@ -218,7 +219,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         logger.error(`[controlPanel] save failed: ${configKey}`, firstError);
       }
     }
-    return { success: failed === 0, saved, failed, firstError };
+    return { success: failed === 0, saved, failed, firstError, localizationModeChanged };
   }
 
   private postMessage(msg: PanelMessage): void {
