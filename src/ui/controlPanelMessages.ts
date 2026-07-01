@@ -221,8 +221,8 @@ export const CONFIG_SELECTS: Record<string, SelectOption[]> = {
 
 export const PROXY_SELECTS: Record<string, SelectOption[]> = {
   localizationMode: [
-    { value: 'append', label: 'Append' },
-    { value: 'override', label: 'Override' },
+    { value: 'append', label: '中英双语 / Bilingual' },
+    { value: 'zh-only', label: '仅中文 / Chinese Only' },
   ],
   localizationTargets: [
     { value: 'diagnostics', label: 'Diagnostics' },

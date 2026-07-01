@@ -446,7 +446,7 @@ export function getControlPanelHtml(
         setText('st-proxy-log-path', values.proxyLogPath || '—');
         setBadge('st-proxy-backup', values.proxyBackupExists, 'Exists', 'None');
         if (values.proxyLocalizationEnabled) {
-          const mode = values.proxyLocalizationMode === 'override' ? 'Override' : 'Append';
+          const mode = values.proxyLocalizationMode === 'zh-only' ? '仅中文' : '中英双语';
           const targets = (values.proxyLocalizationTargets || []).join(', ');
           setText('st-localization', mode + ' — ' + targets);
         } else setText('st-localization', 'Disabled');
