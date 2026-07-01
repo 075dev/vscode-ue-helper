@@ -42,7 +42,7 @@ export interface LocalizationTable {
 /**
  * 创建默认的 clangd 诊断消息中文本地化规则表。
  *
- * 覆盖 30 种常见 clangd 错误消息，分 8 类：
+ * 覆盖 50 种常见 clangd 错误消息，分 10 类：
  *
  * **已存在（7 条）：**
  * 1. incomplete type
@@ -328,6 +328,168 @@ export function createDefaultLocalizationTable(): LocalizationTable {
       {
         pattern: "calling a private constructor of class '([^']+)'",
         replacement: "[调用了类 '$1' 的私有构造函数]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== 新增 UE/clang-cl 通用规则（v1.1 扩展） =====
+
+      // 31. function defined in header → ODR
+      {
+        pattern: "defined in a header file; function definitions in header files can lead to ODR violations",
+        replacement: "[定义在头文件中；头文件中的函数定义可能导致 ODR 违反]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 32. /TC /TP option precedence
+      {
+        pattern: "The '/(TC|TP)' option takes precedence over earlier instances",
+        replacement: "['/$1' 选项优先于之前的实例]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 33. /Fo with multiple source files
+      {
+        pattern: "Cannot specify '/(Fo|Fd)[^']*' when compiling multiple source files",
+        replacement: "[编译多个源文件时不能指定 '/$1' 选项]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 34. implicit conversion loses integer precision
+      {
+        pattern: "implicit conversion loses integer precision: '([^']+)' to '([^']+)'",
+        replacement: "[隐式转换丢失整数精度：从 '$1' 到 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 35. 'X' is not defined
+      {
+        pattern: "'([^']+)' is not defined",
+        replacement: "['$1' 未定义]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 36. expected a type specifier
+      {
+        pattern: "expected a type specifier",
+        replacement: "[期望类型说明符]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 37. cannot open file
+      {
+        pattern: "cannot open file '([^']+)'",
+        replacement: "[无法打开文件 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 38. no such file or directory
+      {
+        pattern: "([^']+)' (is not a|No such) file or directory",
+        replacement: "['$1' 不是文件或目录]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 39. invalid operands to binary expression
+      {
+        pattern: "invalid operands to binary expression '([^']+)' and '([^']+)'",
+        replacement: "[二元表达式的操作数无效：'$1' 和 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 40. cannot initialize return object
+      {
+        pattern: "cannot initialize return object of type '([^']+)' with an lvalue of type '([^']+)'",
+        replacement: "[无法用类型 '$2' 的左值初始化返回类型 '$1']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 41. allocating abstract class type
+      {
+        pattern: "allocating an object of abstract class type '([^']+)'",
+        replacement: "[正在分配抽象类类型 '$1' 的对象]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 42. pure virtual function has no overrider
+      {
+        pattern: "pure virtual function '([^']+)' has no overrider",
+        replacement: "[纯虚函数 '$1' 没有覆盖实现]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 43. cannot declare variable of abstract type
+      {
+        pattern: "cannot declare variable '([^']+)' to be of abstract type '([^']+)'",
+        replacement: "[无法将变量 '$1' 声明为抽象类型 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 44. not an accessible base
+      {
+        pattern: "'([^']+)' is not an accessible base of '([^']+)'",
+        replacement: "['$1' 不是 '$2' 的可访问基类]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 45. cannot cast
+      {
+        pattern: "cannot cast '([^']+)' to '([^']+)'",
+        replacement: "[无法从 '$1' 转换到 '$2']",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 46. 'X' is ambiguous
+      {
+        pattern: "'([^']+)' is ambiguous",
+        replacement: "['$1' 有歧义]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 47. 'X' is private / protected
+      {
+        pattern: "'([^']+)' is (private|protected)",
+        replacement: "['$1' 是 $2 成员]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 48. missing type specifier
+      {
+        pattern: "missing type specifier - int assumed",
+        replacement: "[缺少类型说明符 - 假定为 int]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 49. 'X' : illegal token
+      {
+        pattern: "'([^']+)'\\s*: illegal (token|character)",
+        replacement: "['$1' 是非法的标记]",
+        mode: 'append',
+        target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 50. 'X' : is not a valid value for 'Y'
+      {
+        pattern: "'([^']+)' is not a valid value for '([^']+)'",
+        replacement: "['$1' 不是 '$2' 的有效值]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },

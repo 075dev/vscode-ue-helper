@@ -23,9 +23,9 @@ import {
 // ===== 默认规则表 =====
 
 describe('createDefaultLocalizationTable', () => {
-  it('应包含 30 条默认规则', () => {
+  it('应包含 50 条默认规则', () => {
     const table = createDefaultLocalizationTable();
-    expect(table.rules).toHaveLength(30);
+    expect(table.rules).toHaveLength(50);
   });
 
   it('每条规则应有有效的 pattern、replacement、mode 和 target', () => {
@@ -98,7 +98,7 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe("使用了未声明的标识符 'Foo'");
   });
 
-  it('应处理所有 30 种 clangd 消息', () => {
+  it('应处理所有 50 种 clangd 消息', () => {
     const table = createDefaultLocalizationTable();
     const testCases: Array<{ input: string; expectedContains: string }> = [
       // 原 7 条
@@ -223,6 +223,83 @@ describe('applyLocalizationToDiagnostic', () => {
       {
         input: "calling a private constructor of class 'FScopedEvent'",
         expectedContains: "[调用了类 'FScopedEvent' 的私有构造函数]",
+      },
+      // v1.1 扩展 20 条
+      {
+        input: "function defined in a header file; function definitions in header files can lead to ODR violations",
+        expectedContains: "[定义在头文件中；头文件中的函数定义可能导致 ODR 违反]",
+      },
+      {
+        input: "The '/TP' option takes precedence over earlier instances",
+        expectedContains: "['/TP' 选项优先于之前的实例]",
+      },
+      {
+        input: "Cannot specify '/FoE:/file.obj' when compiling multiple source files",
+        expectedContains: "[编译多个源文件时不能指定 '/Fo' 选项]",
+      },
+      {
+        input: "implicit conversion loses integer precision: 'int64' to 'int32'",
+        expectedContains: "[隐式转换丢失整数精度：从 'int64' 到 'int32']",
+      },
+      {
+        input: "'MyVar' is not defined",
+        expectedContains: "['MyVar' 未定义]",
+      },
+      {
+        input: "expected a type specifier",
+        expectedContains: "[期望类型说明符]",
+      },
+      {
+        input: "cannot open file 'path/to/file.h'",
+        expectedContains: "[无法打开文件 'path/to/file.h']",
+      },
+      {
+        input: "invalid operands to binary expression 'TArray<int32>' and 'int32'",
+        expectedContains: "[二元表达式的操作数无效：'TArray<int32>' 和 'int32']",
+      },
+      {
+        input: "cannot initialize return object of type 'AActor*' with an lvalue of type 'nullptr_t'",
+        expectedContains: "[无法用类型 'nullptr_t' 的左值初始化返回类型 'AActor*']",
+      },
+      {
+        input: "allocating an object of abstract class type 'IMyInterface'",
+        expectedContains: "[正在分配抽象类类型 'IMyInterface' 的对象]",
+      },
+      {
+        input: "pure virtual function 'OnNotify' has no overrider",
+        expectedContains: "[纯虚函数 'OnNotify' 没有覆盖实现]",
+      },
+      {
+        input: "cannot declare variable 'MyObj' to be of abstract type 'UMyClass'",
+        expectedContains: "[无法将变量 'MyObj' 声明为抽象类型 'UMyClass']",
+      },
+      {
+        input: "'UObject' is not an accessible base of 'FMyStruct'",
+        expectedContains: "['UObject' 不是 'FMyStruct' 的可访问基类]",
+      },
+      {
+        input: "cannot cast 'AActor*' to 'UMyComponent*'",
+        expectedContains: "[无法从 'AActor*' 转换到 'UMyComponent*']",
+      },
+      {
+        input: "'GetName' is ambiguous",
+        expectedContains: "['GetName' 有歧义]",
+      },
+      {
+        input: "'InternalHelper' is private",
+        expectedContains: "['InternalHelper' 是 private 成员]",
+      },
+      {
+        input: "missing type specifier - int assumed",
+        expectedContains: "[缺少类型说明符 - 假定为 int]",
+      },
+      {
+        input: "'@' : illegal character",
+        expectedContains: "['@' 是非法的标记]",
+      },
+      {
+        input: "'foo' is not a valid value for 'EMyEnum'",
+        expectedContains: "['foo' 不是 'EMyEnum' 的有效值]",
       },
     ];
     for (const { input, expectedContains } of testCases) {
