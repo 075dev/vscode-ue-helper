@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Proxy 本地化增强
-current_phase: 04
+current_phase: 6
+current_phase_name: UI Update + E2E Verification
 status: completed
 stopped_at: "Phase 4 planned: 2 plans in wave 1"
-last_updated: "2026-07-01T02:19:22.774Z"
-last_activity: 2026-06-30
-last_activity_desc: Phase 04 complete
+last_updated: "2026-07-01T02:48:00.000Z"
+last_activity: 2026-07-01
+last_activity_desc: Phase 05 complete, transitioned to Phase 6
 progress:
-  total_phases: 3
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 4
-  percent: 67
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 7
+  completed_plans: 7
+  percent: 86
 ---
 
 ## Project Reference
@@ -71,10 +72,10 @@ All 3 phases implemented, 28 requirements covered, 498 tests passing across 35 t
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Rule table expanded from 22 to 30 rules (plan 04-02 done)
-Last activity: 2026-06-30 — Phase 04 complete
+Phase: 6 — UI Update + E2E Verification
+Plan: 01 — Complete (labels + restart notice)
+Status: Plan 06-01 complete — control panel labels updated, restart notice bar added
+Last activity: 2026-07-01 — Plan 06-01 complete
 
 ## Phase Dependencies
 
@@ -96,9 +97,9 @@ None.
 
 ## Session
 
-**Last session:** 2026-07-01T02:09:48.626Z
-**Stopped at:** Phase 4 planned: 2 plans in wave 1
-**Resume file:** .planning/phases/04-cli-fix-rule-expansion/04-CONTEXT.md
+**Last session:** 2026-07-01T02:44:36.000Z
+**Stopped at:** Plan 06-01 complete — labels + restart notice
+**Resume file:** .planning/phases/06-ui-update-e2e-verification/06-CONTEXT.md
 
 ## Performance Metrics
 
@@ -106,6 +107,8 @@ None.
 |-------|------|----------|-------|
 | Phase 04-cli-fix-rule-expansion P01 | 5m | 2 tasks | 2 files |
 | Phase 05-localization-mode-enhancement P01 | 390s | 3 tasks | 8 files |
+| Phase 06-ui-update-e2e-verification P02 | 2m | 2 tasks | 1 files |
+| Phase 06-ui-update-e2e-verification P01 | 8m | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -116,3 +119,6 @@ None.
 - [Phase ?]: Replaced 'override' with 'zh-only' across all type unions in cliArgs.ts, bridge.ts, config.ts, and package.json
 - [Phase ?]: Config.clangdProxyLocalizationMode getter maps 'override' to 'zh-only' for backward compatibility
 - [Phase ?]: Control panel files out of scope for this rename; will be updated in a separate plan
+- [Phase 06-01]: Used bilingual labels (Chinese/English) for dropdown options per D-01 to serve both Chinese and international users
+- [Phase 06-01]: Used amber/warning color scheme for the restart notice bar, consistent with VS Code warning conventions
+- [Phase 06-01]: Added localizationModeChanged as optional field on SaveResult rather than creating a new message type

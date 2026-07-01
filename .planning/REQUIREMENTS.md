@@ -21,8 +21,8 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 - [x] **LOC-02-03**: CLI 参数 `--localization-mode` 接受 `append` / `zh-only`
 - [x] **LOC-02-04**: Config 类型 `ClangdProxyLocalizationMode` 新增 `zh-only` 值
 - [x] **LOC-02-05**: bridge.ts `getAdaptedTable()` 将 `zh-only` 映射为 rule 层 `replace` 模式
-- [ ] **LOC-02-06**: 控制面板 Proxy Tab 模式选择器标签更新（中英双语 / 仅中文）
-- [ ] **LOC-02-07**: 模式切换后提示用户重启 Proxy 生效
+- [x] **LOC-02-06**: 控制面板 Proxy Tab 模式选择器标签更新（中英双语 / 仅中文）
+- [x] **LOC-02-07**: 模式切换后提示用户重启 Proxy 生效
 
 ### LOC-03: 完善汉化规则
 
@@ -32,10 +32,10 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 
 ### LOC-04: 端到端验证
 
-- [ ] **LOC-04-01**: 编写集成测试验证 CLI args → LspBridge 的 localization 传递
-- [ ] **LOC-04-02**: 编写集成测试验证 append 模式下输出为"原文 + 翻译"
-- [ ] **LOC-04-03**: 编写集成测试验证 zh-only 模式下输出仅为翻译
-- [ ] **LOC-04-04**: 确认现有 498 个测试全部通过（无回归）
+- [x] **LOC-04-01**: 编写集成测试验证 CLI args → LspBridge 的 localization 传递
+- [x] **LOC-04-02**: 编写集成测试验证 append 模式下输出为"原文 + 翻译"
+- [x] **LOC-04-03**: 编写集成测试验证 zh-only 模式下输出仅为翻译
+- [x] **LOC-04-04**: 确认现有 498 个测试全部通过（无回归）
 
 ## v2 Requirements
 

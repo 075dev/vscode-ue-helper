@@ -79,12 +79,13 @@ Plans:
   5. Integration test confirms zh-only mode produces only translated output
   6. All 498 existing tests pass with zero regressions
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans complete
 
 Plans:
 
-- [ ] 06-01-PLAN.md — Update control panel labels and add restart notice bar (LOC-02-06, LOC-02-07)
-- [ ] 06-02-PLAN.md — Add behavioral tests and verify full suite zero regressions (LOC-04-01 ~ LOC-04-04)
+- [x] 06-01-PLAN.md — Update control panel labels and add restart notice bar (LOC-02-06, LOC-02-07)
+- [x] 06-02-PLAN.md — Add behavioral tests and verify full suite zero regressions (LOC-04-01 ~ LOC-04-04)
+
 **UI hint**: yes
 
 ## Progress
@@ -96,4 +97,4 @@ Plans:
 | 3. 状态展示 + 细节打磨 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 5. Localization Mode Enhancement | v1.1 | 2/2 | Complete    | 2026-07-01 |
-| 6. UI Update + E2E Verification | v1.1 | 0/0 | Not started | - |
+| 6. UI Update + E2E Verification | v1.1 | 2/2 | Complete   | 2026-07-01 |
