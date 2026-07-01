@@ -42,7 +42,7 @@ export interface LocalizationTable {
 /**
  * 创建默认的 clangd 诊断消息中文本地化规则表。
  *
- * 覆盖 135 种常见 clangd 错误消息，分 15 类。
+ * 覆盖 158 种常见 clangd 错误消息，分 15 类。
  *
  * 所有规则默认使用 append 模式，同时应用于 diagnostics、codeActions 和 hover。
  * Hover 专用规则使用 replace 模式，仅应用于 hover。
@@ -1128,6 +1128,175 @@ export function createDefaultLocalizationTable(): LocalizationTable {
       {
         pattern: "'([^']+)' is not captured",
         replacement: "['$1' 未被捕获]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 MSVC/clang-cl 特有诊断 =====
+
+      // 151. warning C4xxx MSVC 风格警告
+      {
+        pattern: "warning (C4[0-9]{3,4}|C5[0-9]{4}):",
+        replacement: "[警告 $1：]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 152. error C2xxx MSVC 风格错误
+      {
+        pattern: "error (C[0-9]{4,5}):",
+        replacement: "[错误 $1：]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 153. fatal error C1xxx
+      {
+        pattern: "fatal error (C1[0-9]{4}|C[0-9]{4}):",
+        replacement: "[致命错误 $1：]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 154. nonstandard extension used: zero-sized array
+      {
+        pattern: "nonstandard extension used: zero-sized array",
+        replacement: "[使用了非标准扩展：零大小数组]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 155. nonstandard extension used: nameless struct/union
+      {
+        pattern: "nonstandard extension used: nameless (struct|union)",
+        replacement: "[使用了非标准扩展：匿名 $1]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 156. 'expression' : signed/unsigned mismatch
+      {
+        pattern: "signed/unsigned mismatch",
+        replacement: "[有符号/无符号不匹配]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 157. 'operation' : different 'modifier' qualifiers
+      {
+        pattern: "different 'modifier' qualifiers",
+        replacement: "[不同的修饰符限定符]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 158. result of 32-bit shift implicitly converted to 64 bits
+      {
+        pattern: "result of (32|64)-bit shift implicitly converted to (32|64) bits",
+        replacement: "[将 $1 位移位结果隐式转换为 $2 位]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 159. C++ exception handler used, but unwind semantics are not enabled
+      {
+        pattern: "C\\+\\+ exception handler used, but unwind semantics are not enabled",
+        replacement: "[使用了 C++ 异常处理程序，但未启用展开语义]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 160. enumerator X in switch of enum Y is not handled
+      {
+        pattern: "enumerator '([^']+)' in switch of enum '([^']+)' is not handled",
+        replacement: "[枚举 '$1' 在 switch 语句中未被处理（枚举 '$2'）]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 161. 'X' cannot be initialized using address of automatic variable
+      {
+        pattern: "cannot be initialized using address of automatic variable",
+        replacement: "[不能使用自动变量的地址初始化]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 162. argument unused during compilation
+      {
+        pattern: "argument unused during compilation: '([^']+)'",
+        replacement: "[编译期间未使用的参数：'$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 163. unknown argument ignored
+      {
+        pattern: "unknown argument: '([^']+)'",
+        replacement: "[未知参数：'$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 164. no such file or directory: 'X'
+      {
+        pattern: "no such file or directory: '([^']+)'",
+        replacement: "[没有这样的文件或目录：'$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 165. using the result of an assignment as a condition without parentheses
+      {
+        pattern: "using the result of an assignment as a condition without parentheses",
+        replacement: "[将赋值结果用作条件但没有加括号]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 166. 'X' is not defined as a preprocessor macro, replacing with 'Y'
+      {
+        pattern: "'([^']+)' is not defined as a preprocessor macro, replacing with '([^']+)'",
+        replacement: "['$1' 未定义为预处理器宏，替换为 '$2']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 167. 'X' macro redefined
+      // Skip - covered by rule 7
+
+      // 168. 'X' : redefinition
+      // Skip - covered by rule 12
+
+      // 169. 'X' : 'class' type is not defined
+      {
+        pattern: "'([^']+)'\\s*: 'class' type is not defined",
+        replacement: "['$1' 的类类型未定义]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 170. multiple types in one declaration
+      {
+        pattern: "multiple types in one declaration",
+        replacement: "[一个声明中有多个类型]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 171. 'X' : 'Y' is not a member of 'Z'
+      {
+        pattern: "'([^']+)'\\s*: '([^']+)' is not a member of '([^']+)'",
+        replacement: "['$1'：'$2' 不是 '$3' 的成员]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 172. unrecognized token
+      {
+        pattern: "unrecognized token",
+        replacement: "[无法识别的标记]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 173. missing ';' before 'X'
+      {
+        pattern: "missing ';' before '([^']+)'",
+        replacement: "[在 '$1' 前缺少 ';']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 174. missing ';' at end of 'X'
+      {
+        pattern: "missing ';' at end of",
+        replacement: "[末尾缺少 ';']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 175. 'X' : ambiguous symbol
+      {
+        pattern: "'([^']+)'\\s*: ambiguous symbol",
+        replacement: "['$1' 是有歧义的符号]",
         mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
       },
     ],

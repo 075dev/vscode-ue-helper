@@ -23,9 +23,9 @@ import {
 // ===== 默认规则表 =====
 
 describe('createDefaultLocalizationTable', () => {
-  it('应包含 135 条默认规则', () => {
+  it('应包含 158 条默认规则', () => {
     const table = createDefaultLocalizationTable();
-    expect(table.rules).toHaveLength(135);
+    expect(table.rules).toHaveLength(158);
   });
 
   it('每条规则应有有效的 pattern、replacement、mode 和 target', () => {
@@ -98,7 +98,7 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe("使用了未声明的标识符 'Foo'");
   });
 
-  it('应处理所有 135 种 clangd 消息', () => {
+  it('应处理所有 158 种 clangd 消息', () => {
     const table = createDefaultLocalizationTable();
     const testCases: Array<{ input: string; expectedContains: string }> = [
       // 原 7 条
@@ -385,6 +385,51 @@ describe('applyLocalizationToDiagnostic', () => {
       {
         input: "lambda capture 'Self' is not found in the enclosing scope",
         expectedContains: "[lambda 捕获 'Self' 在外部作用域中未找到]",
+      },
+      // v1.2 MSVC/clang-cl 特有规则
+      {
+        input: "warning C4018: 'expression' : signed/unsigned mismatch",
+        expectedContains: "[警告 C4018：]",
+      },
+      {
+        input: "error C2065: 'MyVar' : undeclared identifier",
+        expectedContains: "[错误 C2065：]",
+      },
+      {
+        input: "nonstandard extension used: zero-sized array in struct/union",
+        expectedContains: "[使用了非标准扩展：零大小数组]",
+      },
+      {
+        input: "nonstandard extension used: nameless struct",
+        expectedContains: "[使用了非标准扩展：匿名 struct]",
+      },
+      {
+        input: "argument unused during compilation: '/AI'",
+        expectedContains: "[编译期间未使用的参数：'/AI']",
+      },
+      {
+        input: "no such file or directory: '/foobar'",
+        expectedContains: "[没有这样的文件或目录：'/foobar']",
+      },
+      {
+        input: "C++ exception handler used, but unwind semantics are not enabled",
+        expectedContains: "[使用了 C++ 异常处理程序，但未启用展开语义]",
+      },
+      {
+        input: "using the result of an assignment as a condition without parentheses",
+        expectedContains: "[将赋值结果用作条件但没有加括号]",
+      },
+      {
+        input: "unrecognized token",
+        expectedContains: "[无法识别的标记]",
+      },
+      {
+        input: "missing ';' before 'Foo'",
+        expectedContains: "[在 'Foo' 前缺少 ';']",
+      },
+      {
+        input: "'MyClass' : ambiguous symbol",
+        expectedContains: "['MyClass' 是有歧义的符号]",
       },
     ];
     for (const { input, expectedContains } of testCases) {

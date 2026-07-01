@@ -1,7 +1,7 @@
 {
   "tool_name": "WebFetch",
-  "tool_input_preview": "{\"url\":\"https://raw.githubusercontent.com/llvm/llvm-project/main/clang/include/clang/Basic/DiagnosticParseKinds.inc\",\"prompt\":\"Find and extract C++ diagnostic message patterns from clang's source code...",
-  "error": "Unable to verify if domain raw.githubusercontent.com is safe to fetch. This may be due to network restrictions or enterprise security policies blocking claude.ai.",
-  "timestamp": "2026-07-01T09:54:38.011Z",
+  "tool_input_preview": "{\"url\":\"https://cs.android.com/android/platform/superproject/main/+/main:external/clang/include/clang/Basic/DiagnosticSemaKinds.td\",\"prompt\":\"Extract all clang diagnostic C++ messages - the actual err...",
+  "error": "Unable to verify if domain cs.android.com is safe to fetch. This may be due to network restrictions or enterprise security policies blocking claude.ai.",
+  "timestamp": "2026-07-01T11:22:29.129Z",
   "retry_count": 3
 }
