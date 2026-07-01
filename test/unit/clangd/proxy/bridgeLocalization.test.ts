@@ -308,4 +308,61 @@ describe('LspBridge — 本地化集成', () => {
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
     expect(diags?.[0]?.message).toContain("[函数调用的实参过少]");
   });
+
+  it('LOC-04-01: localization 禁用时消息透传，字节等效不修改', () => {
+    const bridge = new LspBridge(transport);
+    const clientOutput = collectClientOutput(bridge);
+    const originalMessage = "use of undeclared identifier 'Foo'";
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: originalMessage }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    // Must be exact original — no brackets, no Chinese characters
+    expect(diags?.[0]?.message).toBe(originalMessage);
+    // Double-check: no CJK characters leaked in
+    expect(diags?.[0]?.message).not.toMatch(/[\u4e00-\u9fff]/);
+  });
+
+  it('LOC-04-02: append 模式输出包含原文和 [翻译] 两部分', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'append');
+    const clientOutput = collectClientOutput(bridge);
+    const originalMessage = "use of undeclared identifier 'Foo'";
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: originalMessage }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    const msg = diags?.[0]?.message as string | undefined;
+    // Contains the original English text
+    expect(msg).toContain(originalMessage);
+    // Contains bracketed Chinese translation
+    expect(msg).toMatch(/\[.+\]/);
+    // Contains CJK characters (the translation)
+    expect(msg).toMatch(/[\u4e00-\u9fff]/);
+  });
+
+  it('LOC-04-03: zh-only 模式输出仅为翻译文本，不含英文原文', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'zh-only');
+    const clientOutput = collectClientOutput(bridge);
+    const originalMessage = "use of undeclared identifier 'Foo'";
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: originalMessage }] },
+    }));
+    const msgs = parseFrames(clientOutput);
+    const params = msgs[0]?.params as Record<string, unknown> | undefined;
+    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
+    const msg = diags?.[0]?.message as string | undefined;
+    // Contains bracketed translation
+    expect(msg).toMatch(/^\[.+\]$/);
+    // Contains CJK characters (the translation)
+    expect(msg).toMatch(/[\u4e00-\u9fff]/);
+    // Does NOT contain the original English text
+    expect(msg).not.toContain(originalMessage);
+  });
 });
