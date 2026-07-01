@@ -240,7 +240,7 @@ describe('LspBridge — 本地化集成', () => {
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[无法初始化类型 'FString' 的变量]");
+    expect(diags?.[0]?.message).toContain("[不能用类型 'int' 的值初始化类型 'FString' 的变量]");
   });
 
   it('diagnostics 新规则：作用域声明被翻译', () => {

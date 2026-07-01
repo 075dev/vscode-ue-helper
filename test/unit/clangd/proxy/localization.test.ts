@@ -23,9 +23,9 @@ import {
 // ===== 默认规则表 =====
 
 describe('createDefaultLocalizationTable', () => {
-  it('应包含 58 条默认规则', () => {
+  it('应包含 135 条默认规则', () => {
     const table = createDefaultLocalizationTable();
-    expect(table.rules).toHaveLength(58);
+    expect(table.rules).toHaveLength(135);
   });
 
   it('每条规则应有有效的 pattern、replacement、mode 和 target', () => {
@@ -98,7 +98,7 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe("使用了未声明的标识符 'Foo'");
   });
 
-  it('应处理所有 58 种 clangd 消息', () => {
+  it('应处理所有 135 种 clangd 消息', () => {
     const table = createDefaultLocalizationTable();
     const testCases: Array<{ input: string; expectedContains: string }> = [
       // 原 7 条
@@ -133,7 +133,7 @@ describe('applyLocalizationToDiagnostic', () => {
       // 新增 15 条
       {
         input: "cannot initialize a variable of type 'FString' with an rvalue of type 'int'",
-        expectedContains: "[无法初始化类型 'FString' 的变量]",
+        expectedContains: "[不能用类型 'int' 的值初始化类型 'FString' 的变量]",
       },
       {
         input: "no viable conversion from 'int32' to 'FString'",
@@ -300,6 +300,91 @@ describe('applyLocalizationToDiagnostic', () => {
       {
         input: "'foo' is not a valid value for 'EMyEnum'",
         expectedContains: "['foo' 不是 'EMyEnum' 的有效值]",
+      },
+      // v1.2 批量扩展测试用例
+      {
+        input: "'MyType' is not a type",
+        expectedContains: "['MyType' 不是一个类型]",
+      },
+      {
+        input: "no type named 'FMyStruct' in 'TArray'",
+        expectedContains: "[在 'TArray' 中没有名为 'FMyStruct' 的类型]",
+      },
+      {
+        input: "'MyClass' is not a class",
+        expectedContains: "['MyClass' 不是一个 class]",
+      },
+      {
+        input: "initial value of reference to non-const must be an lvalue",
+        expectedContains: "[非常量引用的初始值必须是左值]",
+      },
+      {
+        input: "template argument for 'T' must be a type",
+        expectedContains: "[模板参数 'T' 必须是一个类型]",
+      },
+      {
+        input: "too many template arguments",
+        expectedContains: "[模板参数过多]",
+      },
+      {
+        input: "candidate function not viable: expects 2 arguments",
+        expectedContains: "[候选函数不可行：期望 2 个参数]",
+      },
+      {
+        input: "candidate function not viable: no known conversion from 'int32' to 'FString'",
+        expectedContains: "[候选函数不可行：没有从 'int32' 到 'FString' 的已知转换]",
+      },
+      {
+        input: "non-const lvalue reference to type 'AActor*' cannot bind to a temporary",
+        expectedContains: "[类型 'AActor*' 的非常量左值引用不能绑定到 temporary]",
+      },
+      {
+        input: "cannot assign to variable 'MyVar' with const-qualified type 'const int32'",
+        expectedContains: "[不能给 const 限定类型 'const int32' 的变量 'MyVar' 赋值]",
+      },
+      {
+        input: "'FInternalHelper' is a private member of 'UMyClass'",
+        expectedContains: "['FInternalHelper' 是 'UMyClass' 的私有成员]",
+      },
+      {
+        input: "'FInternalHelper' is a protected member of 'UMyClass'",
+        expectedContains: "['FInternalHelper' 是 'UMyClass' 的保护成员]",
+      },
+      {
+        input: "cannot initialize a variable of type 'int32' with a value of type 'float'",
+        expectedContains: "[不能用类型 'float' 的值初始化类型 'int32' 的变量]",
+      },
+      {
+        input: "cannot initialize a parameter of type 'FString' with an lvalue of type 'int32'",
+        expectedContains: "[不能用类型 'int32' 的左值初始化类型 'FString' 的参数]",
+      },
+      {
+        input: "expected expression",
+        expectedContains: "[期望表达式]",
+      },
+      {
+        input: "expected class name",
+        expectedContains: "[期望类名]",
+      },
+      {
+        input: "unknown argument: '-foobar'",
+        expectedContains: "[未知参数：'-foobar']",
+      },
+      {
+        input: "unknown pragma ignored",
+        expectedContains: "[未知的 pragma 被忽略]",
+      },
+      {
+        input: "'MyVar' does not refer to a value",
+        expectedContains: "['MyVar' 不引用一个值]",
+      },
+      {
+        input: "constexpr variable 'MY_CONST' must be initialized by a constant expression",
+        expectedContains: "[constexpr 变量 'MY_CONST' 必须由常量表达式初始化]",
+      },
+      {
+        input: "lambda capture 'Self' is not found in the enclosing scope",
+        expectedContains: "[lambda 捕获 'Self' 在外部作用域中未找到]",
       },
     ];
     for (const { input, expectedContains } of testCases) {

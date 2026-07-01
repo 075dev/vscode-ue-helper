@@ -42,46 +42,10 @@ export interface LocalizationTable {
 /**
  * 创建默认的 clangd 诊断消息中文本地化规则表。
  *
- * 覆盖 58 种常见 clangd 错误消息，分 11 类：
- *
- * **已存在（7 条）：**
- * 1. incomplete type
- * 2. unknown type name
- * 3. undeclared identifier
- * 4. no member named
- * 5. no matching function
- * 6. file not found
- * 7. macro redefined
- *
- * **新增（15 条）：**
- * 8.  cannot initialize variable
- * 9.  no viable conversion
- * 10. cannot convert
- * 11. expected identifier
- * 12. redefinition
- * 13. too many arguments
- * 14. too few arguments
- * 15. not declared in scope
- * 16. does not name a type
- * 17. cannot bind to value
- * 18. ambiguous call
- * 19. deleted function
- * 20. no matching constructor
- * 21. not a member of
- * 22. out-of-line definition mismatch
- *
- *
- * **Phase 4 新增（8 条）：**
- * 23. override specifier
- * 24. cast precision loss
- * 25. protected constructor
- * 26. return type mismatch
- * 27. template instantiation mismatch
- * 28. temporary address
- * 29. deprecated API
- * 30. private constructor
+ * 覆盖 135 种常见 clangd 错误消息，分 15 类。
  *
  * 所有规则默认使用 append 模式，同时应用于 diagnostics、codeActions 和 hover。
+ * Hover 专用规则使用 replace 模式，仅应用于 hover。
  */
 export function createDefaultLocalizationTable(): LocalizationTable {
   return {
@@ -148,7 +112,7 @@ export function createDefaultLocalizationTable(): LocalizationTable {
 
       // 8. cannot initialize a variable of type 'T' with ...
       {
-        pattern: "cannot initialize a variable of type '([^']+)' with",
+        pattern: "cannot initialize a variable of type '([^']+)' with$",
         replacement: "[无法初始化类型 '$1' 的变量]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
@@ -559,6 +523,612 @@ export function createDefaultLocalizationTable(): LocalizationTable {
         replacement: "覆盖",
         mode: 'replace',
         target: ['hover'],
+      },
+
+      // ===== v1.2 批量扩展：类型/声明错误 =====
+
+      // 59. redefinition of 'X' as different kind of symbol
+      {
+        pattern: "redefinition of '([^']+)' as different kind of symbol",
+        replacement: "['$1' 被重定义为不同类型的符号]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 60. 'X' has no member named 'Y'
+      {
+        pattern: "'([^']+)' has no member named '([^']+)'",
+        replacement: "['$1' 没有名为 '$2' 的成员]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 61. 'X' is not a class/namespace/struct
+      {
+        pattern: "'([^']+)' is not a (class|namespace|struct|union)",
+        replacement: "['$1' 不是一个 $2]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 62. 'X' is not a class template
+      {
+        pattern: "'([^']+)' is not a (class|function|variable) template",
+        replacement: "['$1' 不是一个 $2 模板]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 63. 'X' is not a type
+      {
+        pattern: "'([^']+)' is not a type",
+        replacement: "['$1' 不是一个类型]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 64. no type named 'X' in 'Y'
+      {
+        pattern: "no type named '([^']+)' in '([^']+)'",
+        replacement: "[在 '$2' 中没有名为 '$1' 的类型]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 65. 'X' is not a member of 'Y' (already exists as rule 21, this is alt pattern)
+      // Skip - covered by rule 21
+
+      // 66. cannot use 'X' without a type specifier
+      {
+        pattern: "cannot use '([^']+)' without a type specifier",
+        replacement: "[不能在没有类型说明符的情况下使用 '$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 67. 'X' is not a function
+      {
+        pattern: "'([^']+)' is not a function",
+        replacement: "['$1' 不是一个函数]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 68. initial value of reference to non-const must be an lvalue
+      {
+        pattern: "initial value of reference to non-const must be an lvalue",
+        replacement: "[非常量引用的初始值必须是左值]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 69. cannot assign to return value of function
+      {
+        pattern: "cannot assign to return value of function",
+        replacement: "[不能给函数的返回值赋值]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 70. 'X' is not convertible to 'Y'
+      {
+        pattern: "'([^']+)' is not convertible to '([^']+)'",
+        replacement: "['$1' 不能转换为 '$2']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 71. 'X' is an incomplete type (alt pattern)
+      // Skip - covered by rule 1
+
+      // 72. subscript of pointer to incomplete type
+      {
+        pattern: "subscript of pointer to incomplete type '([^']+)'",
+        replacement: "[指向不完整类型 '$1' 的指针下标操作]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 73. arithmetic on pointer to incomplete type
+      {
+        pattern: "arithmetic on a pointer to incomplete type '([^']+)'",
+        replacement: "[对指向不完整类型 '$1' 的指针进行算术运算]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 74. 'X' is an abstract class
+      {
+        pattern: "'([^']+)' is an abstract class",
+        replacement: "['$1' 是一个抽象类]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 75. cannot declare field 'X' to be of abstract type 'Y'
+      {
+        pattern: "cannot declare field '([^']+)' to be of abstract type '([^']+)'",
+        replacement: "[不能将字段 '$1' 声明为抽象类型 '$2']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：模板错误 =====
+
+      // 76. 'X' is not a template
+      {
+        pattern: "'([^']+)' is not a template",
+        replacement: "['$1' 不是一个模板]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 77. template argument for 'X' must be a type
+      {
+        pattern: "template argument for '([^']+)' must be a type",
+        replacement: "[模板参数 '$1' 必须是一个类型]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 78. template argument for 'X' must be a compile-time constant expression
+      {
+        pattern: "template argument for '([^']+)' must be a compile-time constant expression",
+        replacement: "[模板参数 '$1' 必须是编译时常量表达式]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 79. too many template arguments
+      {
+        pattern: "too many template arguments",
+        replacement: "[模板参数过多]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 80. too few template arguments
+      {
+        pattern: "too few template arguments",
+        replacement: "[模板参数过少]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 81. template argument deduction/substitution failed
+      {
+        pattern: "template argument deduction/substitution failed",
+        replacement: "[模板参数推导/替换失败]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 82. candidate template ignored: could not match 'X' against 'Y'
+      {
+        pattern: "candidate (function|constructor) template ignored: could not match '([^']+)' against '([^']+)'",
+        replacement: "[候选 $1 模板被忽略：无法将 '$2' 与 '$3' 匹配]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 83. candidate function template not viable
+      {
+        pattern: "candidate function template not viable",
+        replacement: "[候选函数模板不可行]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：重载/函数匹配错误 =====
+
+      // 84. no matching function for call to 'X'
+      // Skip - covered by rule 5
+
+      // 85. candidate function not viable: 'X'
+      {
+        pattern: "candidate function not viable: expects (\\d+) argument",
+        replacement: "[候选函数不可行：期望 $1 个参数]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 86. candidate function not viable: no known conversion from 'X' to 'Y'
+      {
+        pattern: "candidate function not viable: no known conversion from '([^']+)' to '([^']+)'",
+        replacement: "[候选函数不可行：没有从 '$1' 到 '$2' 的已知转换]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 87. candidate function not viable: allows at most X argument
+      {
+        pattern: "candidate function not viable: allows at most (\\d+) argument",
+        replacement: "[候选函数不可行：最多允许 $1 个参数]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 88. call to 'X' is ambiguous
+      // Skip - covered by rule 18
+
+      // 89. call to deleted function 'X'
+      // Skip - covered by rule 19
+
+      // ===== v1.2 批量扩展：指针/引用错误 =====
+
+      // 90. cannot take the address of an rvalue
+      {
+        pattern: "cannot take the address of an rvalue of type '([^']+)'",
+        replacement: "[不能获取类型 '$1' 的右值的地址]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 91. non-const lvalue reference to type 'X' cannot bind to a temporary
+      {
+        pattern: "non-const lvalue reference to type '([^']+)' cannot bind to a (temporary|value)",
+        replacement: "[类型 '$1' 的非常量左值引用不能绑定到 $2]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 92. cannot bind reference member to a temporary
+      {
+        pattern: "cannot bind reference member '([^']+)' to a temporary",
+        replacement: "[不能将引用成员 '$1' 绑定到临时对象]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 93. cannot bind to a value of type 'X'
+      // Skip - covered by rule 17
+
+      // 94. reference to type 'X' requires that 'Y' be dereferenced
+      {
+        pattern: "reference to type '([^']+)' requires that '([^']+)' be dereferenced",
+        replacement: "[类型 '$1' 的引用需要解引用 '$2']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 95. 'X' is a pointer, did you mean to use '->' ?
+      {
+        pattern: "'([^']+)' is a pointer; did you mean to use '->'\\?",
+        replacement: "['$1' 是一个指针，你是想用 '->' 吗？]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：常量/限定符错误 =====
+
+      // 96. cannot assign to variable 'X' with const-qualified type
+      {
+        pattern: "cannot assign to variable '([^']+)' with const-qualified type '([^']+)'",
+        replacement: "[不能给 const 限定类型 '$2' 的变量 '$1' 赋值]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 97. 'this' argument to member function 'X' has type 'Y' but 'Z' is expected
+      {
+        pattern: "'this' argument to member function '([^']+)' has type '([^']+)' but '([^']+)' is expected",
+        replacement: "[成员函数 '$1' 的 'this' 参数类型为 '$2'，但期望 '$3']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 98. 'X' is not a member of 'Y'
+      // Skip - covered by rule 21
+
+      // 99. no member named 'X' in 'Y'
+      // Skip - covered by rule 4
+
+      // 100. qualified reference to 'X' is a constructor name
+      {
+        pattern: "qualified reference to '([^']+)' is a constructor name",
+        replacement: "[对 '$1' 的限定引用是一个构造函数名]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：初始化/构造/析构错误 =====
+
+      // 101. 'X' is not a direct base of 'Y'
+      {
+        pattern: "'([^']+)' is not a direct base of '([^']+)'",
+        replacement: "['$1' 不是 '$2' 的直接基类]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 102. member initializer 'X' does not name a non-static data member
+      {
+        pattern: "member initializer '([^']+)' does not name a non-static data member or base class",
+        replacement: "[成员初始化器 '$1' 没有命名非静态数据成员或基类]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 103. initializer list is empty
+      {
+        pattern: "cannot initialize '([^']+)' with an empty initializer list",
+        replacement: "[不能用空初始化列表初始化 '$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 104. 'X' is a private member of 'Y'
+      {
+        pattern: "'([^']+)' is a private member of '([^']+)'",
+        replacement: "['$1' 是 '$2' 的私有成员]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 105. 'X' is a protected member of 'Y'
+      {
+        pattern: "'([^']+)' is a protected member of '([^']+)'",
+        replacement: "['$1' 是 '$2' 的保护成员]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 106. destructor of 'X' is private
+      {
+        pattern: "destructor of '([^']+)' is private",
+        replacement: "['$1' 的析构函数是私有的]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 107. deleted function 'X'
+      // Skip - covered by rule 19
+
+      // 108. explicitly deleted destructor
+      {
+        pattern: "destructor of '([^']+)' is explicitly deleted",
+        replacement: "['$1' 的析构函数被显式删除]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：类型转换错误 =====
+
+      // 109. cannot convert from 'X' to 'Y'
+      // Skip - covered by rule 10
+
+      // 110. cannot initialize a variable of type 'X' with a value/rvalue of type 'Y'
+      {
+        pattern: "cannot initialize a variable of type '([^']+)' with (a value|an rvalue) of type '([^']+)'",
+        replacement: "[不能用类型 '$3' 的值初始化类型 '$1' 的变量]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 111. cannot initialize a parameter of type 'X' with an lvalue of type 'Y'
+      {
+        pattern: "cannot initialize a parameter of type '([^']+)' with an lvalue of type '([^']+)'",
+        replacement: "[不能用类型 '$2' 的左值初始化类型 '$1' 的参数]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 112. no viable conversion from 'X' to 'Y'
+      // Skip - covered by rule 9
+
+      // ===== v1.2 批量扩展：预处理/编译错误 =====
+
+      // 113. 'X' file not found
+      // Skip - covered by rule 6
+
+      // 114. 'X' file not found with angled include
+      {
+        pattern: "'([^']+)' file not found with angled include",
+        replacement: "[找不到包含文件 '$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 115. 'X' file not found with quotes include
+      {
+        pattern: "'([^']+)' file not found with quotes include",
+        replacement: "[找不到引号包含的文件 '$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 116. #include nested too deeply
+      {
+        pattern: "#include nested too deeply",
+        replacement: "[#include 嵌套过深]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 117. 'X' is not defined as a preprocessor macro
+      {
+        pattern: "'([^']+)' is not defined as a preprocessor macro",
+        replacement: "['$1' 没有被定义为预处理器宏]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 118. 'X' macro is not defined
+      {
+        pattern: "'([^']+)' macro is not defined",
+        replacement: "[宏 '$1' 未定义]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：语法错误 =====
+
+      // 119. expected ';' after expression
+      {
+        pattern: "expected '(;|\\})' at end of (declaration|statement|expression)",
+        replacement: "[在 $2 末尾期望 '$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 120. expected expression
+      {
+        pattern: "expected expression",
+        replacement: "[期望表达式]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 121. expected '(' after 'X'
+      {
+        pattern: "expected '\\(' after '([^']+)'",
+        replacement: "[在 '$1' 后期望 '(']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 122. expected ')'
+      {
+        pattern: "expected '\\)'",
+        replacement: "[期望 ')']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 123. expected '['
+      {
+        pattern: "expected '\\['",
+        replacement: "[期望 '[']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 124. expected ']'
+      {
+        pattern: "expected '\\]'",
+        replacement: "[期望 ']']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 125. expected '{'
+      {
+        pattern: "expected '\\{'",
+        replacement: "[期望 '{']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 126. expected '}'
+      {
+        pattern: "expected '\\}'",
+        replacement: "[期望 '}']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 127. expected class name
+      {
+        pattern: "expected class name",
+        replacement: "[期望类名]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 128. expected namespace name
+      {
+        pattern: "expected namespace name",
+        replacement: "[期望命名空间名]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 129. expected ':' in conditional expression
+      {
+        pattern: "expected ':' in conditional expression",
+        replacement: "[条件表达式中期望 ':']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：clang-cl/MSVC 特有 =====
+
+      // 130. unknown argument ignored
+      {
+        pattern: "unknown argument: '([^']+)'",
+        replacement: "[未知参数：'$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 131. argument unused during compilation
+      {
+        pattern: "argument unused during compilation: '([^']+)'",
+        replacement: "[编译期间未使用的参数：'$1']",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 132. optimization flag 'X' is not supported
+      {
+        pattern: "optimization flag '([^']+)' is not supported",
+        replacement: "[优化标志 '$1' 不受支持]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 133. '#pragma warning' requires a warning level
+      {
+        pattern: "'#pragma warning' requires a warning level",
+        replacement: "['#pragma warning' 需要警告级别]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 134. '#pragma comment' requires a comment type
+      {
+        pattern: "'#pragma comment' requires a comment type",
+        replacement: "['#pragma comment' 需要注释类型]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 135. unknown pragma ignored
+      {
+        pattern: "unknown pragma ignored",
+        replacement: "[未知的 pragma 被忽略]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 136. attribute 'X' is not supported
+      {
+        pattern: "attribute '([^']+)' is not supported",
+        replacement: "[属性 '$1' 不受支持]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 137. 'X' is not a valid linker option
+      {
+        pattern: "'([^']+)' is not a valid linker option",
+        replacement: "['$1' 不是有效的链接器选项]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== v1.2 批量扩展：语义/作用域错误 =====
+
+      // 138. 'X' is a private member
+      // Skip - covered by rule 104
+
+      // 139. 'X' was not declared in this scope
+      // Skip - covered by rule 15
+
+      // 140. 'X' does not name a type
+      // Skip - covered by rule 16
+
+      // 141. 'X' does not refer to a value
+      {
+        pattern: "'([^']+)' does not refer to a value",
+        replacement: "['$1' 不引用一个值]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 142. 'X' does not refer to a type
+      {
+        pattern: "'([^']+)' does not refer to a type",
+        replacement: "['$1' 不引用一个类型]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 143. 'X' is not a constant expression
+      {
+        pattern: "'([^']+)' is not a constant expression",
+        replacement: "['$1' 不是一个常量表达式]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 144. constexpr variable 'X' must be initialized by a constant expression
+      {
+        pattern: "constexpr variable '([^']+)' must be initialized by a constant expression",
+        replacement: "[constexpr 变量 '$1' 必须由常量表达式初始化]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 145. 'X' is not a constexpr function
+      {
+        pattern: "'([^']+)' is not a constexpr function",
+        replacement: "['$1' 不是一个 constexpr 函数]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 146. default member initializer for 'X' needed before the end of ...
+      {
+        pattern: "default member initializer for '([^']+)' needed",
+        replacement: "[需要 '$1' 的默认成员初始化器]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 147. 'X' is not a static data member
+      {
+        pattern: "'([^']+)' is not a static data member",
+        replacement: "['$1' 不是一个静态数据成员]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 148. 'X' cannot be captured by reference (implicitly)
+      {
+        pattern: "'([^']+)' cannot be captured by reference",
+        replacement: "['$1' 不能被引用捕获]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 149. lambda capture 'X' is not found in the enclosing scope
+      {
+        pattern: "lambda capture '([^']+)' is not found in the enclosing scope",
+        replacement: "[lambda 捕获 '$1' 在外部作用域中未找到]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // 150. 'X' is not captured
+      {
+        pattern: "'([^']+)' is not captured",
+        replacement: "['$1' 未被捕获]",
+        mode: 'append', target: ['diagnostics', 'codeActions', 'hover'],
       },
     ],
   };
