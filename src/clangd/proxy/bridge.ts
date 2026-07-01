@@ -57,8 +57,8 @@ export interface BridgeHooks {
 export interface LocalizationOptions {
   /** 是否启用本地化 */
   enabled: boolean;
-  /** 本地化模式：append（原文 + 翻译）或 override（仅翻译） */
-  mode: 'append' | 'override';
+  /** 本地化模式：append（原文 + 翻译）或 zh-only（仅翻译） */
+  mode: 'append' | 'zh-only';
   /** 本地化目标：diagnostics / codeActions / hover */
   targets: string[];
   /** 规则表 */
@@ -342,14 +342,14 @@ export class LspBridge {
   /**
    * 获取适配了 mode 的规则表。
    *
-   * 将桥接层的 mode（'append' | 'override'）映射到规则层的 mode（'append' | 'replace'）。
+   * 将桥接层的 mode（'append' | 'zh-only'）映射到规则层的 mode（'append' | 'replace'）。
    */
   private getAdaptedTable(): LocalizationTable {
     const loc = this.localization;
     if (!loc) {
       return { rules: [] };
     }
-    const ruleMode: RuleMode = loc.mode === 'override' ? 'replace' : 'append';
+    const ruleMode: RuleMode = loc.mode === 'zh-only' ? 'replace' : 'append';
     return {
       rules: loc.table.rules.map((r) => ({ ...r, mode: ruleMode })),
     };
