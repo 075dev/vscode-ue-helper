@@ -483,16 +483,24 @@ export class LspBridge {
       return msg;
     }
 
+    this.log?.('[bridge] localizeHover: received hover content');
+
     const clonedResult = { ...result };
 
     // MarkupContent: { kind: 'markdown', value: string }
     if (typeof contents === 'object' && contents !== null && !Array.isArray(contents)) {
       const mc = contents as Record<string, unknown>;
       if (typeof mc.value === 'string') {
+        const original = mc.value;
         clonedResult.contents = {
           ...mc,
           value: applyLocalizationToHover(mc.value, table),
         };
+        if (clonedResult.contents.value !== original) {
+          this.log?.(`[bridge]   ✓ hover MarkupContent translated`);
+        } else {
+          this.log?.(`[bridge]   - hover MarkupContent (no rule matched)`);
+        }
       }
     }
 
@@ -500,12 +508,24 @@ export class LspBridge {
     if (Array.isArray(contents)) {
       clonedResult.contents = contents.map((item: unknown) => {
         if (typeof item === 'string') {
-          return applyLocalizationToHover(item, table);
+          const original = item;
+          const localized = applyLocalizationToHover(item, table);
+          if (localized !== original) {
+            this.log?.(`[bridge]   ✓ hover string: "${original}" → "${localized}"`);
+          } else {
+            this.log?.(`[bridge]   - hover string: "${original}" (no rule matched)`);
+          }
+          return localized;
         }
         if (typeof item === 'object' && item !== null) {
           const ms = item as Record<string, unknown>;
           if (typeof ms.value === 'string') {
-            return { ...ms, value: applyLocalizationToHover(ms.value, table) };
+            const original = ms.value;
+            const localized = applyLocalizationToHover(ms.value, table);
+            if (localized !== original) {
+              this.log?.(`[bridge]   ✓ hover code: "${original.substring(0, 60)}..." → "${localized.substring(0, 60)}..."`);
+            }
+            return { ...ms, value: localized };
           }
         }
         return item;

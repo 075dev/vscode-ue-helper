@@ -42,7 +42,7 @@ export interface LocalizationTable {
 /**
  * 创建默认的 clangd 诊断消息中文本地化规则表。
  *
- * 覆盖 50 种常见 clangd 错误消息，分 10 类：
+ * 覆盖 58 种常见 clangd 错误消息，分 11 类：
  *
  * **已存在（7 条）：**
  * 1. incomplete type
@@ -344,8 +344,8 @@ export function createDefaultLocalizationTable(): LocalizationTable {
 
       // 32. /TC /TP option precedence
       {
-        pattern: "The '/(TC|TP)' option takes precedence over earlier instances",
-        replacement: "['/$1' 选项优先于之前的实例]",
+        pattern: "The last '/(TC|TP)' or '/(TC|TP)' option takes precedence over earlier instances",
+        replacement: "[最后一个 '/$1' 或 '/$2' 选项优先于之前的实例]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
       },
@@ -492,6 +492,73 @@ export function createDefaultLocalizationTable(): LocalizationTable {
         replacement: "['$1' 不是 '$2' 的有效值]",
         mode: 'append',
         target: ['diagnostics', 'codeActions', 'hover'],
+      },
+
+      // ===== Hover 专用规则 =====
+      // 这些规则只匹配 hover 内容中的结构化文本
+
+      // 51. hover: Parameters → 参数
+      {
+        pattern: "\\bParameters\\b",
+        replacement: "参数",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 52. hover: Returns → 返回值
+      {
+        pattern: "\\bReturns\\b",
+        replacement: "返回值",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 53. hover: public → 公有
+      {
+        pattern: "\\bpublic\\b",
+        replacement: "公有",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 54. hover: private → 私有
+      {
+        pattern: "\\bprivate\\b",
+        replacement: "私有",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 55. hover: static → 静态
+      {
+        pattern: "\\bstatic\\b",
+        replacement: "静态",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 56. hover: virtual → 虚函数
+      {
+        pattern: "\\bvirtual\\b",
+        replacement: "虚函数",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 57. hover: const → 常量
+      {
+        pattern: "\\bconst\\b",
+        replacement: "常量",
+        mode: 'replace',
+        target: ['hover'],
+      },
+
+      // 58. hover: override → 覆盖
+      {
+        pattern: "\\boverride\\b",
+        replacement: "覆盖",
+        mode: 'replace',
+        target: ['hover'],
       },
     ],
   };

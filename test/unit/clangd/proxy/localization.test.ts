@@ -23,9 +23,9 @@ import {
 // ===== 默认规则表 =====
 
 describe('createDefaultLocalizationTable', () => {
-  it('应包含 50 条默认规则', () => {
+  it('应包含 58 条默认规则', () => {
     const table = createDefaultLocalizationTable();
-    expect(table.rules).toHaveLength(50);
+    expect(table.rules).toHaveLength(58);
   });
 
   it('每条规则应有有效的 pattern、replacement、mode 和 target', () => {
@@ -98,7 +98,7 @@ describe('applyLocalizationToDiagnostic', () => {
     expect(result).toBe("使用了未声明的标识符 'Foo'");
   });
 
-  it('应处理所有 50 种 clangd 消息', () => {
+  it('应处理所有 58 种 clangd 消息', () => {
     const table = createDefaultLocalizationTable();
     const testCases: Array<{ input: string; expectedContains: string }> = [
       // 原 7 条
@@ -230,8 +230,8 @@ describe('applyLocalizationToDiagnostic', () => {
         expectedContains: "[定义在头文件中；头文件中的函数定义可能导致 ODR 违反]",
       },
       {
-        input: "The '/TP' option takes precedence over earlier instances",
-        expectedContains: "['/TP' 选项优先于之前的实例]",
+        input: "The last '/TP' or '/TC' option takes precedence over earlier instances",
+        expectedContains: "[最后一个 '/TP' 或 '/TC' 选项优先于之前的实例]",
       },
       {
         input: "Cannot specify '/FoE:/file.obj' when compiling multiple source files",
@@ -383,6 +383,25 @@ describe('applyLocalizationToHover', () => {
     const content = 'Some random hover text with code';
     const result = applyLocalizationToHover(content, table);
     expect(result).toBe(content);
+  });
+
+  it('hover 专用规则：Parameters → 参数', () => {
+    const table = createDefaultLocalizationTable();
+    const result = applyLocalizationToHover('Parameters:', table);
+    expect(result).toBe('参数:');
+  });
+
+  it('hover 专用规则：public/private/static 替换', () => {
+    const table = createDefaultLocalizationTable();
+    expect(applyLocalizationToHover('public: static void Foo()', table)).toBe('公有: 静态 void Foo()');
+    expect(applyLocalizationToHover('private: int Value', table)).toBe('私有: int Value');
+  });
+
+  it('hover 规则不影响 diagnostics（target 过滤）', () => {
+    const table = createDefaultLocalizationTable();
+    // "public" 在 hover 中应被替换，但在 diagnostics 中不应
+    const diagResult = applyLocalizationToDiagnostic('public: void Foo()', table);
+    expect(diagResult).toBe('public: void Foo()');
   });
 });
 
