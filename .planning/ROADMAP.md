@@ -19,7 +19,7 @@
 <details open>
 <summary>🔄 v1.1 Proxy 本地化增强 (Phases 4-6) — IN PROGRESS</summary>
 
-- [ ] **Phase 4: CLI Fix + Rule Expansion** - Fix CLI-to-bridge localization wiring, expand rule table to 30+ rules
+- [x] **Phase 4: CLI Fix + Rule Expansion** - Fix CLI-to-bridge localization wiring, expand rule table to 30+ rules (completed 2026-06-30)
 - [ ] **Phase 5: Localization Mode Enhancement** - Add zh-only mode, support append/zh-only switching
 - [ ] **Phase 6: UI Update + E2E Verification** - Update control panel labels, add restart prompt, integration tests
 
@@ -58,7 +58,12 @@ Plans:
   3. Config type `ClangdProxyLocalizationMode` accepts `zh-only` as a valid value
   4. `bridge.ts` correctly maps zh-only mode to the rule-layer replace mode
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+
+- [ ] 05-01-PLAN.md — Replace override with zh-only in cliArgs, bridge, config types and package.json enums (source type + logic changes)
+- [ ] 05-02-PLAN.md — Update tests for zh-only mode, add config backward compat test, full suite verification
 
 ### Phase 6: UI Update + E2E Verification
 
@@ -84,6 +89,6 @@ Plans:
 | 1. 面板框架 + 操作按钮 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 2. 配置编辑区 + Proxy 设置 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 3. 状态展示 + 细节打磨 | v1.0 | 1/1 | Complete | 2026-07-01 |
-| 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete   | 2026-06-30 |
-| 5. Localization Mode Enhancement | v1.1 | 0/0 | Not started | - |
+| 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
+| 5. Localization Mode Enhancement | v1.1 | 0/2 | Planned    | - |
 | 6. UI Update + E2E Verification | v1.1 | 0/0 | Not started | - |
