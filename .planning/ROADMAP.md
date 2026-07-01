@@ -58,11 +58,11 @@ Plans:
   3. Config type `ClangdProxyLocalizationMode` accepts `zh-only` as a valid value
   4. `bridge.ts` correctly maps zh-only mode to the rule-layer replace mode
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 
-- [ ] 05-01-PLAN.md — Replace override with zh-only in cliArgs, bridge, config types and package.json enums (source type + logic changes)
+- [x] 05-01-PLAN.md — Replace override with zh-only in cliArgs, bridge, config types and package.json enums (source type + logic changes)
 - [ ] 05-02-PLAN.md — Update tests for zh-only mode, add config backward compat test, full suite verification
 
 ### Phase 6: UI Update + E2E Verification
@@ -90,5 +90,5 @@ Plans:
 | 2. 配置编辑区 + Proxy 设置 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 3. 状态展示 + 细节打磨 | v1.0 | 1/1 | Complete | 2026-07-01 |
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
-| 5. Localization Mode Enhancement | v1.1 | 0/2 | Planned    | - |
+| 5. Localization Mode Enhancement | v1.1 | 1/2 | In Progress|  |
 | 6. UI Update + E2E Verification | v1.1 | 0/0 | Not started | - |

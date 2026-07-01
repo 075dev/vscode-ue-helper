@@ -16,11 +16,11 @@ Requirements for milestone v1.1. Each maps to a roadmap phase.
 
 ### LOC-02: 两种汉化模式支持
 
-- [ ] **LOC-02-01**: 新增 `zh-only` 模式别名，语义为"仅中文"（替换英文原文）
+- [x] **LOC-02-01**: 新增 `zh-only` 模式别名，语义为"仅中文"（替换英文原文）
 - [ ] **LOC-02-02**: `append` 模式保持"中英双语"（原文 + `[中文翻译]` 追加）
-- [ ] **LOC-02-03**: CLI 参数 `--localization-mode` 接受 `append` / `zh-only`
-- [ ] **LOC-02-04**: Config 类型 `ClangdProxyLocalizationMode` 新增 `zh-only` 值
-- [ ] **LOC-02-05**: bridge.ts `getAdaptedTable()` 将 `zh-only` 映射为 rule 层 `replace` 模式
+- [x] **LOC-02-03**: CLI 参数 `--localization-mode` 接受 `append` / `zh-only`
+- [x] **LOC-02-04**: Config 类型 `ClangdProxyLocalizationMode` 新增 `zh-only` 值
+- [x] **LOC-02-05**: bridge.ts `getAdaptedTable()` 将 `zh-only` 映射为 rule 层 `replace` 模式
 - [ ] **LOC-02-06**: 控制面板 Proxy Tab 模式选择器标签更新（中英双语 / 仅中文）
 - [ ] **LOC-02-07**: 模式切换后提示用户重启 Proxy 生效
 
