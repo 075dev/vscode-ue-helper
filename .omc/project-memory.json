@@ -37,8 +37,8 @@
     "runtime": "Node.js 18.0.0"
   },
   "build": {
-    "buildCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npm run build 2>&1",
-    "testCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npx vitest run --run test/unit/core/clangdProxyConfig.test.ts --clearScreen=false 2>&1 | tail -15",
+    "buildCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npm run build 2>&1 | tail -15",
+    "testCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npx vitest run --run test/unit/commands/clangdProxyCommands.test.ts 2>&1 | tail -10",
     "lintCommand": "npm run lint",
     "devCommand": null,
     "scripts": {
@@ -171,8 +171,8 @@
     },
     {
       "path": "",
-      "accessCount": 40,
-      "lastAccessed": 1782878931737,
+      "accessCount": 41,
+      "lastAccessed": 1782880279758,
       "type": "directory"
     },
     {
@@ -200,16 +200,16 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 30,
+      "lastAccessed": 1782880223495,
+      "type": "directory"
+    },
+    {
       "path": "package.json",
       "accessCount": 28,
       "lastAccessed": 1782878174608,
       "type": "file"
-    },
-    {
-      "path": "src",
-      "accessCount": 28,
-      "lastAccessed": 1782878397531,
-      "type": "directory"
     },
     {
       "path": ".planning\\STATE.md",
@@ -263,6 +263,12 @@
       "path": "src\\commands\\showClangdProxyStatus.ts",
       "accessCount": 7,
       "lastAccessed": 1782877857042,
+      "type": "file"
+    },
+    {
+      "path": "test\\unit\\commands\\clangdProxyCommands.test.ts",
+      "accessCount": 7,
+      "lastAccessed": 1782885711661,
       "type": "file"
     },
     {
@@ -341,12 +347,6 @@
       "path": "src\\i18n\\index.ts",
       "accessCount": 2,
       "lastAccessed": 1782842152811,
-      "type": "file"
-    },
-    {
-      "path": "test\\unit\\commands\\clangdProxyCommands.test.ts",
-      "accessCount": 2,
-      "lastAccessed": 1782842159234,
       "type": "file"
     },
     {

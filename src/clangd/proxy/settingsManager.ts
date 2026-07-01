@@ -102,6 +102,21 @@ export class ClangdSettingsManager {
   }
 
   /**
+   * 更新代理 CLI 参数（不修改备份、不修改 path）。
+   *
+   * 用于已激活状态下重新应用最新配置（如 localization 设置变更）。
+   * 只覆写 clangd.arguments，保留已有的 clangd.path 和备份。
+   *
+   * @param proxyArgs - 新的代理 CLI 参数
+   * @param realClangdArgs - 新的真实 clangd 参数（-- 分隔符之后）
+   */
+  async updateArgs(proxyArgs: string[], realClangdArgs: string[]): Promise<void> {
+    const clangdConfig = vscode.workspace.getConfiguration('clangd');
+    const fullArgs = [...proxyArgs, '--', ...realClangdArgs];
+    await clangdConfig.update('arguments', fullArgs, vscode.ConfigurationTarget.Workspace);
+  }
+
+  /**
    * 禁用代理：安全恢复原始设置。
    *
    * 仅在当前 clangd.path 仍指向本扩展 launcher 时恢复。

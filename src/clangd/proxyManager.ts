@@ -130,6 +130,30 @@ export class ClangdProxyManager {
     }
   }
 
+  /**
+   * 重新应用 proxy 参数（已激活状态下更新配置）。
+   *
+   * 当用户修改了 localization 等配置后，无需禁用再启用，
+   * 直接重新构建参数并写入 clangd.arguments，然后提示重启 clangd。
+   */
+  async reapply(): Promise<void> {
+    if (!this.isActive) {
+      this.logger.warn('[proxyManager] proxy not active, cannot reapply; call enable() instead');
+      return;
+    }
+    const clangdConfig = vscode.workspace.getConfiguration('clangd');
+    const originalArgs = clangdConfig.get<string[]>('arguments') ?? [];
+    // 从 -- 分隔符后提取真实 clangd 参数
+    const dashDashIdx = originalArgs.indexOf('--');
+    const realClangdArgs = dashDashIdx === -1 ? [] : originalArgs.slice(dashDashIdx + 1);
+
+    const realClangdPath = this.resolveRealClangdPath(clangdConfig);
+    const proxyArgs = this.buildProxyArgs(realClangdPath);
+
+    await this.settingsManager.updateArgs(proxyArgs, realClangdArgs);
+    this.logger.info('[proxyManager] proxy args reapplied');
+  }
+
   // ===== 内部方法 =====
 
   /**

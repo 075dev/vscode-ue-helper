@@ -29,10 +29,22 @@ export async function executeEnableClangdProxy(
 
   const { proxyManager } = clangd;
 
-  // 检查是否已启用
+  // 已激活时：重新应用最新参数（localization 等配置可能已变更）
   if (proxyManager.isActive) {
-    void vscode.window.showInformationMessage(t('proxy.enable.alreadyEnabled'));
-    logger.info('[enableClangdProxy] already active, skipping');
+    logger.info('[enableClangdProxy] already active, reapplying args with latest config');
+    try {
+      await proxyManager.reapply();
+      const choice = await vscode.window.showInformationMessage(
+        t('proxy.enable.success'),
+        t('proxy.enable.restartClangd'),
+      );
+      if (choice === t('proxy.enable.restartClangd')) {
+        await vscode.commands.executeCommand('clangd.restart');
+      }
+    } catch (err) {
+      logger.error('[enableClangdProxy] reapply failed:', err);
+      void vscode.window.showErrorMessage(t('proxy.enable.failed'));
+    }
     return;
   }
 

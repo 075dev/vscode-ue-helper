@@ -75,6 +75,7 @@ function createClangdHandlesMock(overrides?: Record<string, unknown>) {
       logPath: o.logPath ?? undefined,
       enable,
       disable,
+      reapply: vi.fn<[], Promise<void>>(() => Promise.resolve()),
       getStatus: vi.fn(() => ({
         enabled: activeEnabled(),
         launcherPath: o.launcherPath ?? '/fake/extension/out/launcher/proxy-launcher.bat',
@@ -110,11 +111,12 @@ describe('executeEnableClangdProxy', () => {
     vi.clearAllMocks();
   });
 
-  it('已激活时跳过并显示信息', async () => {
+  it('已激活时重新应用参数并提示重启', async () => {
     const clangd = createClangdHandlesMock({ isActive: true });
+    clangd.proxyManager.reapply = vi.fn().mockResolvedValue(undefined);
     await executeEnableClangdProxy(config, logger, clangd as never);
-    expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('already active'));
-    expect(showInfoMock).toHaveBeenCalledWith(expect.stringContaining('already'));
+    expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('reapply'));
+    expect(clangd.proxyManager.reapply).toHaveBeenCalledOnce();
     expect(clangd.proxyManager.enable).not.toHaveBeenCalled();
   });
 
