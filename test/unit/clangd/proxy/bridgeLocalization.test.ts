@@ -34,7 +34,7 @@ function parseFrames(buffers: Buffer[]): JsonRpcMessage[] {
   return all;
 }
 
-function createLocalizedBridge(transport: FakeTransport, targets: string[], mode: 'append' | 'override' = 'append'): LspBridge {
+function createLocalizedBridge(transport: FakeTransport, targets: string[], mode: 'append' | 'zh-only' = 'append'): LspBridge {
   const options: LspBridgeOptions = {
     localization: { enabled: true, mode, targets, table: createDefaultLocalizationTable() },
   };
@@ -195,8 +195,8 @@ describe('LspBridge — 本地化集成', () => {
     expect(params?.event).toBe('test');
   });
 
-  it('override 模式：替换原文为中文翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'override');
+  it('zh-only 模式：替换原文为中文翻译', () => {
+    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'zh-only');
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] } }));
     const msgs = parseFrames(clientOutput);

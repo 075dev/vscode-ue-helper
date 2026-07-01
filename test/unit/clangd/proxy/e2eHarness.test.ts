@@ -78,7 +78,7 @@ function didCloseParams(uri: string): unknown {
 function createLocalizedBridge(
   transport: FakeTransport,
   targets: string[],
-  mode: 'append' | 'override' = 'append',
+  mode: 'append' | 'zh-only' = 'append',
 ): LspBridge {
   return new LspBridge(transport, {
     localization: {
@@ -330,8 +330,8 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     expect(value).toContain("[使用了未声明的标识符 'Foo']");
   });
 
-  it('场景6b: hover 响应被本地化（override 模式）', () => {
-    bridge = createLocalizedBridge(transport, ['hover'], 'override');
+  it('场景6b: hover 响应被本地化（zh-only 模式）', () => {
+    bridge = createLocalizedBridge(transport, ['hover'], 'zh-only');
     clientOutput = collectClientOutput(bridge);
 
     bridge.feedClientFrame(encodeMessage({

@@ -26,7 +26,7 @@ describe('parseArgs — CLI 参数解析', () => {
       '--real-clangd', '/usr/bin/clangd',
       '--log-path', '/tmp/proxy.log',
       '--localization-enabled',
-      '--localization-mode', 'override',
+      '--localization-mode', 'zh-only',
       '--localization-targets', 'diagnostics,hover',
       '--',
       '--background-index',
@@ -39,7 +39,7 @@ describe('parseArgs — CLI 参数解析', () => {
     expect(result.options.realClangd).toBe('/usr/bin/clangd');
     expect(result.options.logPath).toBe('/tmp/proxy.log');
     expect(result.options.localizationEnabled).toBe(true);
-    expect(result.options.localizationMode).toBe('override');
+    expect(result.options.localizationMode).toBe('zh-only');
     expect(result.options.localizationTargets).toEqual(['diagnostics', 'hover']);
     expect(result.options.realClangdArgs).toEqual([
       '--background-index',

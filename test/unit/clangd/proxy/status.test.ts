@@ -95,11 +95,11 @@ describe('buildStatus — 状态构建', () => {
     const status = buildStatus({
       ...defaultDeps,
       localizationEnabled: true,
-      localizationMode: 'override',
+      localizationMode: 'zh-only',
       localizationTargets: ['diagnostics'],
     });
     expect(status.localizationEnabled).toBe(true);
-    expect(status.localizationMode).toBe('override');
+    expect(status.localizationMode).toBe('zh-only');
     expect(status.localizationTargets).toEqual(['diagnostics']);
   });
 
