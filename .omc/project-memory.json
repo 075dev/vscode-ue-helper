@@ -37,8 +37,8 @@
     "runtime": "Node.js 18.0.0"
   },
   "build": {
-    "buildCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npm run build 2>&1 | tail -3 && npm run test:unit 2>&1 | tail -5",
-    "testCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npx vitest run --run test/unit/clangd/proxy/localization.test.ts 2>&1 | tail -10",
+    "buildCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npm run build 2>&1 | tail -5",
+    "testCommand": "cd \"D:/AIWorkSpace/VScodePlugin/VSCodeUEHelper\" && npx vitest run --reporter=verbose 2>&1 | grep \"FAIL\" | head -3",
     "lintCommand": "npm run lint",
     "devCommand": null,
     "scripts": {

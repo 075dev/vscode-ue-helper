@@ -13,8 +13,7 @@
  * - 规则表可扩展，用户可通过配置添加自定义规则
  * - 不信任外部输入：仅做模式匹配和替换，不执行任何代码
  */
-
-// 规则模式类型
+import { genericTranslate } from './genericTranslator';
 export type RuleMode = 'append' | 'replace';
 
 // 规则目标
@@ -1349,6 +1348,14 @@ function applyRules(
         const localized = match.replace(regex, rule.replacement);
         return match + ' ' + localized;
       });
+    }
+  }
+
+  // 精确规则未命中时，尝试通用翻译引擎（仅 diagnostics）
+  if (result === text && target === 'diagnostics') {
+    const generic = genericTranslate(text);
+    if (generic !== null) {
+      result = generic;
     }
   }
 
