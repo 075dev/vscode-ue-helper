@@ -110,10 +110,28 @@ describe('ClangdProxyConfig', () => {
       expect(config.clangdProxyLogPath).toBe('/tmp/clangd.log');
     });
 
-    it('读取 clangdProxyLocalizationMode = override', () => {
+    it('向后兼容：override 被映射为 zh-only', () => {
       setupMockConfig({ 'clangdProxy.localization.mode': 'override' });
       const config = new Config();
-      expect(config.clangdProxyLocalizationMode).toBe('override');
+      expect(config.clangdProxyLocalizationMode).toBe('zh-only');
+    });
+
+    it('读取 clangdProxyLocalizationMode = zh-only', () => {
+      setupMockConfig({ 'clangdProxy.localization.mode': 'zh-only' });
+      const config = new Config();
+      expect(config.clangdProxyLocalizationMode).toBe('zh-only');
+    });
+
+    it('读取 clangdProxyLocalizationMode = append', () => {
+      setupMockConfig({ 'clangdProxy.localization.mode': 'append' });
+      const config = new Config();
+      expect(config.clangdProxyLocalizationMode).toBe('append');
+    });
+
+    it('clangdProxyLocalizationMode 默认 append（未设置时）', () => {
+      setupMockConfig({});
+      const config = new Config();
+      expect(config.clangdProxyLocalizationMode).toBe('append');
     });
 
     it('读取 clangdProxyLocalizationTargets 自定义值', () => {

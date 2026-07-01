@@ -180,7 +180,7 @@ export class Config {
   /** clangd Proxy 本地化模式，默认 append（追加到 clangd 输出） */
   get clangdProxyLocalizationMode(): ClangdProxyLocalizationMode {
     const raw = this.root.get<string>("clangdProxy.localization.mode");
-    if (raw === "override") return "zh-only";
+    if (raw === "override") { return "zh-only"; }
     return (raw as ClangdProxyLocalizationMode) ?? "append";
   }
 
