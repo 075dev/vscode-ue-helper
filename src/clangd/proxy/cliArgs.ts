@@ -22,7 +22,7 @@ export interface CliOptions {
   /** 是否启用本地化 */
   localizationEnabled: boolean;
   /** 本地化模式 */
-  localizationMode: 'append' | 'override';
+  localizationMode: 'append' | 'zh-only';
   /** 本地化目标 */
   localizationTargets: string[];
   /** 传递给真实 clangd 的参数（-- 分隔符之后） */
@@ -115,7 +115,7 @@ export function parseArgs(argv: string[]): ParseArgsResult {
       case '--localization-mode': {
         i++;
         const val = proxyArgs[i];
-        if (val === 'append' || val === 'override') {
+        if (val === 'append' || val === 'zh-only') {
           options.localizationMode = val;
         }
         break;
