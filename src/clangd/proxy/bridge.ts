@@ -75,6 +75,8 @@ export interface LspBridgeOptions {
   hooks?: BridgeHooks;
   /** 本地化选项（可选，不传则禁用本地化） */
   localization?: LocalizationOptions;
+  /** 日志函数（可选，用于打印汉化流程） */
+  log?: (msg: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +105,8 @@ export class LspBridge {
   private readonly hooks: BridgeHooks | undefined;
   /** 本地化选项 */
   private readonly localization: LocalizationOptions | undefined;
+  /** 日志函数 */
+  private readonly log: ((msg: string) => void) | undefined;
   /** 客户端输出回调 */
   private clientOutputHandler: ((frame: Buffer) => void) | null = null;
 
@@ -110,10 +114,17 @@ export class LspBridge {
     this.transport = transport;
     this.hooks = options?.hooks;
     this.localization = options?.localization;
+    this.log = options?.log;
     this.keepalive = new Keepalive({
       max: options?.keepaliveMax,
       ttlSec: options?.keepaliveTtlSec,
     });
+
+    this.log?.(
+      this.localization
+        ? `[bridge] localization ENABLED: mode=${this.localization.mode}, targets=${JSON.stringify(this.localization.targets)}, rules=${this.localization.table.rules.length}`
+        : '[bridge] localization DISABLED',
+    );
 
     // 监听服务器数据
     this.transport.onData((data: Buffer) => this.handleServerData(data));
@@ -376,12 +387,19 @@ export class LspBridge {
     }
 
     const table = this.getAdaptedTable();
+    this.log?.(`[bridge] localizeDiagnostics: received ${diagnostics.length} diagnostics`);
 
     const localizedDiags = diagnostics.map((diag) => {
       const cloned = { ...diag };
       const message = cloned.message;
       if (typeof message === 'string') {
+        const original = message;
         cloned.message = applyLocalizationToDiagnostic(message, table);
+        if (cloned.message !== original) {
+          this.log?.(`[bridge]   ✓ "${original}" → "${cloned.message}"`);
+        } else {
+          this.log?.(`[bridge]   - "${original}" (no rule matched)`);
+        }
       }
       // 处理 relatedInformation
       const relatedInfo = cloned.relatedInformation as Array<Record<string, unknown>> | undefined;

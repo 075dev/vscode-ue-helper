@@ -100,10 +100,15 @@ export function runProxy(
 
   const logFn = createProxyLogFn(options.logPath, io);
 
+  logFn(`[clangd-proxy] argv: ${JSON.stringify(argv)}`);
+  logFn(`[clangd-proxy] parsed: localizationEnabled=${options.localizationEnabled}, mode=${options.localizationMode}, realClangd=${options.realClangd}`);
+
   // 构造本地化选项：优先级 CLI 参数 > settings.json > 不启用
   const localization: LocalizationOptions | undefined = options.localizationEnabled
     ? { enabled: true, mode: options.localizationMode, targets: ['diagnostics', 'codeActions', 'hover'], table: createDefaultLocalizationTable() }
     : loadLocalizationFromSettings(logFn);
+
+  logFn(`[clangd-proxy] localization ${localization ? `ENABLED (mode=${localization.mode})` : 'DISABLED'}`);
 
   // 信号处理器清理
   let cleanupSignalHandlers: (() => void) | null = null;
@@ -147,6 +152,7 @@ export function runProxy(
     keepaliveMax: options.keepaliveMax,
     keepaliveTtlSec: options.keepaliveTtlSec,
     localization,
+    log: logFn,
     hooks: {
       onServerResponse: (msg, method) => {
         if (method === 'initialize' && msg.error === undefined) {
