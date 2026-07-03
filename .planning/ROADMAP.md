@@ -1,9 +1,15 @@
 # Roadmap: VSCode UE Helper
 
+## Active Milestone
+
+## v1.2 — 汉化规则覆盖完善 (in progress)
+
+3 个阶段 (Phase 7-9)：Diagnostics 规则系统性扩展 (50→158)、Hover 内容汉化、规则表维护与测试。
+
 ## Milestones
 
 - ✅ **v1.0 控制面板** — Phases 1-3 (shipped 2026-07-01)
-- ✅ **v1.1 Proxy 本地化增强** — Phases 4-6 (completed 2026-07-01)
+- ✅ **v1.1 Proxy 本地化增强** — completed 2026-07-01
 - 🔄 **v1.2 汉化规则覆盖完善** — Phases 7-9 (in progress)
 
 ## Phases
