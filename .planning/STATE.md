@@ -4,10 +4,10 @@ milestone: v1.2
 milestone_name: clangd 智能提示与集成完善
 current_phase: 7
 status: planning
-stopped_at: v1.2 re-scoped — old CONTEXT.md removed, awaiting Phase 7 discussion
-last_updated: "2026-07-04T01:00:00.000Z"
+stopped_at: Phase 07 context gathered — ready for planning
+last_updated: "2026-07-04T01:15:00.000Z"
 last_activity: 2026-07-04
-last_activity_desc: v1.2 milestone re-scoped from localization to clangd
+last_activity_desc: Phase 7 discuss-phase complete — CONTEXT.md captured (18 decisions)
 progress:
   total_phases: 4
   completed_phases: 0
@@ -98,9 +98,9 @@ None.
 
 ## Session
 
-**Last session:** 2026-07-04T01:00:00.000Z
-**Stopped at:** v1.2 re-scoped — awaiting Phase 7 discussion
-**Resume file:** .planning/phases/07-clangd-performance-optimization/07-CONTEXT.md (to be created)
+**Last session:** 2026-07-04T01:15:00.000Z
+**Stopped at:** Phase 07 context gathered — ready for planning
+**Resume file:** .planning/phases/07-clangd-performance-optimization/07-CONTEXT.md
 
 ## Performance Metrics
 
@@ -125,3 +125,8 @@ None.
 - [v1.2 re-scope 2026-07-04]: 放弃汉化规则扩展（v1.1 已覆盖足够），回归 clangd 核心功能建设
 - [v1.2 re-scope 2026-07-04]: 阶段按价值/优先级排序：性能优化 → 代码理解 → 工具链 → 诊断增强
 - [v1.2 re-scope 2026-07-04]: 原 Phase 7-9 主题（汉化）整组废弃，新阶段 7-10 主题（clangd），磁盘 CONTEXT.md 清理完成
+- [Phase 07]: 先插桩后 benchmark 双轨方案，D-01 — 实测优先，避免过度设计
+- [Phase 07]: 性能可视化用状态栏三段 + 三色阈值，不新建 Performance Tab，D-04/D-05 — 保持面板简洁
+- [Phase 07]: 模式自适应持久化，开发模式轮转压缩归档，生产模式仅内存，D-07 — 用户体验权衡
+- [Phase 07]: compile_commands.json 拆 2 个 PLAN：PLAN A 指纹/缓存、PLAN B UBT 并发/协同，D-10 — 渐进交付
+- [Phase 07]: 增量扫描具体路径由 agent 决定，用户表态「不太懂」，D-15 — 用户专业边界尊重
