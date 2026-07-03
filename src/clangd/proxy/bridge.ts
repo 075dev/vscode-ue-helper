@@ -27,8 +27,10 @@ import {
   applyLocalizationToDiagnostic,
   applyLocalizationToCodeAction,
   applyLocalizationToHover,
-  type LocalizationTable,
-  type RuleMode,
+  applyLocalizationToCompletion,
+  applyLocalizationToSignatureHelp,
+  applyLocalizationToInlayHint,
+  stripOriginalText,
 } from './localization';
 
 // ---------------------------------------------------------------------------
@@ -59,10 +61,6 @@ export interface LocalizationOptions {
   enabled: boolean;
   /** 本地化模式：append（原文 + 翻译）或 zh-only（仅翻译） */
   mode: 'append' | 'zh-only';
-  /** 本地化目标：diagnostics / codeActions / hover */
-  targets: string[];
-  /** 规则表 */
-  table: LocalizationTable;
 }
 
 /** 桥接选项 */
@@ -122,7 +120,7 @@ export class LspBridge {
 
     this.log?.(
       this.localization
-        ? `[bridge] localization ENABLED: mode=${this.localization.mode}, targets=${JSON.stringify(this.localization.targets)}, rules=${this.localization.table.rules.length}`
+        ? `[bridge] localization ENABLED: mode=${this.localization.mode}`
         : '[bridge] localization DISABLED',
     );
 
@@ -347,23 +345,33 @@ export class LspBridge {
       return this.localizeHoverResult(msg);
     }
 
+    if (method === 'textDocument/completion') {
+      return this.localizeCompletionResult(msg);
+    }
+
+    if (method === 'textDocument/signatureHelp') {
+      return this.localizeSignatureHelpResult(msg);
+    }
+
+    if (method === 'textDocument/inlayHint') {
+      return this.localizeInlayHintResult(msg);
+    }
+
     return msg;
   }
 
   /**
-   * 获取适配了 mode 的规则表。
-   *
-   * 将桥接层的 mode（'append' | 'zh-only'）映射到规则层的 mode（'append' | 'replace'）。
+   * 对翻译结果应用 mode（append 或 zh-only）处理。
+   * append：保留原文 + [翻译]；zh-only：仅保留翻译部分。
    */
-  private getAdaptedTable(): LocalizationTable {
-    const loc = this.localization;
-    if (!loc) {
-      return { rules: [] };
+  private applyMode(original: string, translated: string): string {
+    if (!this.localization) {
+      return original;
     }
-    const ruleMode: RuleMode = loc.mode === 'zh-only' ? 'replace' : 'append';
-    return {
-      rules: loc.table.rules.map((r) => ({ ...r, mode: ruleMode })),
-    };
+    if (this.localization.mode === 'zh-only') {
+      return stripOriginalText(original, translated);
+    }
+    return translated; // append 模式：genericTranslate 已返回 "原文 [翻译]"
   }
 
   /**
@@ -386,7 +394,6 @@ export class LspBridge {
       return msg;
     }
 
-    const table = this.getAdaptedTable();
     this.log?.(`[bridge] localizeDiagnostics: received ${diagnostics.length} diagnostics`);
 
     const localizedDiags = diagnostics.map((diag) => {
@@ -394,11 +401,12 @@ export class LspBridge {
       const message = cloned.message;
       if (typeof message === 'string') {
         const original = message;
-        cloned.message = applyLocalizationToDiagnostic(message, table);
+        const translated = applyLocalizationToDiagnostic(message);
+        cloned.message = this.applyMode(original, translated);
         if (cloned.message !== original) {
           this.log?.(`[bridge]   ✓ "${original}" → "${cloned.message}"`);
         } else {
-          this.log?.(`[bridge]   - "${original}" (no rule matched)`);
+          this.log?.(`[bridge]   - "${original}" (no translation)`);
         }
       }
       // 处理 relatedInformation
@@ -408,7 +416,7 @@ export class LspBridge {
           const infoCloned = { ...info };
           const infoMsg = infoCloned.message;
           if (typeof infoMsg === 'string') {
-            infoCloned.message = applyLocalizationToDiagnostic(infoMsg, table);
+            infoCloned.message = this.applyMode(infoMsg, applyLocalizationToDiagnostic(infoMsg));
           }
           return infoCloned;
         });
@@ -434,8 +442,6 @@ export class LspBridge {
       return msg;
     }
 
-    const table = this.getAdaptedTable();
-
     const localizedActions = result.map((action: unknown) => {
       if (typeof action !== 'object' || action === null) {
         return action;
@@ -445,7 +451,9 @@ export class LspBridge {
 
       // 本地化 title
       if (typeof cloned.title === 'string') {
-        cloned.title = applyLocalizationToCodeAction(cloned.title, table);
+        const original = cloned.title;
+        const translated = applyLocalizationToCodeAction(original);
+        cloned.title = this.applyMode(original, translated);
       }
 
       // 本地化 disabled.reason
@@ -453,7 +461,9 @@ export class LspBridge {
       if (typeof disabled === 'object' && disabled !== null) {
         const d = disabled as Record<string, unknown>;
         if (typeof d.reason === 'string') {
-          cloned.disabled = { ...d, reason: applyLocalizationToCodeAction(d.reason, table) };
+          const original = d.reason;
+          const translated = applyLocalizationToCodeAction(original);
+          cloned.disabled = { ...d, reason: this.applyMode(original, translated) };
         }
       }
 
@@ -473,13 +483,13 @@ export class LspBridge {
   private localizeHoverResult(msg: JsonRpcMessage): JsonRpcMessage {
     const result = msg.result as Record<string, unknown> | undefined;
     if (!result) {
+      this.log?.('[bridge] localizeHover: no result');
       return msg;
     }
 
-    const table = this.getAdaptedTable();
-
     const contents = result.contents;
     if (!contents) {
+      this.log?.('[bridge] localizeHover: no contents');
       return msg;
     }
 
@@ -492,14 +502,18 @@ export class LspBridge {
       const mc = contents as Record<string, unknown>;
       if (typeof mc.value === 'string') {
         const original = mc.value;
+        this.log?.(`[bridge] localizeHover: original="${original.substring(0, 200)}"`);
+        const translated = applyLocalizationToHover(original);
+        this.log?.(`[bridge] localizeHover: translated="${translated.substring(0, 200)}"`);
+        const newValue = this.applyMode(original, translated);
         clonedResult.contents = {
           ...mc,
-          value: applyLocalizationToHover(mc.value, table),
+          value: newValue,
         };
-        if (clonedResult.contents.value !== original) {
+        if (newValue !== original) {
           this.log?.(`[bridge]   ✓ hover MarkupContent translated`);
         } else {
-          this.log?.(`[bridge]   - hover MarkupContent (no rule matched)`);
+          this.log?.(`[bridge]   - hover MarkupContent (no translation)`);
         }
       }
     }
@@ -509,23 +523,26 @@ export class LspBridge {
       clonedResult.contents = contents.map((item: unknown) => {
         if (typeof item === 'string') {
           const original = item;
-          const localized = applyLocalizationToHover(item, table);
-          if (localized !== original) {
-            this.log?.(`[bridge]   ✓ hover string: "${original}" → "${localized}"`);
+          this.log?.(`[bridge] localizeHover string: "${original.substring(0, 200)}"`);
+          const localized = applyLocalizationToHover(original);
+          const result = this.applyMode(original, localized);
+          if (result !== original) {
+            this.log?.(`[bridge]   ✓ hover string: "${original}" → "${result}"`);
           } else {
-            this.log?.(`[bridge]   - hover string: "${original}" (no rule matched)`);
+            this.log?.(`[bridge]   - hover string: (no translation)`);
           }
-          return localized;
+          return result;
         }
         if (typeof item === 'object' && item !== null) {
           const ms = item as Record<string, unknown>;
           if (typeof ms.value === 'string') {
             const original = ms.value;
-            const localized = applyLocalizationToHover(ms.value, table);
-            if (localized !== original) {
-              this.log?.(`[bridge]   ✓ hover code: "${original.substring(0, 60)}..." → "${localized.substring(0, 60)}..."`);
+            const localized = applyLocalizationToHover(original);
+            const result = this.applyMode(original, localized);
+            if (result !== original) {
+              this.log?.(`[bridge]   ✓ hover code: "${original.substring(0, 60)}..." → "${result.substring(0, 60)}..."`);
             }
-            return { ...ms, value: localized };
+            return { ...ms, value: result };
           }
         }
         return item;
@@ -533,6 +550,33 @@ export class LspBridge {
     }
 
     return { ...msg, result: clonedResult };
+  }
+
+  /**
+   * 本地化 textDocument/completion 响应。
+   *
+   * TODO: 后续实现 Completion 项 label/detail 汉化。
+   */
+  private localizeCompletionResult(msg: JsonRpcMessage): JsonRpcMessage {
+    return msg;
+  }
+
+  /**
+   * 本地化 textDocument/signatureHelp 响应。
+   *
+   * TODO: 后续实现 SignatureHelp 参数名/标签汉化。
+   */
+  private localizeSignatureHelpResult(msg: JsonRpcMessage): JsonRpcMessage {
+    return msg;
+  }
+
+  /**
+   * 本地化 textDocument/inlayHint 响应。
+   *
+   * TODO: 后续实现 InlayHint 类型名/标签汉化。
+   */
+  private localizeInlayHintResult(msg: JsonRpcMessage): JsonRpcMessage {
+    return msg;
   }
 
   /**

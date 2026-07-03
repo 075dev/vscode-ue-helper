@@ -23,6 +23,8 @@ export interface CliOptions {
   localizationEnabled: boolean;
   /** 本地化模式 */
   localizationMode: 'append' | 'zh-only';
+  /** UE 文档词典 JSON 路径（可选） */
+  dictionaryPath?: string;
   /** 传递给真实 clangd 的参数（-- 分隔符之后） */
   realClangdArgs: string[];
 }
@@ -113,6 +115,14 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         const val = proxyArgs[i];
         if (val === 'append' || val === 'zh-only') {
           options.localizationMode = val;
+        }
+        break;
+      }
+      case '--dictionary-path': {
+        i++;
+        const val = proxyArgs[i];
+        if (val !== undefined && !val.startsWith('--')) {
+          options.dictionaryPath = val;
         }
         break;
       }

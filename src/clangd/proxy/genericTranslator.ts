@@ -57,7 +57,6 @@ const PHRASE_MAP: Record<string, string> = {
   'declare': '声明',
   'define': '定义',
   'allocate': '分配',
-  'reference': '引用',
   'bind': '绑定',
   'capture': '捕获',
   'match': '匹配',
@@ -76,9 +75,6 @@ const PHRASE_MAP: Record<string, string> = {
   'access': '访问',
   'use': '使用',
   'find': '查找',
-
-  // 名词
-  'function': '函数',
   'variable': '变量',
   'type': '类型',
   'class': '类',
@@ -143,6 +139,26 @@ const PHRASE_MAP: Record<string, string> = {
   'within': '在之内',
   'about': '关于',
 
+  // 名词（补充）
+  'attribute': '属性',
+  'compilation': '编译',
+  'enumerator': '枚举值',
+  'lambda': 'lambda',
+  'linker': '链接器',
+  'lvalue': '左值',
+  'modifier': '修饰符',
+  'nonstandard': '非标准',
+  'optimization': '优化',
+  'pragma': 'pragma',
+  'precision': '精度',
+  'qualifier': '限定符',
+  'redefinition': '重定义',
+  'rvalue': '右值',
+  'specifier': '说明符',
+  'temporary': '临时对象',
+  'Returns': '返回值',
+  'Parameters': '参数',
+
   // 关键词
   'expected': '期望',
   'missing': '缺少',
@@ -159,7 +175,6 @@ const PHRASE_MAP: Record<string, string> = {
   'undeclared': '未声明',
   'undefined': '未定义',
   'incomplete': '不完整',
-  'abstract': '抽象',
 };
 
 // ===== 句式模板 =====
@@ -290,6 +305,48 @@ const TEMPLATES: SentenceTemplate[] = [
     pattern: /^use\s+of\s+(.+)/i,
     translate: (g) => `使用了${g[1]}`,
   },
+
+  // "'X' cannot be used with Y" → "'X' 不能与 Y 一起使用"
+  {
+    pattern: /^'([^']+)'\s+cannot be used\s+(.+)/i,
+    translate: (g) => `'${g[1]}' 不能${g[2]}`,
+  },
+
+  // "no X named Y in Z" → "在 Z 中没有名为 Y 的 X"
+  {
+    pattern: /^no\s+(.+?)\s+named\s+'([^']+)'\s+in\s+'([^']+)'$/i,
+    translate: (g) => `在${g[3]}中没有名为${g[2]}的${g[1]}`,
+  },
+
+  // "'X' is not a valid Y for Z" → "'X' 不是 Z 的有效 Y"
+  {
+    pattern: /^'([^']+)'\s+is not a valid\s+(.+?)\s+for\s+'([^']+)'$/i,
+    translate: (g) => `'${g[1]}' 不是'${g[3]}'的有效${g[2]}`,
+  },
+
+  // "'X' is not an accessible base of Y" → "'X' 不是 Y 的可访问基类"
+  {
+    pattern: /^'([^']+)'\s+is not an accessible base of\s+'([^']+)'$/i,
+    translate: (g) => `'${g[1]}' 不是'${g[2]}'的可访问基类`,
+  },
+
+  // "cannot declare X to be of Y" → "不能将 X 声明为 Y"
+  {
+    pattern: /^cannot declare\s+(.+?)\s+to be of\s+(.+)$/i,
+    translate: (g) => `不能将${g[1]}声明为${g[2]}`,
+  },
+
+  // "no known conversion from X to Y" → "没有从 X 到 Y 的已知转换"
+  {
+    pattern: /^no known conversion from\s+'([^']+)'\s+to\s+'([^']+)'$/i,
+    translate: (g) => `没有从${g[1]}到${g[2]}的已知转换`,
+  },
+
+  // "note: candidate X" → "注意：候选 X"
+  {
+    pattern: /^note:\s+(.+)/i,
+    translate: (g) => `注意：${g[1]}`,
+  },
 ];
 
 // ===== 工具函数 =====
@@ -299,14 +356,19 @@ const TEMPLATES: SentenceTemplate[] = [
  */
 function extractIdentifiers(text: string): { text: string; identifiers: string[] } {
   const identifiers: string[] = [];
+  // 保护已存在的 \x00...\x00 占位符（如 FENCED_BLOCK、INLINE_CODE 等）
+  let result = text.replace(/\x00[^\x00]+\x00/g, (match) => {
+    identifiers.push(match);
+    return `\x00ID${identifiers.length - 1}\x00`;
+  });
   // 保护反引号中的代码
-  let result = text.replace(/`([^`]+)`/g, (_m, id) => {
+  result = result.replace(/`([^`]+)`/g, (_m, _id) => {
     identifiers.push(`\x00ID${identifiers.length}\x00`);
     return `\x00ID${identifiers.length - 1}\x00`;
   });
   // 保护单引号中的标识符
-  result = result.replace(/'([^']+)'/g, (_m, id) => {
-    identifiers.push(`'${id}'`);
+  result = result.replace(/'([^']+)'/g, (_m, cap) => {
+    identifiers.push(`'${cap}'`);
     return `\x00ID${identifiers.length - 1}\x00`;
   });
   return { text: result, identifiers };
@@ -316,9 +378,9 @@ function extractIdentifiers(text: string): { text: string; identifiers: string[]
  * 恢复被保护的标识符。
  */
 function restoreIdentifiers(text: string, identifiers: string[]): string {
-  return text.replace(/\x00ID(\d+)\x00/g, (_m, idx) => {
+  return text.replace(/\x00ID(\d+)\x00/g, (_m: string, idx: string): string => {
     const i = parseInt(idx, 10);
-    return i < identifiers.length ? identifiers[i] : _m;
+    return i < identifiers.length ? (identifiers[i] ?? _m) : _m;
   });
 }
 
@@ -355,16 +417,39 @@ function escapeRegex(str: string): string {
  * @param message - 原始诊断消息
  * @returns 翻译后的消息（原始消息 + 翻译追加），或 null（不适合翻译）
  */
+/**
+ * 字面匹配表：在标识符提取之前匹配原始消息中的固定句式。
+ * 用于处理句式模板和短语替换都覆盖不到的固定消息。
+ */
+const LITERAL_MATCHES: Array<{ pattern: RegExp; translate: (groups: string[]) => string }> = [
+  // "The last '/X' or '/Y' option takes precedence over earlier instances"
+  {
+    pattern: /^The last '(\/[^']+)' or '(\/[^']+)' option takes precedence over earlier instances$/i,
+    translate: (g) => `最后一个 '${g[0]}' 或 '${g[1]}' 选项优先于之前的实例`,
+  },
+];
+
+/**
+ * 短语替换是否适用于给定文本。
+ * 长文本（>120 字符）通常为 hover 文档或说明性文字，
+ * 短语替换会破坏其英文句子结构，不予处理。
+ */
+function shouldApplyPhrases(text: string): boolean {
+  return text.length <= 120;
+}
+
 export function genericTranslate(message: string): string | null {
   if (!message || message.length < 3) {
     return null;
   }
 
-  // 启发式：跳过看起来像代码片段的消息（包含函数签名特征）
-  // 诊断消息通常以自然语言开头，而不是代码
-  const codePatterns = /^(public|private|protected|static|virtual|const|void|int|bool|float|double|char|auto)\s*(:|::)/;
-  if (codePatterns.test(message)) {
-    return null;
+  // 0. 字面匹配表（在标识符提取之前，匹配原始消息中的固定句式）
+  for (const literal of LITERAL_MATCHES) {
+    const match = message.match(literal.pattern);
+    if (match) {
+      const translated = literal.translate(match.slice(1));
+      return message + ` [${translated}]`;
+    }
   }
 
   // 1. 提取并保护标识符
@@ -376,17 +461,23 @@ export function genericTranslate(message: string): string | null {
     if (match) {
       const groups = match.slice(1);
       const translated = template.translate(groups, identifiers);
-      const restored = restoreIdentifiers(translated, identifiers);
+      // 对模板输出中的英文词汇进行短语翻译（仅短文本）
+      let result = translated;
+      if (shouldApplyPhrases(translated)) {
+        result = applyPhraseReplacements(translated);
+      }
+      const restored = restoreIdentifiers(result, identifiers);
       return message + ` [${restored}]`;
     }
   }
 
-  // 3. 没有句式匹配：尝试短语翻译
-  // 对非标识符部分进行短语替换
-  const phraseTranslated = applyPhraseReplacements(protectedText);
-  if (phraseTranslated !== protectedText) {
-    const restored = restoreIdentifiers(phraseTranslated, identifiers);
-    return message + ` [${restored}]`;
+  // 3. 没有句式匹配：尝试短语翻译（仅短文本）
+  if (shouldApplyPhrases(protectedText)) {
+    const phraseTranslated = applyPhraseReplacements(protectedText);
+    if (phraseTranslated !== protectedText) {
+      const restored = restoreIdentifiers(phraseTranslated, identifiers);
+      return message + ` [${restored}]`;
+    }
   }
 
   return null;

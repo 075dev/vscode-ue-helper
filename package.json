@@ -360,6 +360,12 @@
           "default": "append",
           "description": "Localization mode: append = add Chinese after English, zh-only = Chinese only.",
           "description@zh": "汉化模式：append = 在英文后追加中文，zh-only = 仅中文替换。"
+        },
+        "vscodeUEHelper.clangdProxy.dictionaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to UE docs dictionary JSON file for hover localization. Empty = disabled.",
+          "description@zh": "UE 文档词典 JSON 文件路径，用于 hover 内容汉化。留空 = 禁用。"
         }
       }
     },

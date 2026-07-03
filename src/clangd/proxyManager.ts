@@ -207,6 +207,12 @@ export class ClangdProxyManager {
       args.push('--localization-mode', this.config.clangdProxyLocalizationMode);
     }
 
+    // UE 文档词典路径
+    const dictPath = this.config.clangdProxyDictionaryPath;
+    if (dictPath) {
+      args.push('--dictionary-path', dictPath);
+    }
+
     return args;
   }
 }

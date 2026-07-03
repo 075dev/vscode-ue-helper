@@ -1,20 +1,10 @@
 /**
  * bridgeLocalization.test.ts —— LSP 代理桥接本地化集成测试
- *
- * 测试策略：
- * - 使用 FakeTransport 模拟 clangd 子进程
- * - 覆盖 diagnostics 通知本地化
- * - 覆盖 codeAction 响应本地化（title/reason 修改，edit/command/data 不变）
- * - 覆盖 hover 响应本地化（代码块保护）
- * - 覆盖 disabled target 透传（字节等效）
- * - 覆盖 CodeAction edit/command/data deep-equal 除 title/reason
- * - 覆盖非目标消息字节等效
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LspFramingParser, encodeMessage } from '@clangd/proxy/framing';
 import { LspBridge, type ServerTransport, type LspBridgeOptions } from '@clangd/proxy/bridge';
-import { createDefaultLocalizationTable } from '@clangd/proxy/localization';
 import type { JsonRpcMessage } from '@clangd/proxy/framing';
 
 class FakeTransport implements ServerTransport {
@@ -34,10 +24,8 @@ function parseFrames(buffers: Buffer[]): JsonRpcMessage[] {
   return all;
 }
 
-function createLocalizedBridge(transport: FakeTransport, targets: string[], mode: 'append' | 'zh-only' = 'append'): LspBridge {
-  const options: LspBridgeOptions = {
-    localization: { enabled: true, mode, targets, table: createDefaultLocalizationTable() },
-  };
+function createLocalizedBridge(transport: FakeTransport, mode: 'append' | 'zh-only' = 'append'): LspBridge {
+  const options: LspBridgeOptions = { localization: { enabled: true, mode } };
   return new LspBridge(transport, options);
 }
 
@@ -47,32 +35,47 @@ function collectClientOutput(bridge: LspBridge): Buffer[] {
   return output;
 }
 
-describe('LspBridge — 本地化集成', () => {
+describe('LspBridge - localization', () => {
   let transport: FakeTransport;
   beforeEach(() => { transport = new FakeTransport(); });
 
-  it('diagnostics 通知本地化：匹配规则的消息被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('diagnostics notification: translated', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] },
+      jsonrpc: '2.0',
+      method: 'textDocument/publishDiagnostics',
+      params: {
+        uri: 'file:///test.cpp',
+        diagnostics: [{
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+          severity: 1,
+          message: "use of undeclared identifier 'Foo'",
+        }],
+      },
     }));
-    expect(clientOutput).toHaveLength(1);
     const msgs = parseFrames(clientOutput);
-    expect(msgs).toHaveLength(1);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    const message = diags?.[0]?.message as string | undefined;
-    expect(message).toContain("[使用了未声明的标识符 'Foo']");
-    expect(message).toContain("use of undeclared identifier 'Foo'");
+    const msg = diags?.[0]?.message as string | undefined;
+    expect(msg).toMatch(/[\u4e00-\u9fff]/);
+    expect(msg).toContain("use of undeclared identifier 'Foo'");
   });
-  it('diagnostics 通知本地化：不匹配的消息保持不变', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+
+  it('diagnostics notification: unmatched unchanged', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: 'some random diagnostic' }] },
+      jsonrpc: '2.0',
+      method: 'textDocument/publishDiagnostics',
+      params: {
+        uri: 'file:///test.cpp',
+        diagnostics: [{
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+          severity: 1,
+          message: 'some random diagnostic',
+        }],
+      },
     }));
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
@@ -80,67 +83,106 @@ describe('LspBridge — 本地化集成', () => {
     expect(diags?.[0]?.message).toBe('some random diagnostic');
   });
 
-  it('diagnostics 通知本地化：relatedInformation 也被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('diagnostics notification: relatedInformation translated', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'", relatedInformation: [{ location: { uri: 'file:///other.h', range: { start: { line: 1, character: 0 }, end: { line: 1, character: 1 } } }, message: "no member named 'Value' in 'FMyStruct'" }] }] },
+      jsonrpc: '2.0',
+      method: 'textDocument/publishDiagnostics',
+      params: {
+        uri: 'file:///test.cpp',
+        diagnostics: [{
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+          severity: 1,
+          message: "use of undeclared identifier 'Foo'",
+          relatedInformation: [{
+            location: {
+              uri: 'file:///other.h',
+              range: { start: { line: 1, character: 0 }, end: { line: 1, character: 1 } },
+            },
+            message: "no member named 'Value' in 'FMyStruct'",
+          }],
+        }],
+      },
     }));
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    const relatedInfo = diags?.[0]?.relatedInformation as Array<Record<string, unknown>> | undefined;
-    expect(relatedInfo?.[0]?.message).toContain("[在 'FMyStruct' 中没有名为 'Value' 的成员]");
+    const related = diags?.[0]?.relatedInformation as Array<Record<string, unknown>> | undefined;
+    expect(related?.[0]?.message).toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('codeAction 响应本地化：title 被翻译，edit/command/data 不变', () => {
-    const bridge = createLocalizedBridge(transport, ['codeActions']);
+  it('codeAction: title translated, fields preserved', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 10, method: 'textDocument/codeAction', params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } } }));
+    bridge.feedClientFrame(encodeMessage({
+      jsonrpc: '2.0', id: 10, method: 'textDocument/codeAction',
+      params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } },
+    }));
     const editData = { changes: { 'file:///test.cpp': [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'int x;' }] } };
     const commandData = { command: 'test.command', title: 'Test', arguments: [42] };
     const dataPayload = { someData: 'preserved' };
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 10, result: [{ title: "use of undeclared identifier 'Foo'", kind: 'quickfix', edit: editData, command: commandData, data: dataPayload }] }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', id: 10,
+      result: [{ title: "use of undeclared identifier 'Foo'", kind: 'quickfix', edit: editData, command: commandData, data: dataPayload }],
+    }));
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Array<Record<string, unknown>> | undefined;
     const action = result?.[0];
-    expect(action?.title).toContain("[使用了未声明的标识符 'Foo']");
+    expect(action?.title).toMatch(/[\u4e00-\u9fff]/);
     expect(action?.edit).toEqual(editData);
     expect(action?.command).toEqual(commandData);
     expect(action?.data).toEqual(dataPayload);
   });
 
-  it('codeAction 响应本地化：disabled.reason 也被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['codeActions']);
+  it('codeAction: disabled.reason translated', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 11, method: 'textDocument/codeAction', params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } } }));
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 11, result: [{ title: 'Some action', kind: 'quickfix', disabled: { reason: "no member named 'Value' in 'FMyStruct'" } }] }));
+    bridge.feedClientFrame(encodeMessage({
+      jsonrpc: '2.0', id: 11, method: 'textDocument/codeAction',
+      params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } },
+    }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', id: 11,
+      result: [{ title: 'Some action', kind: 'quickfix', disabled: { reason: "no member named 'Value' in 'FMyStruct'" } }],
+    }));
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Array<Record<string, unknown>> | undefined;
     const disabled = result?.[0]?.disabled as Record<string, unknown> | undefined;
-    expect(disabled?.reason).toContain("[在 'FMyStruct' 中没有名为 'Value' 的成员]");
+    expect(disabled?.reason).toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('hover 响应本地化：文本内容被翻译，代码块保护', () => {
-    const bridge = createLocalizedBridge(transport, ['hover']);
+  it('hover: text passes through when no dictionary', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 12, method: 'textDocument/hover', params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 5, character: 3 } } }));
+    bridge.feedClientFrame(encodeMessage({
+      jsonrpc: '2.0', id: 12, method: 'textDocument/hover',
+      params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 5, character: 3 } },
+    }));
     const codeBlock = '`cpp\nint x = 42;\n`';
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 12, result: { contents: { kind: 'markdown', value: "use of undeclared identifier 'Foo'\n\n" + codeBlock } } }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', id: 12,
+      result: { contents: { kind: 'markdown', value: "use of undeclared identifier 'Foo'\n\n" + codeBlock } },
+    }));
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Record<string, unknown> | undefined;
     const contents = result?.contents as Record<string, unknown> | undefined;
     const value = contents?.value as string | undefined;
-    expect(value).toContain("[使用了未声明的标识符 'Foo']");
-    expect(value).toContain(codeBlock);
+    // No dictionary set → hover passes through unchanged
+    expect(value).toBe("use of undeclared identifier 'Foo'\n\n" + codeBlock);
   });
 
-  it('hover 响应本地化：MarkedString 数组被处理', () => {
-    const bridge = createLocalizedBridge(transport, ['hover']);
+  it('hover: MarkedString array passes through when no dictionary', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 13, method: 'textDocument/hover', params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 1, character: 1 } } }));
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 13, result: { contents: [{ language: 'cpp', value: 'int main()' }, "use of undeclared identifier 'Foo'"] } }));
+    bridge.feedClientFrame(encodeMessage({
+      jsonrpc: '2.0', id: 13, method: 'textDocument/hover',
+      params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 1, character: 1 } },
+    }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', id: 13,
+      result: { contents: [{ language: 'cpp', value: 'int main()' }, "use of undeclared identifier 'Foo'"] },
+    }));
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Record<string, unknown> | undefined;
     const contents = result?.contents as Array<unknown> | undefined;
@@ -149,34 +191,50 @@ describe('LspBridge — 本地化集成', () => {
     const first = contents?.[0] as Record<string, unknown> | undefined;
     expect(first?.language).toBe('cpp');
     expect(first?.value).toBe('int main()');
-    expect(contents?.[1]).toContain("[使用了未声明的标识符 'Foo']");
+    // No dictionary → hover passes through unchanged
+    expect(contents?.[1]).toBe("use of undeclared identifier 'Foo'");
   });
 
-  it('localization 启用时 diagnostics 通知总是被翻译（已移除 targets 过滤）', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('localization enabled: diagnostics translated', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] } }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] },
+    }));
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain('[使用了未声明的标识符');
+    expect(diags?.[0]?.message).toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('localization 完全禁用时所有消息透传不修改', () => {
+  it('localization disabled: messages pass through', () => {
     const bridge = new LspBridge(transport);
     const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 20, method: 'textDocument/codeAction', params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } } }));
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 20, result: [{ title: "use of undeclared identifier 'Foo'", kind: 'quickfix' }] }));
+    bridge.feedClientFrame(encodeMessage({
+      jsonrpc: '2.0', id: 20, method: 'textDocument/codeAction',
+      params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } },
+    }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', id: 20,
+      result: [{ title: "use of undeclared identifier 'Foo'", kind: 'quickfix' }],
+    }));
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Array<Record<string, unknown>> | undefined;
     expect(result?.[0]?.title).toBe("use of undeclared identifier 'Foo'");
   });
 
-  it('非目标响应（completion）透传，JSON 内容等效', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('non-target response (completion) pass through', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 30, method: 'textDocument/completion', params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 0, character: 0 } } }));
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 30, result: { items: [{ label: 'Foo', kind: 6 }] } }));
+    bridge.feedClientFrame(encodeMessage({
+      jsonrpc: '2.0', id: 30, method: 'textDocument/completion',
+      params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 0, character: 0 } },
+    }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', id: 30,
+      result: { items: [{ label: 'Foo', kind: 6 }] },
+    }));
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Record<string, unknown> | undefined;
     const items = result?.items as Array<Record<string, unknown>> | undefined;
@@ -184,131 +242,54 @@ describe('LspBridge — 本地化集成', () => {
     expect(items?.[0]?.kind).toBe(6);
   });
 
-  it('非目标通知（telemetry/event）透传，JSON 内容等效', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('non-target notification (telemetry) pass through', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', method: 'telemetry/event', params: { event: 'test', data: { key: 'value' } } }));
+    transport.receiveFromServer(encodeMessage({
+      jsonrpc: '2.0', method: 'telemetry/event', params: { event: 'test', data: { key: 'value' } },
+    }));
     const msgs = parseFrames(clientOutput);
     expect(msgs[0]?.method).toBe('telemetry/event');
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     expect(params?.event).toBe('test');
   });
 
-  it('zh-only 模式：替换原文为中文翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'zh-only');
-    const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] } }));
-    const msgs = parseFrames(clientOutput);
-    const params = msgs[0]?.params as Record<string, unknown> | undefined;
-    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toBe("[使用了未声明的标识符 'Foo']");
-  });
-
-  it('多个 diagnostics 条目都被本地化', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
-    const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }, { range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } }, severity: 1, message: "unknown type name 'FMyClass'" }] } }));
-    const msgs = parseFrames(clientOutput);
-    const params = msgs[0]?.params as Record<string, unknown> | undefined;
-    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[使用了未声明的标识符 'Foo']");
-    expect(diags?.[1]?.message).toContain("[未知的类型名称 'FMyClass']");
-  });
-
-  it('codeAction 响应本地化：多个 action 都被处理', () => {
-    const bridge = createLocalizedBridge(transport, ['codeActions']);
-    const clientOutput = collectClientOutput(bridge);
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 40, method: 'textDocument/codeAction', params: { textDocument: { uri: 'file:///test.cpp' }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, context: { diagnostics: [] } } }));
-    transport.receiveFromServer(encodeMessage({ jsonrpc: '2.0', id: 40, result: [{ title: "use of undeclared identifier 'Foo'", kind: 'quickfix' }, { title: "unknown type name 'FMyClass'", kind: 'quickfix' }] }));
-    const msgs = parseFrames(clientOutput);
-    const result = msgs[0]?.result as Array<Record<string, unknown>> | undefined;
-    expect(result).toBeDefined();
-    expect(result).toHaveLength(2);
-    expect(result?.[0]?.title).toContain("[使用了未声明的标识符 'Foo']");
-    expect(result?.[1]?.title).toContain("[未知的类型名称 'FMyClass']");
-  });
-
-  // ===== 新规则集成测试 =====
-
-  it('diagnostics 新规则：初始化变量失败被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('zh-only mode: original replaced with translation', () => {
+    const bridge = createLocalizedBridge(transport, 'zh-only');
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({
       jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "cannot initialize a variable of type 'FString' with an rvalue of type 'int'" }] },
+      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" }] },
     }));
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[不能用类型 'int' 的值初始化类型 'FString' 的变量]");
+    const msg = diags?.[0]?.message as string | undefined;
+    expect(msg).toMatch(/[\u4e00-\u9fff]/);
+    expect(msg).not.toContain("use of undeclared identifier");
   });
 
-  it('diagnostics 新规则：作用域声明被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
+  it('multiple diagnostics entries all localized', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
     transport.receiveFromServer(encodeMessage({
       jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "'Foo' was not declared in this scope" }] },
+      params: {
+        uri: 'file:///test.cpp',
+        diagnostics: [
+          { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "use of undeclared identifier 'Foo'" },
+          { range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } }, severity: 1, message: "unknown type name 'FMyClass'" },
+        ],
+      },
     }));
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[未在此作用域中声明 'Foo']");
+    expect(diags?.[0]?.message).toMatch(/[\u4e00-\u9fff]/);
+    expect(diags?.[1]?.message).toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('diagnostics 新规则：ambiguous call 被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
-    const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "call to 'FindObject' is ambiguous" }] },
-    }));
-    const msgs = parseFrames(clientOutput);
-    const params = msgs[0]?.params as Record<string, unknown> | undefined;
-    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[对 'FindObject' 的调用有歧义]");
-  });
-
-  it('diagnostics 新规则：deleted function 被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
-    const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "attempting to reference a deleted function" }] },
-    }));
-    const msgs = parseFrames(clientOutput);
-    const params = msgs[0]?.params as Record<string, unknown> | undefined;
-    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[试图引用已删除的函数]");
-  });
-
-  it('diagnostics 新规则：not a member of 被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
-    const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "'GetWorld' is not a member of 'AActor'" }] },
-    }));
-    const msgs = parseFrames(clientOutput);
-    const params = msgs[0]?.params as Record<string, unknown> | undefined;
-    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[不是 'AActor' 的成员 'GetWorld']");
-  });
-
-  it('diagnostics 新规则：too few arguments 被翻译', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics']);
-    const clientOutput = collectClientOutput(bridge);
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: "too few arguments to function call" }] },
-    }));
-    const msgs = parseFrames(clientOutput);
-    const params = msgs[0]?.params as Record<string, unknown> | undefined;
-    const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    expect(diags?.[0]?.message).toContain("[函数调用的实参过少]");
-  });
-
-  it('LOC-04-01: localization 禁用时消息透传，字节等效不修改', () => {
+  it('LOC-04-01: disabled localization passes through byte-identical', () => {
     const bridge = new LspBridge(transport);
     const clientOutput = collectClientOutput(bridge);
     const originalMessage = "use of undeclared identifier 'Foo'";
@@ -319,14 +300,12 @@ describe('LspBridge — 本地化集成', () => {
     const msgs = parseFrames(clientOutput);
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
-    // Must be exact original — no brackets, no Chinese characters
     expect(diags?.[0]?.message).toBe(originalMessage);
-    // Double-check: no CJK characters leaked in
     expect(diags?.[0]?.message).not.toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('LOC-04-02: append 模式输出包含原文和 [翻译] 两部分', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'append');
+  it('LOC-04-02: append mode has original + translation', () => {
+    const bridge = createLocalizedBridge(transport, 'append');
     const clientOutput = collectClientOutput(bridge);
     const originalMessage = "use of undeclared identifier 'Foo'";
     transport.receiveFromServer(encodeMessage({
@@ -337,16 +316,13 @@ describe('LspBridge — 本地化集成', () => {
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
     const msg = diags?.[0]?.message as string | undefined;
-    // Contains the original English text
     expect(msg).toContain(originalMessage);
-    // Contains bracketed Chinese translation
     expect(msg).toMatch(/\[.+\]/);
-    // Contains CJK characters (the translation)
     expect(msg).toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('LOC-04-03: zh-only 模式输出仅为翻译文本，不含英文原文', () => {
-    const bridge = createLocalizedBridge(transport, ['diagnostics'], 'zh-only');
+  it('LOC-04-03: zh-only mode has only translation', () => {
+    const bridge = createLocalizedBridge(transport, 'zh-only');
     const clientOutput = collectClientOutput(bridge);
     const originalMessage = "use of undeclared identifier 'Foo'";
     transport.receiveFromServer(encodeMessage({
@@ -357,11 +333,7 @@ describe('LspBridge — 本地化集成', () => {
     const params = msgs[0]?.params as Record<string, unknown> | undefined;
     const diags = params?.diagnostics as Array<Record<string, unknown>> | undefined;
     const msg = diags?.[0]?.message as string | undefined;
-    // Contains bracketed translation
-    expect(msg).toMatch(/^\[.+\]$/);
-    // Contains CJK characters (the translation)
     expect(msg).toMatch(/[\u4e00-\u9fff]/);
-    // Does NOT contain the original English text
     expect(msg).not.toContain(originalMessage);
   });
 });

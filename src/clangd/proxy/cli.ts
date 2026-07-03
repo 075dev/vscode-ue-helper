@@ -22,8 +22,9 @@ import { ProcessBridge } from './processBridge';
 import { LspBridge, type LocalizationOptions } from './bridge';
 import { createProxyLogFn, realIo, realStdio, wireBridgeStdio } from './cliRuntime';
 import { parseArgs } from './cliArgs';
-import { createDefaultLocalizationTable } from './localization';
 import { loadLocalizationFromSettings } from './settingsReader';
+import { UeDocLookup } from './ueDocLookup';
+import { setDocLookup } from './localization';
 import type { CliIo, CliStdio } from './cliRuntime';
 
 export { parseArgs } from './cliArgs';
@@ -105,10 +106,23 @@ export function runProxy(
 
   // 构造本地化选项：优先级 CLI 参数 > settings.json > 不启用
   const localization: LocalizationOptions | undefined = options.localizationEnabled
-    ? { enabled: true, mode: options.localizationMode, targets: ['diagnostics', 'codeActions', 'hover'], table: createDefaultLocalizationTable() }
+    ? { enabled: true, mode: options.localizationMode }
     : loadLocalizationFromSettings(logFn);
 
   logFn(`[clangd-proxy] localization ${localization ? `ENABLED (mode=${localization.mode})` : 'DISABLED'}`);
+
+  // 加载 UE 文档词典
+  if (options.dictionaryPath) {
+    try {
+      const lookup = new UeDocLookup();
+      lookup.load(options.dictionaryPath);
+      setDocLookup(lookup);
+      logFn(`[clangd-proxy] UE docs dictionary loaded: ${lookup.size()} entries from ${options.dictionaryPath}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logFn(`[clangd-proxy] WARNING: failed to load dictionary from ${options.dictionaryPath}: ${msg}`);
+    }
+  }
 
   // 信号处理器清理
   let cleanupSignalHandlers: (() => void) | null = null;

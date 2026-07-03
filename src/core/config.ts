@@ -176,6 +176,12 @@ export class Config {
     return (raw as ClangdProxyLocalizationMode) ?? "append";
   }
 
+  /** UE 文档词典 JSON 路径 */
+  get clangdProxyDictionaryPath(): string | undefined {
+    const v = this.root.get<string>("clangdProxy.dictionaryPath");
+    return v && v.length > 0 ? v : undefined;
+  }
+
 // ===== 写入 / 监听 =====
 
   /**

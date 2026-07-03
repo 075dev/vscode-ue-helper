@@ -23,7 +23,6 @@ import { LspFramingParser, encodeMessage } from '@clangd/proxy/framing';
 import { LspBridge, type ServerTransport } from '@clangd/proxy/bridge';
 import { ProcessBridge } from '@clangd/proxy/processBridge';
 import { runProxy, type CliIo } from '@clangd/proxy/cli';
-import { createDefaultLocalizationTable } from '@clangd/proxy/localization';
 import type { JsonRpcMessage } from '@clangd/proxy/framing';
 
 // ---------------------------------------------------------------------------
@@ -77,15 +76,12 @@ function didCloseParams(uri: string): unknown {
 
 function createLocalizedBridge(
   transport: FakeTransport,
-  targets: string[],
   mode: 'append' | 'zh-only' = 'append',
 ): LspBridge {
   return new LspBridge(transport, {
     localization: {
       enabled: true,
       mode,
-      targets,
-      table: createDefaultLocalizationTable(),
     },
   });
 }
@@ -298,8 +294,8 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
 
   // ─── 场景 6: Hover 本地化 ─────────────────────────────────────
 
-  it('场景6: hover 响应被本地化（append 模式）', () => {
-    bridge = createLocalizedBridge(transport, ['hover']);
+  it('场景6: hover 透传（无词典）', () => {
+    bridge = createLocalizedBridge(transport);
     clientOutput = collectClientOutput(bridge);
 
     bridge.feedClientFrame(encodeMessage({
@@ -326,12 +322,12 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     const result = msgs[0]?.result as Record<string, unknown> | undefined;
     const contents = result?.contents as Record<string, unknown> | undefined;
     const value = contents?.value as string | undefined;
-    expect(value).toContain("use of undeclared identifier 'Foo'");
-    expect(value).toContain("[使用了未声明的标识符 'Foo']");
+    // No dictionary → hover passes through unchanged
+    expect(value).toBe("use of undeclared identifier 'Foo'");
   });
 
-  it('场景6b: hover 响应被本地化（zh-only 模式）', () => {
-    bridge = createLocalizedBridge(transport, ['hover'], 'zh-only');
+  it('场景6b: hover 透传（zh-only 模式，无词典）', () => {
+    bridge = createLocalizedBridge(transport, 'zh-only');
     clientOutput = collectClientOutput(bridge);
 
     bridge.feedClientFrame(encodeMessage({
@@ -356,13 +352,14 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     const result = msgs[0]?.result as Record<string, unknown> | undefined;
     const contents = result?.contents as Record<string, unknown> | undefined;
     const value = contents?.value as string | undefined;
-    expect(value).toBe("[未知的类型名称 'FMyClass']");
+    // No dictionary → hover passes through unchanged even in zh-only mode
+    expect(value).toBe("unknown type name 'FMyClass'");
   });
 
   // ─── 场景 7: CodeAction 本地化 ────────────────────────────────
 
   it('场景7: codeAction 响应被本地化，edit/command/data 不变', () => {
-    bridge = createLocalizedBridge(transport, ['codeActions']);
+    bridge = createLocalizedBridge(transport);
     clientOutput = collectClientOutput(bridge);
 
     bridge.feedClientFrame(encodeMessage({
@@ -400,7 +397,7 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Array<Record<string, unknown>> | undefined;
     const action = result?.[0];
-    expect(action?.title).toContain("[使用了未声明的标识符 'Foo']");
+    expect(action?.title).toMatch(/[\u4e00-\u9fff]/);
     expect(action?.edit).toEqual(editData);
     expect(action?.command).toEqual(commandData);
     expect(action?.data).toEqual(dataPayload);
@@ -409,7 +406,7 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   // ─── 场景 8: Diagnostics 本地化 ───────────────────────────────
 
   it('场景8: publishDiagnostics 通知被本地化', () => {
-    bridge = createLocalizedBridge(transport, ['diagnostics']);
+    bridge = createLocalizedBridge(transport);
     clientOutput = collectClientOutput(bridge);
 
     transport.receiveFromServer(encodeMessage({
@@ -439,8 +436,8 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     expect(diags).toHaveLength(2);
     const msg0 = diags?.[0]?.message as string | undefined;
     const msg1 = diags?.[1]?.message as string | undefined;
-    expect(msg0).toContain("[使用了未声明的标识符 'Foo']");
-    expect(msg1).toContain("[未知的类型名称 'FMyClass']");
+    expect(msg0).toMatch(/[\u4e00-\u9fff]/);
+    expect(msg1).toMatch(/[\u4e00-\u9fff]/);
   });
 
   // ─── 场景 9: 失败路径 —— bridge.close 刷新待处理 didClose ────
@@ -519,8 +516,6 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
       localization: {
         enabled: true,
         mode: 'append',
-        targets: ['hover'],
-        table: createDefaultLocalizationTable(),
       },
     });
 
@@ -577,9 +572,8 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
     const result = hoverResp[0]?.result as Record<string, unknown> | undefined;
     const contents = result?.contents as Record<string, unknown> | undefined;
     const value = contents?.value as string | undefined;
-    // 验证本地化生效：原文 + 中文翻译
-    expect(value).toContain("use of undeclared identifier 'Foo'");
-    expect(value).toContain("[使用了未声明的标识符 'Foo']");
+    // No dictionary → hover passes through unchanged
+    expect(value).toBe("use of undeclared identifier 'Foo'");
 
     // 验证 stdout 未被协议日志污染（日志仅通过 log 函数输出）
     const stdoutLogs = logs.filter((l) => l.includes('Content-Length'));

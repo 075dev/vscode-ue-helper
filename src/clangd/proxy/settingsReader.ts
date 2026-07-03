@@ -15,7 +15,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, sep } from 'node:path';
 import type { LocalizationOptions } from './bridge';
-import { createDefaultLocalizationTable } from './localization';
 
 // VS Code settings 中本扩展的配置前缀
 const VSCODE_SETTINGS_FILE = '.vscode' + sep + 'settings.json';
@@ -50,8 +49,6 @@ export function loadLocalizationFromSettings(
       return {
         enabled: true,
         mode: 'append' as const,
-        targets: ['diagnostics', 'codeActions', 'hover'],
-        table: createDefaultLocalizationTable(),
       };
     }
 
@@ -59,8 +56,6 @@ export function loadLocalizationFromSettings(
     return {
       enabled: true,
       mode,
-      targets: ['diagnostics', 'codeActions', 'hover'],
-      table: createDefaultLocalizationTable(),
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
