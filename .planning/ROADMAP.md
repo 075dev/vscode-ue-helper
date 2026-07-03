@@ -2,15 +2,20 @@
 
 ## Active Milestone
 
-## v1.2 — 汉化规则覆盖完善 (in progress)
+## v1.2 — clangd 智能提示与集成完善 (in progress)
 
-3 个阶段 (Phase 7-9)：Diagnostics 规则系统性扩展 (50→158)、Hover 内容汉化、规则表维护与测试。
+4 个阶段 (Phase 7-10)：性能优化 → 代码理解增强 → 工具链集成 → 诊断增强。
+
+> **⚠ v1.2 主题变更：** 原 v1.2 计划聚焦汉化规则扩展（2026-07-01 立项），2026-07-04
+> 决定回归 clangd 核心功能建设。废弃范围：Diagnostics 规则表 58→150+ 扩展、
+> Hover 内容汉化、规则表分类与性能测试（已并入已 shipped 的 v1.1 phase 5/6）。
 
 ## Milestones
 
 - ✅ **v1.0 控制面板** — Phases 1-3 (shipped 2026-07-01)
 - ✅ **v1.1 Proxy 本地化增强** — completed 2026-07-01
-- 🔄 **v1.2 汉化规则覆盖完善** — Phases 7-9 (in progress)
+- 🔄 **v1.2 clangd 智能提示与集成完善** — Phases 7-10 (in progress, re-scoped 2026-07-04)
+- ~~❌ **v1.2 汉化规则覆盖完善**~~ — *abandoned 2026-07-04，主题变更*
 
 ## Phases
 
@@ -23,8 +28,8 @@
 
 </details>
 
-<details open>
-<summary>🔄 v1.1 Proxy 本地化增强 (Phases 4-6) — SHIPPED 2026-07-01</summary>
+<details>
+<summary>✅ v1.1 Proxy 本地化增强 (Phases 4-6) — SHIPPED 2026-07-01</summary>
 
 - [x] **Phase 4: CLI Fix + Rule Expansion** - Fix CLI-to-bridge localization wiring, expand rule table to 30+ rules (completed 2026-06-30)
 - [x] **Phase 5: Localization Mode Enhancement** - Add zh-only mode, support append/zh-only switching (completed 2026-07-01)
@@ -33,11 +38,12 @@
 </details>
 
 <details open>
-<summary>🔄 v1.2 汉化规则覆盖完善 (Phases 7-9) — IN PROGRESS</summary>
+<summary>🔄 v1.2 clangd 智能提示与集成完善 (Phases 7-10) — RE-SCOPED 2026-07-04</summary>
 
-- [ ] **Phase 7: Diagnostics 规则系统性扩展** - 从 58 条扩展到 150+ 条，覆盖 clangd/clang-cl 常见诊断
-- [ ] **Phase 8: Hover 内容汉化** - 添加 hover 专用规则，覆盖 C++ 关键字、UE 类型、函数签名等
-- [ ] **Phase 9: 规则表维护 + 测试完善** - 规则分类优化、边界测试、性能验证
+- [ ] **Phase 7: clangd 性能优化** - compile_commands.json 生成加速、preparse-includes 缓存、增量扫描
+- [ ] **Phase 8: 代码理解增强** - UE 类型系统补全、include 自动补全、跳转定义增强、引用搜索
+- [ ] **Phase 9: 工具链集成** - UE 编辑器双向通信、Source 浏览器集成、Hot Reload 联动、调试适配
+- [ ] **Phase 10: 诊断增强** - 自定义诊断规则、UE 特定错误诊断补全、修复建议、快速修复
 
 </details>
 
@@ -104,44 +110,57 @@ Plans:
 
 **UI hint**: yes
 
-### Phase 7: Diagnostics 规则系统性扩展
+### Phase 7: clangd 性能优化
 
-**Goal**: 将诊断消息规则表从 58 条扩展到 150+ 条，系统性覆盖 clangd/clang-cl 常见诊断消息
-**Depends on**: Phase 6 (v1.1 proxy localization pipeline)
-**Requirements**: LOC-05-01, LOC-05-02, LOC-05-03
+**Goal**: 提升 clangd 启动速度、增量响应速度和大规模工程的扫描效率
+**Depends on**: Phase 6 (v1.1 completed)
+**Requirements**: TBD (clangd-01-*)
 **Success Criteria** (what must be TRUE):
-  1. `createDefaultLocalizationTable()` 返回 150+ 条规则
-  2. 覆盖 clangd 全部常见诊断类别（类型错误、语法错误、模板错误等）
-  3. 覆盖 clang-cl/MSVC 特有诊断（编译器选项、pragma 等）
-  4. 每条新规则有对应的单元测试
-  5. 现有 492 个测试全部通过
+  1. compile_commands.json 生成时间在大型项目（>5000 文件）中 < 5s
+  2. preparse-includes 缓存命中率 > 80%（二次构建）
+  3. 文件变更后增量扫描延迟 < 200ms
+  4. vscode-clangd 与自研 proxy 协同不引入额外开销
 **Plans**: TBD
 
-### Phase 8: Hover 内容汉化
+### Phase 8: 代码理解增强
 
-**Goal**: 添加 hover 专用规则，覆盖 C++ 关键字、UE 类型名、函数签名关键词等
+**Goal**: 强化 clangd 对 UE C++ 代码的理解与导航能力
 **Depends on**: Phase 7
-**Requirements**: LOC-06-01, LOC-06-02, LOC-06-03
+**Requirements**: TBD (clangd-02-*)
 **Success Criteria** (what must be TRUE):
-  1. hover 内容中的 C++ 关键字（public/private/static/virtual/const/override 等）被翻译
-  2. hover 内容中的常见 UE 类型前缀（TSoftClassPtr、FName、TArray 等）不被误翻译
-  3. 代码块和内联代码保护机制正常工作
-  4. hover 规则不影响 diagnostics 输出
-  5. 所有测试通过
+  1. UE 类型（TObjectPtr、TSubclassOf、FGameMode 等）补全正常
+  2. include 路径自动补全（支持 `Public/`、`Private/`、`*.generated.h` 模式）
+  3. 跳转定义穿透 UPROPERTY/UFUNCTION 宏到真实声明
+  4. 引用搜索识别 UCLASS/USTRUCT 反射注册
 **Plans**: TBD
 
-### Phase 9: 规则表维护 + 测试完善
+### Phase 9: 工具链集成
 
-**Goal**: 规则分类优化、边界测试、性能验证，确保规则表可维护
+**Goal**: 与 Unreal Editor / UBT / Live Coding 协同联动
 **Depends on**: Phase 8
-**Requirements**: LOC-07-01, LOC-07-02, LOC-07-03
+**Requirements**: TBD (clangd-03-*)
 **Success Criteria** (what must be TRUE):
-  1. 规则按类别分组（类型错误/语法错误/模板/MSVC/其他）
-  2. 每条规则有类别标签
-  3. 边界测试覆盖空输入、特殊字符、混合语言
-  4. 规则表加载性能 < 5ms
-  5. 所有测试通过
+  1. 编辑器内点击源码文件 → VS Code 跳转对应行（编辑器通信）
+  2. Hot Reload 后无需手动 reload Window，clangd 自动同步
+  3. VS Code 内右键 UE 类型符号可一键在编辑器内定位
+  4. 调试配置支持 attach 到 UE 进程（含断点映射）
 **Plans**: TBD
+
+### Phase 10: 诊断增强
+
+**Goal**: 自定义 clangd 诊断规则与 UE 特定错误的快速修复
+**Depends on**: Phase 9
+**Requirements**: TBD (clangd-04-*)
+**Success Criteria** (what must be TRUE):
+  1. UE 编译错误（链接失败、模块缺失等）显示明确诊断 + 修复建议
+  2. `UPROPERTY()` 宏缺失/类型错误提供 code action
+  3. Module 依赖错误（缺 `PublicDependencyModuleNames`）自动建议
+  4. 用户可自定义本地规则表（外部 JSON 文件）
+**Plans**: TBD
+
+### ~~Phase 7 (废弃): 汉化规则扩展~~
+
+> **⚠ ABANDONED 2026-07-04** — v1.2 主题调整为 clangd 完善。汉化规则表扩展（58→150+）已并入 v1.1 Phase 4/5。残留 07-CONTEXT.md 已删除，磁盘已清理。新主题见 Phase 7: clangd 性能优化。
 
 ## Progress
 
@@ -153,6 +172,7 @@ Plans:
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 5. Localization Mode Enhancement | v1.1 | 2/2 | Complete    | 2026-07-01 |
 | 6. UI Update + E2E Verification | v1.1 | 2/2 | Complete    | 2026-07-01 |
-| 7. Diagnostics 规则系统性扩展 | v1.2 | 0/0 | Not started | - |
-| 8. Hover 内容汉化 | v1.2 | 0/0 | Not started | - |
-| 9. 规则表维护 + 测试完善 | v1.2 | 0/0 | Not started | - |
+| 7. clangd 性能优化 | v1.2 | 0/0 | Re-scoped | - |
+| 8. 代码理解增强 | v1.2 | 0/0 | Re-scoped | - |
+| 9. 工具链集成 | v1.2 | 0/0 | Re-scoped | - |
+| 10. 诊断增强 | v1.2 | 0/0 | Re-scoped | - |

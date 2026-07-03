@@ -19,15 +19,19 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - Full i18n (Chinese/English) support
 - Timeline: 2026-06-30 → 2026-07-01
 
-## Current Milestone: v1.2 汉化规则覆盖完善
+## Current Milestone: v1.2 clangd 智能提示与集成完善
 
-**Goal:** 系统性扩展汉化规则覆盖范围，从 58 条扩展到 200+ 条，覆盖 UE C++ 开发中的常见 clangd/clang-cl 诊断消息和 hover 内容。
+> **⚠ Re-scoped 2026-07-04**：v1.2 主题从"汉化规则覆盖完善"调整为"clangd 完善"。
+> 原 v1.2 内容（Diagnostics 规则 58→150+、Hover 汉化、规则表维护）已废弃，相关要求标记 out-of-scope，
+> 汉化能力持续由 v1.1 维持。
 
-**Target features:**
-- 系统性收集并添加 clangd/clang-cl 常见诊断规则（目标 200+ 条）
-- hover 内容结构化关键词汉化（C++ 关键字、UE 类型名等）
-- 用户通过日志反馈持续迭代规则
-- 所有规则有对应的单元测试
+**Goal:** 强化 clangd 在 UE C++ 工程中的智能提示与导航能力，让 VS Code + clangd + UBT 协同工作流达到 Rider 等价体验。
+
+**Target features (4 阶段):**
+1. **Phase 7 — clangd 性能优化**：compile_commands.json 生成加速、preparse-includes 缓存、增量扫描
+2. **Phase 8 — 代码理解增强**：UE 类型补全、include 路径补全、跳转定义穿透 UPROPERTY/UFUNCTION、引用搜索识别反射
+3. **Phase 9 — 工具链集成**：UE 编辑器双向通信、Hot Reload 自动同步、调试 attach、断点映射
+4. **Phase 10 — 诊断增强**：UE 编译错误智能诊断、UPROPERTY 错误 code action、Module 依赖建议、自定义规则表
 
 ## Previous Milestone: v1.1 Proxy 本地化增强 ✅
 
@@ -38,19 +42,21 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - ✓ **CTRL-01 ~ CTRL-10**: 面板框架 + 操作按钮 — v1.0
 - ✓ **CTRL-11 ~ CTRL-21**: 配置编辑 + Proxy 设置 — v1.0
 - ✓ **CTRL-22 ~ CTRL-28**: 状态展示 + 细节打磨 — v1.0
+- ✓ **LOC-01 ~ LOC-04 (18 sub-items)**: CLI 传递 + 汉化模式 + 规则扩展 + E2E — v1.1
 
-### Active
+### Active (v1.2 — clangd 完善)
 
-- [ ] **LOC-01**: CLI 层传递 localization 配置给 LspBridge
-- [ ] **LOC-02**: 新增"仅中文"本地化模式（当前为 append 模式，需支持 replace 替换英文）
-- [ ] **LOC-03**: 完善汉化规则覆盖范围
-- [ ] **LOC-04**: 端到端验证本地化功能
+- [ ] **CLANGD-01**: clangd 性能优化（见 Phase 7）
+- [ ] **CLANGD-02**: 代码理解与导航增强（见 Phase 8）
+- [ ] **CLANGD-03**: 与 UE 编辑器/UBT 工具链集成（见 Phase 9）
+- [ ] **CLANGD-04**: 自定义诊断与快速修复（见 Phase 10）
 
 ### Out of Scope
 
 - 替换现有的状态栏 UI — 状态栏和控制面板共存互补
 - 实时构建日志输出到面板 — 构建日志在 Output 通道更合适
-- Phase 4+ 面板增强功能（快捷键、排序、构建历史）— 推迟到 v1.2
+- Phase 4+ 面板增强功能（快捷键、排序、构建历史）— 推迟到 v2
+- **v1.2 已废弃**: Diagnostics 规则表 58→150+、Hover 内容汉化、规则分类优化 — 回归 v1.1 已覆盖范围
 
 ## Context
 
@@ -60,7 +66,8 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - 所有配置项已在 `package.json` 的 `contributes.configuration` 中定义
 - 已有 i18n 系统（`src/i18n/index.ts`，中英双语）
 - **v1.0 新增**: WebView 控制面板（4 Tab，16 按钮，15 配置字段）
-- **已知问题**: clangd Proxy 本地化功能因 CLI 层未传递配置而静默失效
+- **v1.1 新增**: 汉化 Proxy（22→30+ 规则、zh-only/append 双模式、控制面板模式选择器）
+- **v1.2 待办**: clangd 配置文件生成器、clangd 触发指令、UE 类型系统适配层、Hot Reload 钩子
 
 ## Constraints
 
@@ -68,6 +75,7 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 - **Pattern**: 消息协议双向通信（postMessage / onDidReceiveMessage）
 - **i18n**: 所有用户可见文本必须通过 t() 函数
 - **Proxy 协议**: 代理 CLI 必须通过 --localization-* 参数传递本地化配置
+- **clangd 协议**: 遵循 LSP 3.17 规范，不修改 upstream clangd，通过配置与客户端指令增强
 
 ## Key Decisions
 
@@ -79,6 +87,7 @@ UE 开发者可以在 VS Code 中完成所有日常开发操作，无需切换�
 | 4 Tab 分区（Actions/Config/Proxy/Status） | 功能正交，用户快速定位 | ✓ Good |
 | Unicode 图标而非图标库 | 避免前端依赖 | ✓ Good |
 | 配置批量保存 + 回执机制 | 确保配置写入成功 | ✓ Good |
+| **v1.2 主题变更 2026-07-04** | 汉化规则扩展边际收益递减，回归 clangd 核心价值 | ✓ Pending feedback |
 
 ## Evolution
 
@@ -98,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-01 after v1.1 milestone start*
+*Last updated: 2026-07-04 — v1.2 re-scoped from localization to clangd*

@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.2
-milestone_name: 汉化规则覆盖完善
+milestone_name: clangd 智能提示与集成完善
 current_phase: 7
 status: planning
-stopped_at: Plan 06-01 complete — labels + restart notice
-last_updated: "2026-07-01T17:00:00.000Z"
-last_activity: 2026-07-01
-last_activity_desc: v1.2 milestone created - rule expansion
+stopped_at: v1.2 re-scoped — old CONTEXT.md removed, awaiting Phase 7 discussion
+last_updated: "2026-07-04T01:00:00.000Z"
+last_activity: 2026-07-04
+last_activity_desc: v1.2 milestone re-scoped from localization to clangd
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-current_phase_name: Diagnostics 规则系统性扩展
+current_phase_name: clangd 性能优化
 ---
 
 ## Project Reference
@@ -72,24 +72,25 @@ All 3 phases implemented, 28 requirements covered, 498 tests passing across 35 t
 
 ## Current Position
 
-Phase: 06
+Phase: 07
 Plan: Not started
-Status: Plan 06-01 complete — control panel labels updated, restart notice bar added
-Last activity: 2026-07-01 — Phase 06 complete
+Status: v1.2 re-scoped — old 汉化 CONTEXT.md removed, awaiting new Phase 7 discussion
+Last activity: 2026-07-04 — v1.2 主题从汉化规则调整为 clangd 完善
 
 ## Phase Dependencies
 
-- **Phase 4**: CLI Fix + Rule Expansion — blocks everything else
-- **Phase 5**: Localization Mode Enhancement — depends on Phase 4
-- **Phase 6**: UI Update + E2E Verification — depends on Phase 5
+- **Phase 7 (clangd 性能优化)** — 当前阶段，启动 v1.2 入口
+- **Phase 8 (代码理解增强)** — Depends on Phase 7
+- **Phase 9 (工具链集成)** — Depends on Phase 8
+- **Phase 10 (诊断增强)** — Depends on Phase 9
 
 ## Known Context
 
-- Root bug: cli.ts line 139-149 never passes parsed --localization-* args to LspBridge
-- Fix scope: ~10 lines of TypeScript in cli.ts
-- Rule expansion: 22 -> 30+ rules in localization.ts
-- Mode mapping: zh-only -> replace, append -> append (getAdaptedTable() already correct)
-- All localization logic exists and is correct — it simply lacks the input connection
+- v1.2 主题变更：放弃汉化规则扩展（v1.1 已覆盖 30+ 规则），回归 clangd 核心
+- 新阶段按价值/优先级顺序：性能优化 → 代码理解 → 工具链集成 → 诊断增强
+- 现有基础设施（v1.0 控制面板 + v1.1 Proxy 本地化）保持不变
+- Phase 7 需要先识别 clangd 现有的性能瓶颈点（compile_commands 生成、preparse-includes、增量扫描）
+- clangd 完善不需要修改代理层逻辑，集中在 clangd 配置、客户端指令、面板触发逻辑
 
 ## Blockers
 
@@ -97,9 +98,9 @@ None.
 
 ## Session
 
-**Last session:** 2026-07-01T02:44:36.000Z
-**Stopped at:** Plan 06-01 complete — labels + restart notice
-**Resume file:** .planning/phases/06-ui-update-e2e-verification/06-CONTEXT.md
+**Last session:** 2026-07-04T01:00:00.000Z
+**Stopped at:** v1.2 re-scoped — awaiting Phase 7 discussion
+**Resume file:** .planning/phases/07-clangd-performance-optimization/07-CONTEXT.md (to be created)
 
 ## Performance Metrics
 
@@ -116,9 +117,11 @@ None.
 - [Phase 04-cli-fix-rule-expansion]: When localization is disabled, undefined is passed (backward compatible per LOC-01-04) — Spreading undefined into object literal is safe and keeps the bridge default behavior unchanged
 - [Phase 04-cli-fix-rule-expansion]: createDefaultLocalizationTable called eagerly at construction time — Function is synchronous and infallible, so eager construction is safe
 - [Phase ?]: Replaced 'override' with 'zh-only' across all type unions in cliArgs.ts, bridge.ts, config.ts, and package.json
-- [Phase ?]: Replaced 'override' with 'zh-only' across all type unions in cliArgs.ts, bridge.ts, config.ts, and package.json
 - [Phase ?]: Config.clangdProxyLocalizationMode getter maps 'override' to 'zh-only' for backward compatibility
 - [Phase ?]: Control panel files out of scope for this rename; will be updated in a separate plan
 - [Phase 06-01]: Used bilingual labels (Chinese/English) for dropdown options per D-01 to serve both Chinese and international users
 - [Phase 06-01]: Used amber/warning color scheme for the restart notice bar, consistent with VS Code warning conventions
 - [Phase 06-01]: Added localizationModeChanged as optional field on SaveResult rather than creating a new message type
+- [v1.2 re-scope 2026-07-04]: 放弃汉化规则扩展（v1.1 已覆盖足够），回归 clangd 核心功能建设
+- [v1.2 re-scope 2026-07-04]: 阶段按价值/优先级排序：性能优化 → 代码理解 → 工具链 → 诊断增强
+- [v1.2 re-scope 2026-07-04]: 原 Phase 7-9 主题（汉化）整组废弃，新阶段 7-10 主题（clangd），磁盘 CONTEXT.md 清理完成
