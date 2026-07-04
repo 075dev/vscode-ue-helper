@@ -101,6 +101,9 @@ vi.mock('vscode', () => ({
     }
   },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+  ThemeColor: class {
+    constructor(public readonly id: string) {}
+  },
   CompletionItemKind: { Property: 9 },
   CompletionItem: class {
     label: string;
