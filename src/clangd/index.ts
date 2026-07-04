@@ -15,6 +15,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
@@ -24,6 +25,7 @@ import { ClangdProxyManager } from './proxyManager';
 import { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 import { perfLog } from './perfLog';
 import { PerfStatusBar } from '@ui/perfStatusBar';
+import { IncrementalFileWatcher } from './fileWatcher';
 
 export {
   writeClangdConfig,
@@ -152,6 +154,53 @@ export function activateClangd(
   } else {
     logger.info('[clangd] perfStatusBar disabled by setting (perfLog still records)');
   }
+
+  // [Phase 7 PLAN B / per D-15/D-16] 增量扫描（chokidar + 100ms debounce）
+  // - 选择 chokidar over VS Code FileSystemWatcher（per CONTEXT §Discretion）：
+  //   (a) 项目已有 chokidar ^3.6.0 依赖；
+  //   (b) awaitWriteFinish 内置防抖省 30 行手写代码；
+  //   (c) UE 5000+ 文件下 Windows 句柄压力可控；
+  //   (d) **不主动发送 LSP workspace/didChangeWatchedFiles** — clangd 自己的 watcher 已在工作
+  // - vscodeUEHelper.showPerfInStatusBar 关闭时 watcher 仍启动并埋点（per D-06：埋点与 UI 解耦）
+  void detection.ready.then((result) => {
+    const project = result.projects[0];
+    if (!project?.path) {
+      logger.warn('[clangd] no projectPath: skip incremental watcher');
+      return;
+    }
+    const projectDir = path.dirname(project.path);
+    const watcher = new IncrementalFileWatcher();
+    watcher.onBatch = (batch) => {
+      // 通知 perfLog（per D-15/D-17）—— 状态栏可订阅 onMetricUpdate 实时刷新
+      perfLog.recordIncrementalScan(batch.totalLatencyMs, batch.files.length);
+      // 同时落 perfLog.record 通用事件（per D-03，header/source 分级元数据）
+      try {
+        perfLog.record({
+          event: 'incremental.scanComplete',
+          elapsedMs: batch.totalLatencyMs,
+          meta: {
+            headerCount: batch.headerCount,
+            sourceCount: batch.sourceCount,
+            fileCount: batch.files.length,
+          },
+        });
+      } catch (err) {
+        // 失败仅 logger.warn，不阻塞主流程（per T-7-13）
+        logger.warn(
+          `[perf] incremental scan record failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    };
+    const handle = watcher.start({
+      patterns: [
+        path.join(projectDir, 'Source', '**', '*.{h,hpp,inl,cpp}'),
+        path.join(projectDir, 'Plugins', '**', 'Source', '**', '*.{h,hpp,inl,cpp}'),
+      ],
+      debounceMs: 100,
+    });
+    context.subscriptions.push(handle);
+    logger.info(`[clangd] incremental watcher started for: ${projectDir}`);
+  });
 
   // TODO Phase 4: replace the WorkspaceBackup constructor argument with a real
   // projectPath sourced from the detection layer (after the user picks one).
