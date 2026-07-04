@@ -17,6 +17,8 @@ import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
+import type { WorkspaceState } from '@core/workspace';
+import type { ClangdOps } from '@clangd/clangdOps';
 import {
   discoverSystemIncludes,
   listMsvcVersions,
@@ -37,6 +39,8 @@ export async function executeSetSystemIncludes(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
+  workspace?: WorkspaceState,
+  clangdOps?: ClangdOps,
 ): Promise<void> {
   if (process.platform !== 'win32') {
     void vscode.window.showInformationMessage(
@@ -156,16 +160,25 @@ export async function executeSetSystemIncludes(
     fmsCompatibilityVersion: detected.fmsCompatibilityVersion,
   });
 
-  const projectDir = path.dirname(project.path);
-  const clangdFile = await findClangdConfig(project.path);
+  const projectDir = workspace?.projectDir ?? path.dirname(project.path);
+  const clangdFile = workspace?.clangdConfigPath ?? await findClangdConfig(project.path);
   if (!clangdFile) {
     // No .clangd yet — create one with the default + system flags.
-    await writeClangdConfig(project.path);
+    if (clangdOps) {
+      await clangdOps.writeFull({});
+    } else {
+      await writeClangdConfig(project.path);
+    }
   }
   const before = await fs.readFile(clangdFile ?? path.join(projectDir, '.clangd'), 'utf-8');
   const after = replaceSystemIncludeBlock(before, newFlags);
   if (after !== before) {
-    await fs.writeFile(clangdFile ?? path.join(projectDir, '.clangd'), after, 'utf-8');
+    if (clangdOps) {
+      // [Phase 8] 优先用 ClangdOps 原子写入
+      await clangdOps.updateSystemIncludes(newFlags);
+    } else {
+      await fs.writeFile(clangdFile ?? path.join(projectDir, '.clangd'), after, 'utf-8');
+    }
     logger.info(`[setSystemIncludes] wrote ${newFlags.length} flags to .clangd`);
   }
 
