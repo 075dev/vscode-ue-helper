@@ -44,22 +44,30 @@ export async function loadBundledList(mode: CompletionMode): Promise<string[]> {
 
 /**
  * Merge in user customizations from the project's
- * `.vscode/vscodeuehelper/` directory. Any `.h` file there is appended.
+ * `.vscode/vscodeuehelper/` directory.
+ *
+ * 仅 `addMacroCompletions.h` 通过自动扫描加入 preparse 列表。
+ *
+ * 排除扩展生成的其他 header 是必要的——它们要么已经被其他机制包含（避免重复），
+ * 要么被设计为仅在 `completionHelper.cpp` 这一个 TU 中加载（避免污染所有 .cpp）。
+ *
+ * 关键风险（已观察到）：若把 `addCompletions.h` 加入 preparse，会通过 `-include`
+ * 强制注入到所有 .cpp TU 前。clangd 此时把它视为第二个 source，触发 driver
+ * 警告 `drv_out_file_argument_with_multiple_sources`；同时 UE 的
+ * `UE_DEFINE_GAMEPLAY_TAG` 宏在被强制包含的 .h 中展开时 `__FILE__` 指向
+ * `addCompletions.h`，触发 `static_assert(HasFileExtension(__FILE__), "must be .cpp")`。
+ *
+ * @see FILENAME_ADD_MACRO_COMPLETIONS in completionFiles.ts
  */
 export async function mergeUserCustomizations(
   projectPath: string,
   baseList: string[],
 ): Promise<string[]> {
   const dir = path.join(path.dirname(projectPath), '.vscode', 'vscodeuehelper');
+  const macroFile = path.join(dir, 'addMacroCompletions.h');
   try {
-    const entries = await fs.readdir(dir);
-    const headers: string[] = [];
-    for (const entry of entries) {
-      if (entry.endsWith('.h')) {
-        headers.push(path.join(dir, entry));
-      }
-    }
-    return [...baseList, ...headers];
+    await fs.access(macroFile);
+    return [...baseList, macroFile];
   } catch {
     return baseList;
   }
