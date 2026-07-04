@@ -40,7 +40,7 @@
 <details open>
 <summary>🔄 v1.2 clangd 智能提示与集成完善 (Phases 7-10) — RE-SCOPED 2026-07-04</summary>
 
-- [ ] **Phase 7: clangd 性能优化** - compile_commands.json 生成加速、preparse-includes 缓存、增量扫描
+- [x] **Phase 7: clangd 性能优化** - compile_commands.json 生成加速、preparse-includes 缓存、增量扫描 (completed 2026-07-04)
 - [ ] **Phase 8: 代码理解增强** - UE 类型系统补全、include 自动补全、跳转定义增强、引用搜索
 - [ ] **Phase 9: 工具链集成** - UE 编辑器双向通信、Source 浏览器集成、Hot Reload 联动、调试适配
 - [ ] **Phase 10: 诊断增强** - 自定义诊断规则、UE 特定错误诊断补全、修复建议、快速修复
@@ -116,10 +116,12 @@ Plans:
 **Depends on**: Phase 6 (v1.1 completed)
 **Requirements**: TBD (clangd-01-*)
 **Success Criteria** (what must be TRUE):
+
   1. compile_commands.json 生成时间在大型项目（>5000 文件）中 < 5s
   2. preparse-includes 缓存命中率 > 80%（二次构建）
   3. 文件变更后增量扫描延迟 < 200ms
   4. vscode-clangd 与自研 proxy 协同不引入额外开销
+
 **Plans**: TBD
 
 ### Phase 8: 代码理解增强
@@ -128,10 +130,12 @@ Plans:
 **Depends on**: Phase 7
 **Requirements**: TBD (clangd-02-*)
 **Success Criteria** (what must be TRUE):
+
   1. UE 类型（TObjectPtr、TSubclassOf、FGameMode 等）补全正常
   2. include 路径自动补全（支持 `Public/`、`Private/`、`*.generated.h` 模式）
   3. 跳转定义穿透 UPROPERTY/UFUNCTION 宏到真实声明
   4. 引用搜索识别 UCLASS/USTRUCT 反射注册
+
 **Plans**: TBD
 
 ### Phase 9: 工具链集成
@@ -140,10 +144,12 @@ Plans:
 **Depends on**: Phase 8
 **Requirements**: TBD (clangd-03-*)
 **Success Criteria** (what must be TRUE):
+
   1. 编辑器内点击源码文件 → VS Code 跳转对应行（编辑器通信）
   2. Hot Reload 后无需手动 reload Window，clangd 自动同步
   3. VS Code 内右键 UE 类型符号可一键在编辑器内定位
   4. 调试配置支持 attach 到 UE 进程（含断点映射）
+
 **Plans**: TBD
 
 ### Phase 10: 诊断增强
@@ -152,10 +158,12 @@ Plans:
 **Depends on**: Phase 9
 **Requirements**: TBD (clangd-04-*)
 **Success Criteria** (what must be TRUE):
+
   1. UE 编译错误（链接失败、模块缺失等）显示明确诊断 + 修复建议
   2. `UPROPERTY()` 宏缺失/类型错误提供 code action
   3. Module 依赖错误（缺 `PublicDependencyModuleNames`）自动建议
   4. 用户可自定义本地规则表（外部 JSON 文件）
+
 **Plans**: TBD
 
 ### ~~Phase 7 (废弃): 汉化规则扩展~~
@@ -172,7 +180,7 @@ Plans:
 | 4. CLI Fix + Rule Expansion | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 5. Localization Mode Enhancement | v1.1 | 2/2 | Complete    | 2026-07-01 |
 | 6. UI Update + E2E Verification | v1.1 | 2/2 | Complete    | 2026-07-01 |
-| 7. clangd 性能优化 | v1.2 | 0/0 | Re-scoped | - |
+| 7. clangd 性能优化 | v1.2 | 2/2 | Complete    | 2026-07-04 |
 | 8. 代码理解增强 | v1.2 | 0/0 | Re-scoped | - |
 | 9. 工具链集成 | v1.2 | 0/0 | Re-scoped | - |
 | 10. 诊断增强 | v1.2 | 0/0 | Re-scoped | - |
