@@ -40,4 +40,5 @@ desktop.ini
 compile_commands.json
 .clangd
 .vscode/.code-workspace.backup
+.vscode/clangd-perf-cache/   # Phase 7 perf cache (per D-14)
 .omo
