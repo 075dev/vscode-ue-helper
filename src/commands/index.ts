@@ -20,7 +20,6 @@ import { executeInstallRules } from './installRules';
 import { executeUninstall } from './uninstall';
 import { executeSetSystemIncludes } from './setSystemIncludes';
 import { executeOpenWorkspaceFile } from './openWorkspaceFile';
-import { executeRegenerateWorkspace } from './regenerateWorkspace';
 import { executeSelectConfig } from './selectConfig';
 import { executeSelectTarget } from './selectTarget';
 import { executeEnableClangdProxy } from './enableClangdProxy';
@@ -35,7 +34,8 @@ export function activateCommands(
   logger: Logger,
   detection: DetectionHandles,
   clangd: ClangdHandles,
-  workspace?: WorkspaceState,
+  // [Phase 8] workspace 当前未直接使用，保留以便后续命令迁移时透传
+  _workspace?: WorkspaceState,
 ): void {
   registerCommand(context, 'vscodeUEHelper.showProjectInfo', () =>
     showProjectInfo(config, logger, detection),
@@ -75,9 +75,6 @@ export function activateCommands(
     executeSetSystemIncludes(config, logger, detection),
   );
   registerCommand(context, 'vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile());
-  registerCommand(context, 'vscodeUEHelper.regenerateWorkspace', () =>
-    executeRegenerateWorkspace(logger, workspace),
-  );
   registerCommand(context, 'vscodeUEHelper.selectConfig', () =>
     executeSelectConfig(config, logger),
   );

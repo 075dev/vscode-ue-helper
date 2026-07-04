@@ -1,8 +1,8 @@
 /**
  * openWorkspaceFile —— 在编辑器里打开 .code-workspace
  *
- * 让用户能直接看到 folders[] 数组,检测失败时可以手动编辑。
- * 也可以用 regenerateWorkspace 命令自动重新生成。
+ * 让用户能直接看到 folders[] 数组，检测失败时可以手动编辑。
+ * [Phase 8] 不再提供自动重新生成命令——用户需手动从 .uproject 创建。
  */
 
 import * as fs from 'node:fs/promises';

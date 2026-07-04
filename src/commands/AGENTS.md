@@ -21,7 +21,6 @@
 | `uninstall` | `uninstall.ts` | 清理所有生成文件 |
 | `setSystemIncludes` | `setSystemIncludes.ts` | 设置系统包含路径 (Windows) |
 | `openWorkspaceFile` | `openWorkspaceFile.ts` | 打开 .code-workspace |
-| `regenerateWorkspace` | `regenerateWorkspace.ts` | 从 .uproject 重新生成工作区 |
 | `selectConfig` | `selectConfig.ts` | 选择构建配置 |
 | `selectTarget` | `selectTarget.ts` | 选择构建目标 |
 

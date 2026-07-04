@@ -137,12 +137,6 @@
         "category": "UE Helper"
       },
       {
-        "command": "vscodeUEHelper.regenerateWorkspace",
-        "title": "Regenerate Workspace from .uproject",
-        "title@zh": "从 .uproject 重新生成工作区",
-        "category": "UE Helper"
-      },
-      {
         "command": "vscodeUEHelper.selectConfig",
         "title": "Select Build Configuration",
         "title@zh": "选择构建配置",

@@ -117,13 +117,12 @@ describe('BUTTON_GROUPS', () => {
   it('each group has buttons mapped in COMMAND_MAP', () => {
     for (const g of BUTTON_GROUPS) for (const b of g.buttons) expect(COMMAND_MAP[b.id]).toBeTruthy();
   });
-  it('tools has 4 buttons (showProjectInfo removed), proxy has 2 (showClangdProxyStatus removed)', () => {
+  it('tools has 3 buttons (regenerateWorkspace removed), proxy has 2 (showClangdProxyStatus removed)', () => {
     const tools = BUTTON_GROUPS.find((g) => g.id === 'tools');
-    expect(tools?.buttons).toHaveLength(4);
-    expect(tools?.buttons.find((b) => b.id === 'showProjectInfo')).toBeUndefined();
+    expect(tools?.buttons).toHaveLength(3);
+    expect(tools?.buttons.find((b) => b.id === 'regenerateWorkspace')).toBeUndefined();
     const proxy = BUTTON_GROUPS.find((g) => g.id === 'proxy');
     expect(proxy?.buttons).toHaveLength(2);
-    expect(proxy?.buttons.find((b) => b.id === 'showClangdProxyStatus')).toBeUndefined();
   });
 });
 
@@ -133,7 +132,7 @@ describe('COMMAND_MAP', () => {
       'build', 'rebuild', 'clean', 'launchEditor', 'liveCoding',
       'createProject', 'generateCompileCommands', 'diagnoseProject',
       'toggleCompletionMode', 'setSystemIncludes', 'enableClangdProxy', 'disableClangdProxy',
-      'regenerateWorkspace', 'openWorkspaceFile', 'installRules', 'uninstall',
+      'openWorkspaceFile', 'installRules', 'uninstall',
     ]);
   });
 });

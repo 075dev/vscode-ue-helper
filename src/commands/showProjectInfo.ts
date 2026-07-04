@@ -136,16 +136,11 @@ export async function showProjectInfo(
       return;
     }
 
-    const choice = await vscode.window.showWarningMessage(
-      t('showInfo.noEnginesNoWsWithUE', {
-        project: projects[0]?.name ?? '(none)',
-        workspace: String(workspace),
-      }),
-      t('showInfo.btn.regenerate'),
-    );
-    if (choice === t('showInfo.btn.regenerate')) {
-      await vscode.commands.executeCommand('vscodeUEHelper.regenerateWorkspace');
-    }
+    // [Phase 8] 不再提供"重新生成工作区"按钮——该命令会覆盖用户已有的
+    // .code-workspace 设置（settings / extensions 推荐块等），是导致用户
+    // 工作区文件被改错的根源。改为弹一次通知，提示用户从 .uproject
+    // 手动创建 .code-workspace（与 WorkspaceState 缺失提示一致）。
+    void vscode.window.showWarningMessage(t('showInfo.noEnginesNoWsWithUE'));
     logger.show();
     return;
   }

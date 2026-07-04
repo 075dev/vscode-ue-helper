@@ -103,7 +103,6 @@ export const COMMAND_MAP: Record<string, string> = {
   setSystemIncludes: 'vscodeUEHelper.setSystemIncludes',
   enableClangdProxy: 'vscodeUEHelper.enableClangdProxy',
   disableClangdProxy: 'vscodeUEHelper.disableClangdProxy',
-  regenerateWorkspace: 'vscodeUEHelper.regenerateWorkspace',
   openWorkspaceFile: 'vscodeUEHelper.openWorkspaceFile',
   installRules: 'vscodeUEHelper.installRules',
   uninstall: 'vscodeUEHelper.uninstall',
@@ -168,7 +167,6 @@ export const BUTTON_GROUPS: ButtonGroup[] = [
     id: 'tools',
     i18nKey: 'panel.group.tools',
     buttons: [
-      { id: 'regenerateWorkspace', i18nKey: 'cmd.regenerateWorkspace', icon: '🔄' },
       { id: 'openWorkspaceFile', i18nKey: 'cmd.openWorkspaceFile', icon: '📋' },
       { id: 'installRules', i18nKey: 'cmd.installRules', icon: '📜' },
       { id: 'uninstall', i18nKey: 'cmd.uninstall', icon: '🗑️' },
