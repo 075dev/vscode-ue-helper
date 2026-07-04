@@ -139,7 +139,7 @@ describe('COMMAND_MAP', () => {
 
 describe('Config/Proxy field definitions', () => {
   it('CONFIG_FIELDS has expected fields', () => {
-    expect(CONFIG_FIELDS).toEqual(['configuration', 'target', 'platform', 'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace']);
+    expect(CONFIG_FIELDS).toEqual(['configuration', 'target', 'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace']);
   });
   it('PROXY_FIELDS has expected fields', () => {
     expect(PROXY_FIELDS).toEqual(['clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec', 'clangdProxyRealClangdPath', 'clangdProxyLogPath', 'localizationEnabled', 'localizationMode']);
@@ -171,10 +171,11 @@ describe('getControlPanelHtml', () => {
     const html = getControlPanelHtml('vscode-webview://test', '', '');
     expect(html).toContain('id="cfg-configuration"');
     expect(html).toContain('id="cfg-target"');
-    expect(html).toContain('id="cfg-platform"');
     expect(html).toContain('id="cfg-completionMode"');
     expect(html).toContain('id="cfg-autoBackupWorkspace"');
     expect(html).toContain('id="config-save-btn"');
+    // platform 切换选项已删除（只读 status 保留）
+    expect(html).not.toContain('id="cfg-platform"');
   });
   it('renders proxy form fields', () => {
     const html = getControlPanelHtml('vscode-webview://test', '', '');

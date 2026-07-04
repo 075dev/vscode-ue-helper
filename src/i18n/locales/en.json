@@ -140,7 +140,6 @@
 
   "panel.field.configuration": "Build Configuration",
   "panel.field.target": "Build Target",
-  "panel.field.platform": "Platform",
   "panel.field.completionMode": "Completion Mode",
   "panel.field.useMCP": "MCP Mode",
   "panel.field.lspLoggingLevel": "Logging Level",

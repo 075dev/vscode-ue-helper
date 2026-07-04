@@ -140,7 +140,6 @@
 
   "panel.field.configuration": "构建配置",
   "panel.field.target": "构建目标",
-  "panel.field.platform": "平台",
   "panel.field.completionMode": "补全模式",
   "panel.field.useMCP": "MCP 模式",
   "panel.field.lspLoggingLevel": "日志级别",

@@ -194,11 +194,6 @@ export const CONFIG_SELECTS: Record<string, SelectOption[]> = {
     { value: 'Server', label: 'Server' },
     { value: 'Client', label: 'Client' },
   ],
-  platform: [
-    { value: 'Win64', label: 'Win64' },
-    { value: 'Mac', label: 'Mac' },
-    { value: 'Linux', label: 'Linux' },
-  ],
   completionMode: [
     { value: 'fast', labelKey: 'config.completionMode.enum.fast' },
     { value: 'slow', labelKey: 'config.completionMode.enum.slow' },
@@ -227,7 +222,7 @@ export const CONFIG_BOOLEANS: string[] = ['autoBackupWorkspace'];
 export const PROXY_BOOLEANS: string[] = ['clangdProxyEnabled', 'localizationEnabled'];
 
 export const CONFIG_FIELDS: string[] = [
-  'configuration', 'target', 'platform',
+  'configuration', 'target',
   'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace',
 ];
 
@@ -251,7 +246,6 @@ export function getFieldType(field: string, isProxy: boolean): FieldType {
 export const CONFIG_KEY_MAP: Record<string, string> = {
   configuration: 'configuration',
   target: 'target',
-  platform: 'platform',
   completionMode: 'completionMode',
   useMCP: 'useMCP',
   autoBackupWorkspace: 'autoBackupWorkspace',

@@ -251,7 +251,7 @@ export function getControlPanelHtml(
   <div class="tab-content" id="content-config">
     <div class="form-section">
       <div class="section-title">${escapeHtml(t('panel.section.build'))}</div>
-      ${renderConfigFields(['configuration', 'target', 'platform'])}
+      ${renderConfigFields(['configuration', 'target'])}
     </div>
     <div class="form-section">
       <div class="section-title">${escapeHtml(t('panel.section.clangd'))}</div>
