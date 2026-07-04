@@ -198,5 +198,14 @@
   "panel.status.proxyBackupExists": "备份",
   "panel.status.localization": "汉化",
   "panel.status.refresh": "刷新",
-  "panel.status.refreshing": "正在刷新..."
+  "panel.status.refreshing": "正在刷新...",
+
+  "perf.clangdGen.tooltip": "compile_commands.json 生成耗时 {ms}ms / Generated in {ms}ms",
+  "perf.preparseCache.tooltip": "preparse-includes 缓存命中率 {pct}% / Hit rate: {pct}%",
+  "perf.incrementalScan.tooltip": "增量扫描延迟 {ms}ms (chokidar debounce) / Incremental scan: {ms}ms",
+  "perf.cacheHit": "缓存命中，跳过 UBT / Cache hit, skip UBT",
+  "perf.cacheMiss": "缓存未命中，运行 UBT / Cache miss, running UBT",
+  "perf.showInStatusBar": "在状态栏显示性能指标 / Show performance metrics in status bar",
+  "perf.showInStatusBar.desc": "在状态栏显示性能指标（compile_commands 生成耗时、preparse 缓存命中率、增量扫描延迟）。",
+  "config.showPerfInStatusBar.desc": "在状态栏显示性能指标。"
 }

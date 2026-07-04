@@ -198,5 +198,14 @@
   "panel.status.proxyBackupExists": "Backup",
   "panel.status.localization": "Localization",
   "panel.status.refresh": "Refresh",
-  "panel.status.refreshing": "Refreshing..."
+  "panel.status.refreshing": "Refreshing...",
+
+  "perf.clangdGen.tooltip": "compile_commands.json generation took {ms}ms",
+  "perf.preparseCache.tooltip": "preparse-includes cache hit rate {pct}%",
+  "perf.incrementalScan.tooltip": "Incremental scan latency {ms}ms (chokidar debounce)",
+  "perf.cacheHit": "Cache hit, skip UBT",
+  "perf.cacheMiss": "Cache miss, running UBT",
+  "perf.showInStatusBar": "Show performance metrics in status bar",
+  "perf.showInStatusBar.desc": "Show performance metrics (compile_commands gen time, preparse cache hit rate, incremental scan latency) in status bar.",
+  "config.showPerfInStatusBar.desc": "Show performance metrics in status bar."
 }

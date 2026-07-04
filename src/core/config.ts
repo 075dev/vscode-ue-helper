@@ -182,6 +182,17 @@ export class Config {
     return v && v.length > 0 ? v : undefined;
   }
 
+  // ===== Phase 7 性能面板配置 =====
+
+  /**
+   * 是否在状态栏显示 clangd 性能三段（生成耗时 / PI 命中率 / 增量延迟）。
+   *
+   * 默认 true：D-06 决策 — 让用户看到而非猜到性能基线。
+   * 用户可在设置中关闭，关闭后 PerfStatusBar 不创建（但 perfLog 仍记录）。
+   */
+  get showPerfInStatusBar(): boolean {
+    return this.root.get<boolean>("showPerfInStatusBar") ?? true;
+  }
 // ===== 写入 / 监听 =====
 
   /**

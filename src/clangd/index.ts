@@ -22,6 +22,8 @@ import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
 import { ClangdProxyManager } from './proxyManager';
 import { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
+import { perfLog } from './perfLog';
+import { PerfStatusBar } from '@ui/perfStatusBar';
 
 export {
   writeClangdConfig,
@@ -130,10 +132,31 @@ export function activateClangd(
   context.subscriptions.push({ dispose: () => completionMode.dispose() });
   context.subscriptions.push(ueMacroCompletionProvider);
 
+  // [Phase 7 PLAN A / per D-06] 性能状态栏（尊重 showPerfInStatusBar setting）
+  // - 设置为 false 时完全跳过创建（尊重用户选择）
+  // - perfLog 始终在内存中记录；状态栏关闭只关 UI 不关数据通路
+  if (config.showPerfInStatusBar) {
+    const perfBar = new PerfStatusBar();
+    context.subscriptions.push(perfBar);
+    perfBar.show();
+    context.subscriptions.push(
+      perfLog.onMetricUpdate((m) => {
+        perfBar.update({
+          ...(typeof m.genMs === 'number' ? { genMs: m.genMs } : {}),
+          ...(typeof m.hitRate === 'number' ? { hitRate: m.hitRate } : {}),
+          ...(typeof m.incrMs === 'number' ? { incrMs: m.incrMs } : {}),
+        });
+      }),
+    );
+    logger.info('[clangd] perfStatusBar enabled (per D-06)');
+  } else {
+    logger.info('[clangd] perfStatusBar disabled by setting (perfLog still records)');
+  }
+
   // TODO Phase 4: replace the WorkspaceBackup constructor argument with a real
   // projectPath sourced from the detection layer (after the user picks one).
   // For Phase 3 we just register the contract.
 
-  logger.info('[clangd] activated (status bar ready)');
+  logger.info('[clangd] activated (status bar + perf ready)');
   return { completionMode, backup, proxyManager };
 }
