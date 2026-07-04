@@ -1,8 +1,8 @@
 ---
 phase: 7
 slug: clangd-performance-optimization
-status: draft
-nyquist_compliant: false
+status: ready
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-04
 ---
