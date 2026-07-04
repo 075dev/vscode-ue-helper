@@ -1,26 +1,25 @@
 /**
  * statusBar —— 底部 Rider 风格工具栏(移植自 engine-link)
  *
- * 布局(从左到右,11 个按钮):
+ * 布局(从左到右,8 个按钮):
  *   [$(play) Build] [$(refresh) Rebuild] [$(trash) Clean]
- *   [$(gear) Config] [$(symbol-class) Target] [$(device-desktop) Platform]
- *   [$(library) MSVC/SDK]                                         ← 新增
- *   [$(file-code) Project] [$(package) Engine]
+ *   [$(gear) Config] [$(symbol-class) Target]
+ *   [$(file-code) 项目名|引擎版本|平台]                    ← 合并 project/engine/platform 三项
  *   [$(zap) Live Coding] [$(rocket) Launch]
  *
  * 主要按钮特性:
  *   - Build / Live Coding / Launch 用 prominent 背景(高亮)
  *   - Build 按钮在 build 中显示 spinner,完成后显示绿勾或红错
- *   - Project / Engine 缺失时用 warning 背景(红黄)
+ *   - 项目信息按钮缺失任一项时用 warning 背景(红黄)
  *   - 没有项目时,Build/Rebuild/Clean/LiveCoding/Launch 按钮隐藏
  *
  * 绑定的命令:
  *   vscodeUEHelper.build / rebuild / clean / launchEditor / liveCoding
  *   vscodeUEHelper.selectConfig / selectTarget
- *   vscodeUEHelper.setSystemIncludes / showProjectInfo
+ *   vscodeUEHelper.showProjectInfo
  *
  * 主要导出:
- *   - StatusBarManager: 类,管理 11 个 StatusBarItem
+ *   - StatusBarManager: 类,管理 8 个 StatusBarItem
  *   - settingsFromConfig: 从 Config 提取 StatusBarSettings
  *   - StatusBarContext / StatusBarSettings: 类型定义
  *
@@ -69,10 +68,7 @@ export class StatusBarManager {
   // --- Config / info items ---
   private configBtn: vscode.StatusBarItem;
   private targetBtn: vscode.StatusBarItem;
-  private platformBtn: vscode.StatusBarItem;
-  private sdkBtn: vscode.StatusBarItem;
-  private projectBtn: vscode.StatusBarItem;
-  private engineBtn: vscode.StatusBarItem;
+  private projectInfoBtn: vscode.StatusBarItem;
 
   private _isBuilding = false;
 
@@ -97,31 +93,21 @@ export class StatusBarManager {
     this.configBtn.command = 'vscodeUEHelper.selectConfig';
     this.configBtn.name = 'UE Helper: Configuration';
 
-    this.targetBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 297);
+    this.targetBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 296);
     this.targetBtn.command = 'vscodeUEHelper.selectTarget';
     this.targetBtn.name = 'UE Helper: Target';
 
-    this.platformBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 296);
-    this.platformBtn.name = 'UE Helper: Platform';
-
-    this.sdkBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 295);
-    this.sdkBtn.command = 'vscodeUEHelper.setSystemIncludes';
-    this.sdkBtn.name = 'UE Helper: Windows SDK / MSVC / C++ Standard';
-
-    this.projectBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 294);
-    this.projectBtn.command = 'vscodeUEHelper.showProjectInfo';
-    this.projectBtn.name = 'UE Helper: Project';
-
-    this.engineBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 293);
-    this.engineBtn.command = 'vscodeUEHelper.showProjectInfo';
-    this.engineBtn.name = 'UE Helper: Engine';
+    // 合并按钮：项目名|引擎版本|平台
+    this.projectInfoBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 295);
+    this.projectInfoBtn.command = 'vscodeUEHelper.showProjectInfo';
+    this.projectInfoBtn.name = 'UE Helper: Project Info';
 
     // Right group: Live Coding + Launch
-    this.liveCodingBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 292);
+    this.liveCodingBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 294);
     this.liveCodingBtn.command = 'vscodeUEHelper.liveCoding';
     this.liveCodingBtn.name = 'UE Helper: Live Coding';
 
-    this.launchBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 291);
+    this.launchBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 293);
     this.launchBtn.command = 'vscodeUEHelper.launchEditor';
     this.launchBtn.name = 'UE Helper: Launch';
   }
@@ -157,35 +143,30 @@ export class StatusBarManager {
     this.targetBtn.text = `$(symbol-class)  ${settings.buildTarget}`;
     this.targetBtn.tooltip = 'Build target — click for details';
 
-    // ── Platform ──
-    this.platformBtn.text = `$(device-desktop)  ${settings.platform}`;
-    this.platformBtn.tooltip = `Target platform: ${settings.platform}`;
-
-    // ── Windows SDK / MSVC / C++ standard (Windows-only quickPick) ──
-    this.sdkBtn.text = '$(library)  MSVC/SDK';
-    this.sdkBtn.tooltip =
-      'Pick Windows SDK + MSVC + C++ standard — writes /imsvc flags into .clangd';
-
-    // ── Project ──
+    // ── 项目名|引擎版本|平台（合并 3 个信息项）──
+    const projectName = ctx.project?.name ?? 'No Project';
+    const engineVersion = ctx.engine ? `UE ${ctx.engine.version}` : 'No Engine';
+    const platform = settings.platform;
+    this.projectInfoBtn.text = `$(file-code)  ${projectName}|${engineVersion}|${platform}`;
+    const tooltipLines: string[] = [];
     if (ctx.project) {
-      this.projectBtn.text = `$(file-code)  ${ctx.project.name}`;
-      this.projectBtn.tooltip = ctx.project.path;
-      this.projectBtn.backgroundColor = undefined;
+      tooltipLines.push(`项目: ${ctx.project.path}`);
     } else {
-      this.projectBtn.text = '$(warning)  No Project';
-      this.projectBtn.tooltip = 'No .uproject detected — click for details';
-      this.projectBtn.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      tooltipLines.push('未检测到 .uproject');
     }
-
-    // ── Engine ──
     if (ctx.engine) {
-      this.engineBtn.text = `$(package)  UE ${ctx.engine.version}`;
-      this.engineBtn.tooltip = ctx.engine.path;
-      this.engineBtn.backgroundColor = undefined;
+      tooltipLines.push(`引擎: ${ctx.engine.path}`);
     } else {
-      this.engineBtn.text = '$(warning)  No Engine';
-      this.engineBtn.tooltip = 'No engine detected — click for details';
-      this.engineBtn.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      tooltipLines.push('未检测到引擎');
+    }
+    tooltipLines.push(`平台: ${platform}`);
+    this.projectInfoBtn.tooltip = tooltipLines.join('\n');
+    if (!ctx.project || !ctx.engine) {
+      this.projectInfoBtn.backgroundColor = new vscode.ThemeColor(
+        'statusBarItem.warningBackground',
+      );
+    } else {
+      this.projectInfoBtn.backgroundColor = undefined;
     }
 
     // ── Live Coding (prominent) ──
@@ -205,10 +186,7 @@ export class StatusBarManager {
       this.cleanBtn.show();
       this.configBtn.show();
       this.targetBtn.show();
-      this.platformBtn.show();
-      this.sdkBtn.show();
-      this.projectBtn.show();
-      this.engineBtn.show();
+      this.projectInfoBtn.show();
       this.liveCodingBtn.show();
       this.launchBtn.show();
     } else {
@@ -217,10 +195,7 @@ export class StatusBarManager {
       this.cleanBtn.hide();
       this.configBtn.show();
       this.targetBtn.show();
-      this.platformBtn.show();
-      this.sdkBtn.show();
-      this.projectBtn.show();
-      this.engineBtn.hide();
+      this.projectInfoBtn.show();
       this.liveCodingBtn.hide();
       this.launchBtn.hide();
     }
@@ -268,10 +243,7 @@ export class StatusBarManager {
     this.cleanBtn.dispose();
     this.configBtn.dispose();
     this.targetBtn.dispose();
-    this.platformBtn.dispose();
-    this.sdkBtn.dispose();
-    this.projectBtn.dispose();
-    this.engineBtn.dispose();
+    this.projectInfoBtn.dispose();
     this.liveCodingBtn.dispose();
     this.launchBtn.dispose();
   }
