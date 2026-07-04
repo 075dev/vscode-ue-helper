@@ -1,10 +1,16 @@
 /**
  * VSCodeUEHelper —— 插件入口文件
+ *
+ * Phase 8 架构：单一真相源 WorkspaceState 在 detection.ready 后注入，
+ * 通过 ClangdOps 暴露给需要 .clangd 操作的模块（暂未集成到各模块激活流程，
+ * 保留旧 API 作为过渡，后续 PR 逐步迁移调用方）。
  */
 
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
+import { WorkspaceState } from '@core/workspace';
+import { ClangdOps } from '@clangd/clangdOps';
 import { activateDetection } from '@detection';
 import { activateBuild } from '@build';
 import { activateClangd } from '@clangd';
@@ -26,10 +32,27 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 
   try {
     const detection = activateDetection(context, config, logger);
+
+    // [Phase 8 架构] WorkspaceState 单一真相源
+    // 等待 detection.ready resolve 后注入数据。所有模块通过 workspace getter 访问
+    // 项目/引擎/路径信息，统一派生路径 get 函数 + 去重错误通知。
+    const workspace = new WorkspaceState({ detection, logger });
+    void detection.ready.then((result) => {
+      workspace.setResult(result);
+    });
+
+    // [Phase 8 架构] ClangdOps 统一 .clangd 操作 API（mutate / setAddFlag / replaceAddBlock）
+    const clangdOps = new ClangdOps({ workspace, logger });
+
+    // 旧模块激活流程（保持兼容，后续 PR 逐步迁移到接受 workspace 参数）
     const build = activateBuild(context, config, logger, detection);
     const clangd = activateClangd(context, config, logger, detection);
     const ui = activateUI(context, config, logger, detection);
     activateCommands(context, config, logger, detection, clangd);
+
+    // workspace + clangdOps 暂时挂在 disposables 防止被 GC，后续 PR 接入
+    disposables.push(workspace as unknown as vscode.Disposable);
+    disposables.push(clangdOps as unknown as vscode.Disposable);
 
     ControlPanelProvider.register({ context, config, logger, detection, clangd });
 
