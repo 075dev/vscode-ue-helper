@@ -309,17 +309,30 @@ async function findClangToolchain(): Promise<string | undefined> {
  * @returns 生成的 compile_commands.json 的绝对路径
  */
 export async function generateCompileCommands(opts: GenerateOptions): Promise<string> {
-  // 将 AbortSignal 暴露给 executeShellTask 内部闭包
-  optsSignal = opts.signal;
-
+  // [Phase 7 PLAN B / per D-03] 阶段 1：函数入口 — 记录整体起点 + entry 埋点
+  const entryStart = performance.now();
   const log = opts.logger ?? new Logger('compileCommands');
   const projectName = path.basename(opts.project, '.uproject');
   const engineUri = vscode.Uri.file(opts.engineRoot);
 
+  // 将 AbortSignal 暴露给 executeShellTask 内部闭包
+  optsSignal = opts.signal;
+
+  const isNativeAtEntry = opts.isNative === true;
+  try {
+    perfLog.record({
+      event: 'compileCommands.entry',
+      elapsedMs: 0,
+      meta: { project: opts.project, isNative: isNativeAtEntry },
+    });
+  } catch (err) {
+    log.warn(`[perf] instrumentation entry failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   // [LOG] 函数入口：明确打印输入参数，便于诊断 linkToWorkspaceRoot 后续找不到源文件
   log.info(
     `[generateCompileCommands] ENTRY project=${opts.project}, engineRoot=${opts.engineRoot}, ` +
-      `isNative=${opts.isNative === true}, platform=${opts.platform ?? '(auto)'}`
+      `isNative=${isNativeAtEntry}, platform=${opts.platform ?? '(auto)'}`
   );
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
@@ -347,6 +360,16 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
         log.info(
           `[perf] compileCommands cache HIT (fp ${fpMs.toFixed(1)}ms), skip UBT → ${cachedEntry.ccPath}`,
         );
+        // [Phase 7 PLAN B / per D-03] 阶段 5：fast-path 命中 — totalElapsed 收尾
+        try {
+          perfLog.record({
+            event: 'compileCommands.totalElapsed',
+            elapsedMs: performance.now() - entryStart,
+            meta: { hit: true, outcome: 'cacheFastPath' },
+          });
+        } catch (err) {
+          log.warn(`[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
         return cachedEntry.ccPath;
       }
     }
@@ -430,7 +453,27 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   log.info(`[compileCommands] LLVM_PATH: ${taskEnv?.LLVM_PATH ?? '(not set)'}`);
 
   // 5. 通过 Task API 执行
+  // [Phase 7 PLAN B / per D-03] 阶段 2：UBT 任务执行 — 包裹 timing 测量
+  const ubtStart = performance.now();
+  try {
+    perfLog.record({
+      event: 'compileCommands.ubtStart',
+      elapsedMs: 0,
+      meta: { isNative, target: args[0] ?? 'unknown' },
+    });
+  } catch (err) {
+    log.warn(`[perf] instrumentation ubtStart failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
   await executeShellTask(ubtRelPath, args, opts.engineRoot, log, taskEnv);
+  try {
+    perfLog.record({
+      event: 'ubt.taskCompleted',
+      elapsedMs: performance.now() - ubtStart,
+      meta: { isNative, exitCode: 0 },
+    });
+  } catch (err) {
+    log.warn(`[perf] instrumentation ubt.taskCompleted failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // 6. 定位输出文件
   //
@@ -454,6 +497,8 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   log.info(`[generateCompileCommands] searching compile_commands.json in candidates: ${JSON.stringify(candidates)}`);
 
   // 找到**第一个存在且非空**的文件
+  // [Phase 7 PLAN B / per D-03] 阶段 3：candidates 文件查找 — 循环前后 timing
+  const candStart = performance.now();
   for (const p of candidates) {
     try {
       const stat = await fs.stat(p);
@@ -483,6 +528,25 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
           }
         }
 
+        try {
+          perfLog.record({
+            event: 'compileCommands.candidatesScanned',
+            elapsedMs: performance.now() - candStart,
+            meta: { candidateCount: candidates.length, hit: true, ccPath: p },
+          });
+        } catch (err) {
+          log.warn(`[perf] instrumentation candidatesScanned failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        // [Phase 7 PLAN B / per D-03] 阶段 5：generateCompileCommands 总耗时 — return 前
+        try {
+          perfLog.record({
+            event: 'compileCommands.totalElapsed',
+            elapsedMs: performance.now() - entryStart,
+            meta: { hit: true, outcome: 'found', ccPath: p },
+          });
+        } catch (err) {
+          log.warn(`[perf] instrumentation totalElapsed (return) failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
         return p;
       } else {
         log.warn(`[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`);
@@ -492,6 +556,27 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     }
   }
 
+  // candidates 全部未命中 — 记录扫描耗时（per D-03）
+  try {
+    perfLog.record({
+      event: 'compileCommands.candidatesScanned',
+      elapsedMs: performance.now() - candStart,
+      meta: { candidateCount: candidates.length, hit: false },
+    });
+  } catch (err) {
+    log.warn(`[perf] instrumentation candidatesScanned (miss) failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // [Phase 7 PLAN B / per D-03] 阶段 5：generateCompileCommands 总耗时 — throw 前
+  try {
+    perfLog.record({
+      event: 'compileCommands.totalElapsed',
+      elapsedMs: performance.now() - entryStart,
+      meta: { hit: false, outcome: 'notFound' },
+    });
+  } catch (err) {
+    log.warn(`[perf] instrumentation totalElapsed failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
   throw new Error(
     `UBT task completed but compile_commands.json not found or empty.\n` +
     `Checked:\n` +
@@ -519,6 +604,9 @@ export async function linkToWorkspaceRoot(
   projectPath: string,
   logger?: Logger,
 ): Promise<string> {
+  // [Phase 7 PLAN B / per D-03] 阶段 4：linkToWorkspaceRoot — 入口 timing 测量
+  const lwsStart = performance.now();
+  let lwsSucceeded = false;
   const projectDir = path.dirname(projectPath);
   const ccDir = path.join(projectDir, '.vscode', 'vscodeuehelper');
   const target = path.join(ccDir, FILE_NAME_COMPILE_COMMANDS);
@@ -530,6 +618,16 @@ export async function linkToWorkspaceRoot(
   // 如果生成的已经在目标位置，无需操作
   if (path.resolve(jsonPath) === path.resolve(target)) {
     logger?.info(`[linkToWorkspaceRoot] already at target, skip`);
+    lwsSucceeded = true;
+    try {
+      perfLog.record({
+        event: 'compileCommands.linkToWorkspaceRoot',
+        elapsedMs: performance.now() - lwsStart,
+        meta: { skipped: true, target },
+      });
+    } catch (err) {
+      logger?.warn(`[perf] instrumentation linkToWorkspaceRoot skipped failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return target;
   }
 
@@ -566,6 +664,7 @@ export async function linkToWorkspaceRoot(
     logger?.info(`[linkToWorkspaceRoot] trying fs.symlink(${jsonPath}, ${target}, 'file')`);
     await fs.symlink(jsonPath, target, 'file');
     logger?.info(`[linkToWorkspaceRoot] fs.symlink SUCCEEDED → ${target}`);
+    lwsSucceeded = true;
   } catch (symlinkErr) {
     const symlinkMsg = symlinkErr instanceof Error ? symlinkErr.message : String(symlinkErr);
     const errno =
@@ -585,6 +684,7 @@ export async function linkToWorkspaceRoot(
       logger?.info(`[linkToWorkspaceRoot] trying fs.copyFile(${jsonPath}, ${target})`);
       await fs.copyFile(jsonPath, target);
       logger?.info(`[linkToWorkspaceRoot] fs.copyFile SUCCEEDED → ${target}`);
+      lwsSucceeded = true;
     } catch (copyErr) {
       const copyMsg = copyErr instanceof Error ? copyErr.message : String(copyErr);
       const copyErrno =
@@ -606,6 +706,16 @@ export async function linkToWorkspaceRoot(
     }
   }
   logger?.info(`[linkToWorkspaceRoot] done: ${target}`);
+  // [Phase 7 PLAN B / per D-03] 阶段 4 收尾：linkToWorkspaceRoot — 末尾 timing 测量
+  try {
+    perfLog.record({
+      event: 'compileCommands.linkToWorkspaceRoot',
+      elapsedMs: performance.now() - lwsStart,
+      meta: { succeeded: lwsSucceeded, target },
+    });
+  } catch (err) {
+    logger?.warn(`[perf] instrumentation linkToWorkspaceRoot done failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return target;
 }
 
