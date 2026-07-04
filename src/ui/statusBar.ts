@@ -2,9 +2,9 @@
  * statusBar —— 底部 Rider 风格工具栏(移植自 engine-link)
  *
  * 布局(从左到右,8 个按钮):
- *   [$(play) Build] [$(refresh) Rebuild] [$(trash) Clean]
+ *   [$(file-code) 项目名 | $(package) 引擎版本 | $(device-desktop) 平台]   ← 合并 3 项
  *   [$(gear) Config] [$(symbol-class) Target]
- *   [$(file-code) 项目名|引擎版本|平台]                    ← 合并 project/engine/platform 三项
+ *   [$(play) Build] [$(refresh) Rebuild] [$(trash) Clean]
  *   [$(zap) Live Coding] [$(rocket) Launch]
  *
  * 主要按钮特性:
@@ -74,33 +74,32 @@ export class StatusBarManager {
 
   constructor() {
     // Higher priority = further left. Actions on left, info on right.
-
-    // Left group: build actions
-    this.buildBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 300);
-    this.buildBtn.command = 'vscodeUEHelper.build';
-    this.buildBtn.name = 'UE Helper: Build';
-
-    this.rebuildBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 299);
-    this.rebuildBtn.command = 'vscodeUEHelper.rebuild';
-    this.rebuildBtn.name = 'UE Helper: Rebuild';
-
-    this.cleanBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 298);
-    this.cleanBtn.command = 'vscodeUEHelper.clean';
-    this.cleanBtn.name = 'UE Helper: Clean';
+    // 合并按钮：项目名|引擎版本|平台
+    this.projectInfoBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 300);
+    this.projectInfoBtn.command = 'vscodeUEHelper.showProjectInfo';
+    this.projectInfoBtn.name = 'UE Helper: Project Info';
 
     // Middle group: config selectors
-    this.configBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 297);
+    this.configBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 299);
     this.configBtn.command = 'vscodeUEHelper.selectConfig';
     this.configBtn.name = 'UE Helper: Configuration';
 
-    this.targetBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 296);
+    this.targetBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 298);
     this.targetBtn.command = 'vscodeUEHelper.selectTarget';
     this.targetBtn.name = 'UE Helper: Target';
 
-    // 合并按钮：项目名|引擎版本|平台
-    this.projectInfoBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 295);
-    this.projectInfoBtn.command = 'vscodeUEHelper.showProjectInfo';
-    this.projectInfoBtn.name = 'UE Helper: Project Info';
+    // Left group: build actions
+    this.buildBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 297);
+    this.buildBtn.command = 'vscodeUEHelper.build';
+    this.buildBtn.name = 'UE Helper: Build';
+
+    this.rebuildBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 296);
+    this.rebuildBtn.command = 'vscodeUEHelper.rebuild';
+    this.rebuildBtn.name = 'UE Helper: Rebuild';
+
+    this.cleanBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 295);
+    this.cleanBtn.command = 'vscodeUEHelper.clean';
+    this.cleanBtn.name = 'UE Helper: Clean';
 
     // Right group: Live Coding + Launch
     this.liveCodingBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 294);
@@ -118,7 +117,9 @@ export class StatusBarManager {
 
   /** Update all status bar items based on current context and settings. */
   update(ctx: StatusBarContext, settings: StatusBarSettings): void {
-    if (this._isBuilding) {return;}
+    if (this._isBuilding) {
+      return;
+    }
 
     // ── Build (prominent) ──
     this.buildBtn.text = '$(play)  Build';
@@ -147,7 +148,7 @@ export class StatusBarManager {
     const projectName = ctx.project?.name ?? 'No Project';
     const engineVersion = ctx.engine ? `UE ${ctx.engine.version}` : 'No Engine';
     const platform = settings.platform;
-    this.projectInfoBtn.text = `$(file-code)  ${projectName}|${engineVersion}|${platform}`;
+    this.projectInfoBtn.text = `$(file-code)  ${projectName} | $(package)  ${engineVersion} | $(device-desktop)  ${platform}`;
     const tooltipLines: string[] = [];
     if (ctx.project) {
       tooltipLines.push(`项目: ${ctx.project.path}`);
