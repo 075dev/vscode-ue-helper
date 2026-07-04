@@ -435,7 +435,10 @@
     "test:integration": "node test/integration/runTests.js",
     "test": "npm run test:unit && npm run test:integration",
     "package": "vsce package",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "perf:baseline": "node scripts/measure-proxy-overhead.mjs --baseline",
+    "perf:after": "node scripts/measure-proxy-overhead.mjs --after",
+    "perf:diff": "node scripts/measure-proxy-overhead.mjs --diff"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
