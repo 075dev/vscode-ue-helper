@@ -15,6 +15,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { WorkspaceState } from '@core/workspace';
 import type { PerfSession } from './perfLog';
 import { perfLog } from './perfLog';
 import { CompletionMode, PrepareIncludesList } from './types';
@@ -57,13 +58,17 @@ export async function loadBundledList(mode: CompletionMode): Promise<string[]> {
  * `UE_DEFINE_GAMEPLAY_TAG` 宏在被强制包含的 .h 中展开时 `__FILE__` 指向
  * `addCompletions.h`，触发 `static_assert(HasFileExtension(__FILE__), "must be .cpp")`。
  *
+ * Phase 8：[可选] 接受 workspace 注入以使用 workspace.clangdHelperDir 派生路径。
+ *           不传时降级到 projectPath + path.dirname（向后兼容）。
+ *
  * @see FILENAME_ADD_MACRO_COMPLETIONS in completionFiles.ts
  */
 export async function mergeUserCustomizations(
   projectPath: string,
   baseList: string[],
+  workspace?: WorkspaceState,
 ): Promise<string[]> {
-  const dir = path.join(path.dirname(projectPath), '.vscode', 'vscodeuehelper');
+  const dir = workspace?.clangdHelperDir ?? path.join(path.dirname(projectPath), '.vscode', 'vscodeuehelper');
   const macroFile = path.join(dir, 'addMacroCompletions.h');
   try {
     await fs.access(macroFile);
