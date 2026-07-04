@@ -52,10 +52,12 @@ describe('defaultClangdConfig (模板风格)', () => {
     }
   });
 
-  it('includes MSVC compatibility flags', () => {
+  it('includes MSVC compatibility flags (excluding /TP)', () => {
     const cfg = defaultClangdConfig();
     const add = cfg.CompileFlags?.Add ?? [];
-    expect(add).toContain('/TP');
+    // 移除 /TP：clang-cl 默认按扩展名区分 C/C++，/TP 与 compile_commands.json 条目中的
+    // 重复 /TP 触发 MSVC D4002 警告「最后一个 /TC 或 /TP 选项优先于之前的实例」。
+    expect(add).not.toContain('/TP');
     expect(add).toContain('-mwaitpkg');
     expect(add).toContain('-Werror');
     expect(add).toContain('-Wshadow');
@@ -261,7 +263,8 @@ describe('defaultClangdConfig (preparseHeaders with EngineRoot resolution)', () 
     const stdIdx = add.findIndex((f) => f.includes('std:c++20'));
     const macroIdx = add.findIndex((f) => f === '/FI/path/to/macroCompletionHelper.h');
     const preparseIdx = add.findIndex((f) => f === '-include');
-    const msvcIdx = add.findIndex((f) => f === '/TP');
+    // 用 -mwaitpkg 作为 MSVC 兼容性 flag 段的起始 marker（/TP 已移除）
+    const msvcIdx = add.findIndex((f) => f === '-mwaitpkg');
 
     expect(compatIdx).toBeGreaterThanOrEqual(0);
     expect(sysIdx).toBeGreaterThan(compatIdx);

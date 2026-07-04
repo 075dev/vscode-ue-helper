@@ -17,7 +17,6 @@
  *     - /imsvc"..."
  *     - /std:c++20
  *     - /FI.../macroCompletionHelper.h
- *     - /TP
  *     - -mwaitpkg
  *     - ...
  * Diagnostics:
@@ -94,8 +93,10 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
   }
 
   // 4. MSVC 兼容性 flag（对齐模板的 WIN_COMPILER_FLAGS_TO_ADD）
+  //    注意：移除 /TP。/TP 强制将所有文件视为 C++，但当 compile_commands.json 中某些条目已带 /TP（UBT 对 .cpp 文件），
+  //    重复 /TP 会触发 MSVC D4002 警告「最后一个 /TC 或 /TP 选项优先于之前的实例」。
+  //    clang-cl 默认按文件扩展名区分 C/C++，无需显式 /TP。
   addFlags.push(
-    '/TP',
     '-mwaitpkg',
     '/we4668',
     '/wd4244',
