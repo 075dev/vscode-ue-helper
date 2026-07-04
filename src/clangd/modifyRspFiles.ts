@@ -17,6 +17,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { EOL } from 'node:os';
+import type { WorkspaceState } from '@core/workspace';
 
 /**
  * 扫描 .vscode/<项目名>/*.rsp 文件，移除每行中包含 "PCH" 的
@@ -32,8 +33,9 @@ import { EOL } from 'node:os';
 export async function startModifyResponseFiles(
   projectPath: string,
   logger?: { info: (msg: string) => void; warn: (msg: string) => void },
+  workspace?: WorkspaceState,
 ): Promise<{ replaced: number; unchanged: number }> {
-  const projectDir = path.dirname(projectPath);
+  const projectDir = workspace?.projectDir ?? path.dirname(projectPath);
 
   // 步骤 1：找到 rsp 文件目录。
   // UBT 把 rsp 放在 .vscode/<项目名>/ 下。

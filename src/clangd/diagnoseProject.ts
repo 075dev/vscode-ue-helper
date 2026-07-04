@@ -7,6 +7,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { WorkspaceState } from '@core/workspace';
 import {
   type DiagnosticCheck,
   type ParsedClangd,
@@ -21,9 +22,12 @@ export { formatDiagnosticReport } from './diagnostics/format';
 
 // ---- 主诊断函数 ----
 
-export async function diagnoseProject(projectPath: string): Promise<import('./diagnostics/types').DiagnosticReport> {
+export async function diagnoseProject(
+  projectPath: string,
+  workspace?: WorkspaceState,
+): Promise<import('./diagnostics/types').DiagnosticReport> {
   const projectDir = path.dirname(projectPath);
-  const clangdFile = path.join(projectDir, '.clangd');
+  const clangdFile = workspace?.clangdConfigPath ?? path.join(projectDir, '.clangd');
   const checks: DiagnosticCheck[] = [];
 
   const clangdContent = await fs.readFile(clangdFile, 'utf-8').catch(() => undefined);

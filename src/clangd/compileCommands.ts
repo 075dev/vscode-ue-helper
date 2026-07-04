@@ -26,6 +26,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
+import type { WorkspaceState } from '@core/workspace';
 import { getUbtPath, getUnrealPlatform, getBuildTargetNames } from './ueHelpers';
 import { computeFingerprint } from './fingerprint';
 import { CompileCommandsCache } from './compileCommandsCache';
@@ -81,6 +82,8 @@ export interface GenerateOptions {
   platform?: string;
   /** 目标架构（如 x64 / arm64），可选。 */
   architecture?: string;
+  /** [Phase 8] 可选 WorkspaceState 注入。提供时优先用 workspace 派生路径。 */
+  workspace?: WorkspaceState;
 }
 
 /* ------------------------------------------------------------------ */
@@ -218,7 +221,7 @@ let optsSignal: AbortSignal | undefined;
  *   -Compiler=Clang -mode=GenerateClangDataBase [-architecture=<arch>]
  */
 async function buildNonNativeArgs(opts: GenerateOptions): Promise<string[]> {
-  const projectDir = path.dirname(opts.project);
+  const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
 
   // 1. 查找 build target names
   const targetNames = await getBuildTargetNames(projectDir);
@@ -336,7 +339,7 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   );
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
-  const projectDir = path.dirname(opts.project);
+  const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
   const cache = new CompileCommandsCache({ logger: log });
   let cachedEntry: CachedCompileCommands | undefined;
   try {
@@ -603,12 +606,13 @@ export async function linkToWorkspaceRoot(
   jsonPath: string,
   projectPath: string,
   logger?: Logger,
+  workspace?: WorkspaceState,
 ): Promise<string> {
   // [Phase 7 PLAN B / per D-03] 阶段 4：linkToWorkspaceRoot — 入口 timing 测量
   const lwsStart = performance.now();
   let lwsSucceeded = false;
-  const projectDir = path.dirname(projectPath);
-  const ccDir = path.join(projectDir, '.vscode', 'vscodeuehelper');
+  const projectDir = workspace?.projectDir ?? path.dirname(projectPath);
+  const ccDir = workspace?.clangdHelperDir ?? path.join(projectDir, '.vscode', 'vscodeuehelper');
   const target = path.join(ccDir, FILE_NAME_COMPILE_COMMANDS);
   logger?.info(
     `[linkToWorkspaceRoot] ENTRY jsonPath=${jsonPath}, projectPath=${projectPath}, ` +
@@ -897,8 +901,9 @@ export async function fillMissingCompileCommands(
   jsonPath: string,
   projectPath: string,
   logger?: Logger,
+  workspace?: WorkspaceState,
 ): Promise<FillResult | undefined> {
-  const projectDir = path.dirname(projectPath);
+  const projectDir = workspace?.projectDir ?? path.dirname(projectPath);
 
   logger?.info(`[fillMissingCompileCommands] ENTRY jsonPath=${jsonPath}, projectDir=${projectDir}`);
 

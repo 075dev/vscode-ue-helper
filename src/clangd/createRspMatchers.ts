@@ -17,6 +17,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { WorkspaceState } from '@core/workspace';
 
 /**
  * rsp 匹配器条目。
@@ -49,8 +50,9 @@ export async function startCreateRspMatchers(
   projectPath: string,
   enginePath: string,
   logger?: { info: (msg: string) => void; warn: (msg: string) => void },
+  workspace?: WorkspaceState,
 ): Promise<RspMatcher[]> {
-  const projectDir = path.dirname(projectPath);
+  const projectDir = workspace?.projectDir ?? path.dirname(projectPath);
 
   // 步骤 1：找到 rsp 目录
   const rspDir = await findRspDirForMatchers(projectDir);
