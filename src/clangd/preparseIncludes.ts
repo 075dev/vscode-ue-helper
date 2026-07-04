@@ -15,6 +15,8 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { PerfSession } from './perfLog';
+import { perfLog } from './perfLog';
 import { CompletionMode, PrepareIncludesList } from './types';
 
 /**
@@ -66,13 +68,40 @@ export async function mergeUserCustomizations(
 /**
  * Build the final preparse list for the given mode and project.
  * User customizations are appended at the end so they take precedence.
+ *
+ * 第三个可选参数 options 用于 Phase 7 性能埋点（D-03 / D-13）：
+ *   - perfSession: 注入 perfLog，触发 preparse.listBuilt 事件 + hit/miss 计数
+ *
+ * 默认 undefined → 不做埋点，向后兼容现有调用点。
  */
 export async function getPrepareIncludesList(
   mode: CompletionMode,
   projectPath: string,
+  options?: { perfSession?: PerfSession },
 ): Promise<string[]> {
   const base = await loadBundledList(mode);
-  return mergeUserCustomizations(projectPath, base);
+  const merged = await mergeUserCustomizations(projectPath, base);
+  const userCount = merged.length - base.length;
+
+  // Phase 7 性能埋点：仅在显式注入 perfSession 时触发
+  // 未注入时回落到 perfLog 单例，保证 hit/miss 统计不断
+  const session = options?.perfSession ?? perfLog;
+  session.recordPreparseResult(mode, base.length, userCount);
+
+  return merged;
+}
+
+/**
+ * Phase 7 全局 preparse 统计（per D-13 数据通路）
+ *
+ * 返回 perfLog 单例的 hit/miss 累加值：
+ *   - hit: 至少命中基础列表的次数（baseCount > 0）
+ *   - miss: 基础列表为空的次数（一般代表打包 JSON 缺失）
+ *   - hitRate: hit / total（无事件时为 0）
+ */
+export function getPreparseStats(): { hit: number; miss: number; hitRate: number } {
+  const r = perfLog.getPreparseHitRate();
+  return { hit: r.hits, miss: r.misses, hitRate: r.rate };
 }
 
 /**

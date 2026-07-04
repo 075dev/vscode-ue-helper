@@ -27,6 +27,10 @@ import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { getUbtPath, getUnrealPlatform, getBuildTargetNames } from './ueHelpers';
+import { computeFingerprint } from './fingerprint';
+import { CompileCommandsCache } from './compileCommandsCache';
+import { perfLog } from './perfLog';
+import type { CachedCompileCommands } from './types';
 
 const execFileAsync = promisify(execFile);
 
@@ -318,6 +322,51 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       `isNative=${opts.isNative === true}, platform=${opts.platform ?? '(auto)'}`
   );
 
+  // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
+  const projectDir = path.dirname(opts.project);
+  const cache = new CompileCommandsCache({ logger: log });
+  let cachedEntry: CachedCompileCommands | undefined;
+  try {
+    const fpStart = performance.now();
+    const fp = await computeFingerprint(projectDir);
+    cachedEntry = await cache.tryRead(projectDir);
+    const fpMs = performance.now() - fpStart;
+
+    // 命中条件：cache 存在 + fingerprint 完全一致 + ccPath 仍存在
+    if (cachedEntry && cachedEntry.fingerprint === fp.fingerprint) {
+      const ccExists = await fs
+        .access(cachedEntry.ccPath)
+        .then(() => true)
+        .catch(() => false);
+      if (ccExists) {
+        perfLog.record({
+          event: 'compileCommands.cacheHit',
+          elapsedMs: fpMs,
+          meta: { fingerprint: fp.fingerprint, ccPath: cachedEntry.ccPath },
+        });
+        log.info(
+          `[perf] compileCommands cache HIT (fp ${fpMs.toFixed(1)}ms), skip UBT → ${cachedEntry.ccPath}`,
+        );
+        return cachedEntry.ccPath;
+      }
+    }
+    perfLog.record({
+      event: 'compileCommands.cacheMiss',
+      elapsedMs: fpMs,
+      meta: { fingerprint: fp.fingerprint, hadCache: !!cachedEntry },
+    });
+    log.info(`[perf] compileCommands cache MISS (fp ${fpMs.toFixed(1)}ms), running UBT`);
+  } catch (err) {
+    // 指纹或缓存 IO 异常：降级到原有 UBT 路径（per T-7-04 防御原则）
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn(`[perf] fingerprint/cache fast-path failed, fallback to UBT: ${msg}`);
+    perfLog.record({
+      event: 'compileCommands.fastPathError',
+      elapsedMs: 0,
+      meta: { error: msg },
+    });
+  }
+
   // 1. 查找 UBT 路径（RunUBT.bat/sh 优先）
   const ubtAbsPath = await getUbtPath(engineUri);
   if (!ubtAbsPath) {
@@ -389,7 +438,6 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   //   <EngineRoot>/compile_commands.json
   // Native (-projectfiles): 只生成 .vcxproj，**不**生成 compile_commands.json
   //
-  const projectDir = path.dirname(opts.project);
   const candidates = [
     // 优先：UE 5.x GenerateClangDatabase 默认输出到引擎根目录
     path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS),
@@ -412,6 +460,29 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       if (stat.size > 2) {
         // > 2 字节：避免空数组 []
         log.info(`[generateCompileCommands] found compile_commands.json at: ${p} (${stat.size} bytes)`);
+
+        // [Phase 7 D-08] 写入缓存，供下次快速命中
+        if (cachedEntry?.ccPath !== p) {
+          try {
+            // 重新计算一次以获取稳定 fingerprint（含 computedMs 用于诊断）
+            const fp = await computeFingerprint(path.dirname(opts.project));
+            await cache.write(path.dirname(opts.project), {
+              fingerprint: fp.fingerprint,
+              ccPath: p,
+              linkTarget: p,
+              savedAt: new Date().toISOString(),
+              fileCount: 0,
+            });
+            log.info(
+              `[perf] compileCommands cache WRITTEN (fingerprint=${fp.fingerprint.slice(0, 12)}...)`,
+            );
+          } catch (cacheErr) {
+            // 写缓存失败：不阻塞主流程（per T-7-04 防御原则）
+            const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
+            log.warn(`[perf] failed to write compileCommands cache: ${msg}`);
+          }
+        }
+
         return p;
       } else {
         log.warn(`[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`);

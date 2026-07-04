@@ -188,6 +188,12 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
       UnusedIncludes: 'None',
       MissingIncludes: 'None',
     },
+    // [Phase 7 D-12] 与 vscodeUEHelper perf-cache 共享 .cache/clangd/ 目录
+    // 启用 Background Build 模式：clangd 在空闲时后台构建索引，不阻塞编辑
+    // ⚠️ 22.x 不支持 Index 在 If 块中（types.ts 第 33 行），所以放在根级别
+    Index: {
+      Background: 'Build',
+    },
   };
 
   return result;

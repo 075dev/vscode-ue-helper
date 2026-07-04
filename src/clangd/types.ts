@@ -96,3 +96,72 @@ export interface ClangdConfig {
   };
 
 }
+
+/**
+ * Phase 7 性能埋点事件
+ *
+ * 各模块通过 perfLog.record(...) 推送：
+ * - event: 事件名（如 'compileCommands.cacheHit'、'preparse.listBuilt'）
+ * - elapsedMs: 阶段耗时
+ * - timestamp: ISO 时间戳
+ * - meta: 附带元数据（hit/miss 标志、文件数等）
+ */
+export interface PerfEvent {
+  event: string;
+  elapsedMs: number;
+  timestamp: string;
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * 持久化缓存条目：compile_commands.json 生成结果。
+ *
+ * 写入到 .vscode/clangd-perf-cache/compile-commands-cache.json。
+ * 二次激活时若 fingerprint 命中且 ccPath 存在 → 跳过 UBT 子进程调用。
+ */
+export interface CachedCompileCommands {
+  fingerprint: string;
+  ccPath: string;
+  linkTarget: string;
+  savedAt: string;
+  fileCount: number;
+}
+
+/**
+ * 指纹计算结果
+ *
+ * fingerprint: SHA256 拼接的 64 字符 hex 串
+ * files: 参与哈希的文件列表（含元数据，便于诊断）
+ * computedMs: 指纹计算耗时（毫秒）
+ */
+export interface FingerprintResult {
+  fingerprint: string;
+  files: { path: string; size: number; mtimeMs: number }[];
+  computedMs: number;
+}
+
+/**
+ * 头文件 SHA256 + mtime 缓存条目
+ *
+ * 仅当 compile_commands 缓存命中（fingerprint 一致）时此缓存生效，
+ * 避免 fingerprint 错误时给出过期数据。
+ */
+export interface HeaderCacheEntry {
+  headerPath: string;
+  sha256: string;
+  mtimeMs: number;
+  sizeBytes: number;
+  recordedAt: string;
+}
+
+/**
+ * 性能指标快照（推送给状态栏使用）
+ *
+ * 任意字段缺失时不更新对应段。
+ */
+export interface PerfMetricSnapshot {
+  genMs?: number;
+  hitRate?: number;
+  incrMs?: number;
+  ts: string;
+}

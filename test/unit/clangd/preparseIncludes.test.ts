@@ -5,7 +5,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolvePreparseHeaders, toIncludeFlags } from '@clangd/preparseIncludes';
+import * as path from 'node:path';
+import * as fs from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import {
+  resolvePreparseHeaders,
+  toIncludeFlags,
+  getPrepareIncludesList,
+  getPreparseStats,
+} from '@clangd/preparseIncludes';
+import type { PerfSession } from '@clangd/perfLog';
 
 describe('resolvePreparseHeaders', () => {
   it('将 $(EngineRoot) 占位符替换为实际 engineRoot 路径', () => {
@@ -136,5 +145,63 @@ describe('resolvePreparseHeaders (adversarial)', () => {
     const result = resolvePreparseHeaders(headers, 'E:\\UE_5.8\\Engine');
 
     expect(result[0]).toBe('E:/UE_5.8/Engine/Source/a.h');
+  });
+});
+
+// ===== Phase 7: 性能埋点（D-13） =====
+
+describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
+  it('不传 perfSession 仍可正常工作（向后兼容）', async () => {
+    // 不传第三个参数 → 不抛错，返回数组
+    const result = await getPrepareIncludesList('fast', '/nonexistent/path');
+    // 加载 bundled 列表（即使 projectPath 无效，base 列表仍存在）
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('注入 mock perfSession 时 recordPreparseResult 被调用', async () => {
+    let recorded: { mode: string; baseCount: number; userCount: number } | null = null;
+
+    const mockSession: PerfSession = {
+      record: () => {},
+      recordPreparseResult: (mode, baseCount, userCount) => {
+        recorded = { mode, baseCount, userCount };
+      },
+      recordIncrementalScan: () => {},
+      getCompileCommandsLastMs: () => 0,
+      getPreparseHitRate: () => ({ hits: 0, misses: 0, rate: 0 }),
+      getLastIncrementalScanMs: () => 0,
+      onMetricUpdate: () => ({ dispose: () => {} }),
+      flushToDisk: async () => {},
+    };
+
+    await getPrepareIncludesList('fast', '/nonexistent/path', {
+      perfSession: mockSession,
+    });
+
+    expect(recorded).not.toBeNull();
+    // 非空断言：上面 expect.toBeNull 失败会终止测试，到这里 recorded 必非 null
+    expect(recorded?.mode).toBe('fast');
+    expect(recorded?.baseCount).toBeGreaterThan(0);
+  });
+
+  it('getPreparseStats 返回 perfLog 单例的命中率', () => {
+    const stats = getPreparseStats();
+    expect(stats).toHaveProperty('hit');
+    expect(stats).toHaveProperty('miss');
+    expect(stats).toHaveProperty('hitRate');
+    expect(stats.hitRate).toBeGreaterThanOrEqual(0);
+    expect(stats.hitRate).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('getPrepareIncludesList 集成 (tmpdir)', () => {
+  it('空 projectPath 返回 bundled 列表', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(tmpdir(), 'preparse-test-'));
+    try {
+      const result = await getPrepareIncludesList('fast', tmpDir);
+      expect(result.length).toBeGreaterThan(0);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   });
 });

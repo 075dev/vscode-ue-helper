@@ -148,6 +148,15 @@ vi.mock('vscode', () => ({
   ProgressLocation: { Notification: 10, Window: 15 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   ExtensionMode: { Production: 1, Development: 2, Test: 3 },
+  Disposable: class {
+    private readonly callOnce: () => void;
+    constructor(callOnDispose: () => void) {
+      this.callOnce = callOnDispose;
+    }
+    dispose(): void {
+      this.callOnce();
+    }
+  },
   ViewColumn: { One: 1, Two: 2, Three: 3, Four: 4, Five: 5, Six: 6, Seven: 7, Eight: 8, Nine: 9 },
   extensions: { getExtension: vi.fn() },
   env: {
@@ -156,4 +165,27 @@ vi.mock('vscode', () => ({
     isLinux: process.platform === 'linux',
   },
   version: '1.85.0',
+}));
+
+/**
+ * Phase 7 PLAN B 前置依赖：mock chokidar 用于 fileWatcher.test.ts 单元测试
+ *
+ * 防御研究 §Pitfall 6 — 直接 import chokidar 在测试环境下会触发真实 fs watcher，
+ * 阻塞测试进程。提供最小可用 mock：watch() 返回 chainable watcher。
+ */
+vi.mock('chokidar', () => ({
+  default: {
+    watch: vi.fn(() => ({
+      on: vi.fn().mockReturnThis(),
+      close: vi.fn(),
+      add: vi.fn(),
+      unwatch: vi.fn(),
+    })),
+  },
+  watch: vi.fn(() => ({
+    on: vi.fn().mockReturnThis(),
+    close: vi.fn(),
+    add: vi.fn(),
+    unwatch: vi.fn(),
+  })),
 }));

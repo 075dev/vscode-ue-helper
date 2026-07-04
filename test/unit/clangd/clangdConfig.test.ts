@@ -119,6 +119,23 @@ describe('defaultClangdConfig (模板风格)', () => {
     expect(cfg.Hover).toBeUndefined();
     expect(cfg.Completion).toBeUndefined();
   });
+
+  // [Phase 7 D-12] 与 vscodeUEHelper perf-cache 共享 .cache/clangd/ 目录
+  it('[Phase 7 D-12] defaultClangdConfig 输出含 Index.Background = Build', () => {
+    const cfg = defaultClangdConfig();
+    expect(cfg.Index).toBeDefined();
+    expect(cfg.Index?.Background).toBe('Build');
+  });
+
+  it('[Phase 7] Index 字段必须放在根级别，不在 If 块内（per types.ts 第 33 行注释）', () => {
+    const cfg = defaultClangdConfig({
+      projectPath: '/path/to/MyProject.uproject',
+    });
+    // 验证 Index 在根级别
+    expect(cfg.Index?.Background).toBe('Build');
+    // 验证 If 块不包含 Index（不在 If 嵌套）
+    expect((cfg.If as Record<string, unknown> | undefined)?.Index).toBeUndefined();
+  });
 });
 
 describe('defaultClangdConfig (compatHeaderPath)', () => {
