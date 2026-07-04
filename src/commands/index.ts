@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import { registerCommand } from '@core/command-registry';
+import type { WorkspaceState } from '@core/workspace';
 import type { DetectionHandles } from '@detection';
 import type { ClangdHandles } from '@clangd';
 import { showProjectInfo } from '@commands/showProjectInfo';
@@ -34,6 +35,7 @@ export function activateCommands(
   logger: Logger,
   detection: DetectionHandles,
   clangd: ClangdHandles,
+  workspace?: WorkspaceState,
 ): void {
   registerCommand(context, 'vscodeUEHelper.showProjectInfo', () =>
     showProjectInfo(config, logger, detection),
@@ -74,7 +76,7 @@ export function activateCommands(
   );
   registerCommand(context, 'vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile());
   registerCommand(context, 'vscodeUEHelper.regenerateWorkspace', () =>
-    executeRegenerateWorkspace(logger),
+    executeRegenerateWorkspace(logger, workspace),
   );
   registerCommand(context, 'vscodeUEHelper.selectConfig', () =>
     executeSelectConfig(config, logger),

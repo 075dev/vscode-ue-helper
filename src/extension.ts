@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // [Phase 8 Stage 1] 注入 ClangdOps 给 activateClangd，让 CompletionModeController 走统一 API
     const clangd = activateClangd(context, config, logger, detection, workspace, clangdOps);
     const ui = activateUI(context, config, logger, detection);
-    activateCommands(context, config, logger, detection, clangd);
+    activateCommands(context, config, logger, detection, clangd, workspace);
 
     // workspace + clangdOps 暂时挂在 disposables 防止被 GC，后续 PR 接入
     disposables.push(workspace as unknown as vscode.Disposable);
