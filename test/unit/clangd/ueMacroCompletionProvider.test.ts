@@ -110,7 +110,15 @@ function createDetectionHandles(): DetectionHandles {
     discovery: {} as never,
     vsBuildTools: {} as never,
     workspaceContext: {} as never,
-    ready: Promise.resolve({ projects: [project], engines: [engine], workspaceFile: undefined }),
+    ready: Promise.resolve({
+      projects: [project],
+      engines: [engine],
+      workspaceFile: undefined,
+      workspaceRoot: undefined,
+      workspaceFolders: [],
+      projectFolder: null,
+      engineFolder: null,
+    }),
   };
 }
 

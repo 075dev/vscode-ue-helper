@@ -34,12 +34,9 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     const detection = activateDetection(context, config, logger);
 
     // [Phase 8 架构] WorkspaceState 单一真相源
-    // 等待 detection.ready resolve 后注入数据。所有模块通过 workspace getter 访问
+    // 构造时自动订阅 detection.ready 并 setResult。所有模块通过 workspace getter 访问
     // 项目/引擎/路径信息，统一派生路径 get 函数 + 去重错误通知。
     const workspace = new WorkspaceState({ detection, logger });
-    void detection.ready.then((result) => {
-      workspace.setResult(result);
-    });
 
     // [Phase 8 架构] ClangdOps 统一 .clangd 操作 API（mutate / setAddFlag / replaceAddBlock）
     const clangdOps = new ClangdOps({ workspace, logger });
