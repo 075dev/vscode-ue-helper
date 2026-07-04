@@ -5,8 +5,10 @@
  * 补全文件系统（curated header）、工作区备份防 UBT 覆盖、
  * completion-mode 状态栏（fast/slow 实际控制 .clangd）。
  *
+ * Phase 8 架构：通过 ClangdOps + WorkspaceState 统一 .clangd 操作。
+ *
  * 主要导出:
- *   - writeClangdConfig / renderClangdConfig: 写/渲染 .clangd
+ *   - writeClangdConfig / renderClangdConfig: 写/渲染 .clangd（兼容旧 API）
  *   - generateCompileCommands / linkToWorkspaceRoot: 跑 UBT 生成 compile_commands.json
  *   - createCompletionFiles / addCompletionHelperToCompileCommands: 补全文件系统
  *   - WorkspaceBackup: 备份 .code-workspace 防 UBT 覆盖
@@ -18,6 +20,8 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
+import type { WorkspaceState } from '@core/workspace';
+import type { ClangdOps } from './clangdOps';
 import type { DetectionHandles } from '@detection';
 import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
@@ -99,11 +103,20 @@ export function activateClangd(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
+  workspace?: WorkspaceState,
+  clangdOps?: ClangdOps,
 ): ClangdHandles {
   const completionMode = new CompletionModeController(config);
+  // [Phase 8] 注入 ClangdOps（如可用），让 rewriteClangd 走统一 API
+  if (clangdOps) {
+    completionMode.setClangdOps(clangdOps);
+  }
   const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
   const proxyManager = new ClangdProxyManager(context, config, logger);
   const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
+
+  // workspace 参数当前未使用（保留以备后续 stage 使用）
+  void workspace;
 
   // detection.ready 完成后设置 projectPath/engineRoot，确保 toggle/rewrite 能定位 .clangd 写入位置
   // 并能解析 preparse header 中的 $(EngineRoot) 占位符。

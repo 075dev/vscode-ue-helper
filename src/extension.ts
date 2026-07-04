@@ -46,7 +46,8 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 
     // 旧模块激活流程（保持兼容，后续 PR 逐步迁移到接受 workspace 参数）
     const build = activateBuild(context, config, logger, detection);
-    const clangd = activateClangd(context, config, logger, detection);
+    // [Phase 8 Stage 1] 注入 ClangdOps 给 activateClangd，让 CompletionModeController 走统一 API
+    const clangd = activateClangd(context, config, logger, detection, workspace, clangdOps);
     const ui = activateUI(context, config, logger, detection);
     activateCommands(context, config, logger, detection, clangd);
 

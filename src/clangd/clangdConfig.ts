@@ -211,8 +211,11 @@ export function renderClangdConfig(config: ClangdConfig): string {
 // ===== 写文件 =====
 
 /**
- * 把 .clangd 写入项目根目录。
+ * 把 .clangd 写入项目根目录（兼容旧 API，内部走 ClangdOps）
+ *
  * 重写整个文件（非增量），保证只有一个 CompileFlags 块。
+ *
+ * @deprecated 推荐用 ClangdOps.writeFull，避免重复传 projectPath。
  */
 export async function writeClangdConfig(
   projectPath: string,
@@ -220,11 +223,19 @@ export async function writeClangdConfig(
 ): Promise<string> {
   const target = path.join(path.dirname(projectPath), '.clangd');
   const yamlText = renderClangdConfig(defaultClangdConfig(opts));
-  await fs.writeFile(target, yamlText, 'utf-8');
+  // 原子写入：temp + rename（per PATTERNS §3 第 280-285 行）
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(tmp, yamlText, 'utf-8');
+  try {
+    await fs.rename(tmp, target);
+  } catch (err) {
+    try { await fs.unlink(tmp); } catch { /* ignore */ }
+    throw err;
+  }
   return target;
 }
 
-/** 查找 .clangd */
+/** 查找 .clangd（兼容旧 API） */
 export async function findClangdConfig(projectPath: string): Promise<string | null> {
   const target = path.join(path.dirname(projectPath), '.clangd');
   try {

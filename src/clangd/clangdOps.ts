@@ -43,7 +43,8 @@ export type ClangdMutateResult =
 export class ClangdOps {
   constructor(private readonly opts: ClangdOpsOptions) {}
 
-  private get workspace(): WorkspaceState {
+  /** 暴露 WorkspaceState 给调用方用于派生路径访问 */
+  get workspace(): WorkspaceState {
     return this.opts.workspace;
   }
 

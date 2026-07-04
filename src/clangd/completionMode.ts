@@ -8,6 +8,8 @@
  *
  * 状态栏显示当前模式，点击切换。切换时自动重写 .clangd 文件。
  *
+ * Phase 8 架构：通过 ClangdOps 统一 .clangd 操作，调用方不传 projectPath。
+ *
  * 参考 unreal-clangd 的 completionMode 实现。
  */
 
@@ -15,6 +17,7 @@ import * as vscode from 'vscode';
 import { Config } from '@core/config';
 import { t } from '@i18n';
 import { CompletionMode as Mode } from './types';
+import { ClangdOps } from './clangdOps';
 import { writeClangdConfig } from './clangdConfig';
 import { getMacroCompletionHelperPath } from './completionFiles';
 import { getPrepareIncludesList } from './preparseIncludes';
@@ -38,7 +41,7 @@ export interface RewriteResult {
   warning?: RewriteWarning;
 }
 
-/** CompletionModeController 需要的项目上下文 */
+/** CompletionModeController 需要的项目上下文（兼容旧 API） */
 export interface CompletionModeProjectContext {
   /** .uproject 文件绝对路径 */
   projectPath: string;
@@ -51,6 +54,8 @@ export type RewriteWarning = 'missingProjectPath' | 'writeFailed';
 export class CompletionModeController {
   private statusBarItem: vscode.StatusBarItem;
   private projectContext: CompletionModeProjectContext | null = null;
+  /** [Phase 8] 可选注入 ClangdOps，用于通过统一 API 写入 .clangd */
+  private clangdOps: ClangdOps | null = null;
 
   constructor(private readonly config: Config) {
     this.statusBarItem = vscode.window.createStatusBarItem(
@@ -61,8 +66,20 @@ export class CompletionModeController {
   }
 
   /**
+   * [Phase 8] 注入 ClangdOps（推荐路径）。
+   * 注入后 rewriteClangd 通过 ClangdOps.writeFull 操作，
+   * 派生路径（macroHelperPath / compatHeaderPath / clangdConfigPath）由 ClangdOps 内部用 WorkspaceState 解析。
+   */
+  setClangdOps(ops: ClangdOps): void {
+    this.clangdOps = ops;
+  }
+
+  /**
    * 设置项目上下文。切换模式时需要知道在哪写 .clangd，以及如何解析
    * $(EngineRoot) preparse header。由 detection.ready 成功后注入。
+   *
+   * @deprecated 推荐用 setClangdOps + WorkspaceState 自动派生路径。
+   *            保留此方法仅为向后兼容旧调用点。
    */
   setProjectContext(context: CompletionModeProjectContext): void {
     this.projectContext = context;
@@ -110,29 +127,47 @@ export class CompletionModeController {
    * 用当前 config 中的模式重写 .clangd。
    * 用于初始激活或 refresh。
    *
+   * 优先用 ClangdOps 注入路径；如果未注入，回落到旧 projectContext 路径。
+   *
    * @returns RewriteResult: written=false 表示缺少 projectPath 或写入失败
    */
   async rewriteClangd(mode?: Mode): Promise<RewriteResult> {
+    const currentMode = mode ?? this.config.completionMode;
+
+    // [Phase 8] 优先路径：通过 ClangdOps + WorkspaceState 派生路径
+    if (this.clangdOps) {
+      const ws = this.clangdOps.workspace;
+      const projectPath = ws.project?.path; // .uproject 路径（preparseIncludes 仍接受）
+      if (!projectPath) {
+        return { written: false, warning: 'missingProjectPath' };
+      }
+      const engineRoot = ws.engineRoot ?? undefined;
+
+      const preparseHeaders = await getPrepareIncludesList(currentMode, projectPath);
+
+      const macroHelperPath =
+        currentMode === 'slow' ? ws.macroHelperPath ?? undefined : undefined;
+      const compatHeaderPath = ws.ueClangdCompatPath ?? undefined;
+
+      const result = await this.clangdOps.writeFull({
+        completionMode: currentMode,
+        macroHelperPath,
+        preparseHeaders,
+        compatHeaderPath,
+        projectPath,
+        engineRoot,
+      });
+      return result ? { written: true } : { written: false, warning: 'writeFailed' };
+    }
+
+    // 兼容路径：通过旧 setProjectContext 注入的 projectPath
     if (!this.projectContext) {
       return { written: false, warning: 'missingProjectPath' };
     }
-
-    const currentMode = mode ?? this.config.completionMode;
     const { projectPath, engineRoot } = this.projectContext;
-
-    // Load SharedPCH preparse headers for this mode.
-    // Both fast and slow get the bundled list; slow additionally gets
-    // macroCompletionHelper.h appended below.
-    const preparseHeaders = await getPrepareIncludesList(
-      currentMode,
-      projectPath,
-    );
-
+    const preparseHeaders = await getPrepareIncludesList(currentMode, projectPath);
     const macroHelperPath =
-      currentMode === 'slow'
-        ? getMacroCompletionHelperPath(projectPath)
-        : undefined;
-
+      currentMode === 'slow' ? getMacroCompletionHelperPath(projectPath) : undefined;
     try {
       await writeClangdConfig(projectPath, {
         completionMode: currentMode,
@@ -144,7 +179,6 @@ export class CompletionModeController {
       });
       return { written: true };
     } catch {
-      // .clangd write 失败不阻塞用户操作，但必须让调用方看到未成功写入。
       return { written: false, warning: 'writeFailed' };
     }
   }
