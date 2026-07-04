@@ -20,7 +20,6 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'node:path';
 import chokidar from 'chokidar';
 
 /**
@@ -101,7 +100,7 @@ export class IncrementalFileWatcher {
   private batchedChanges: string[] = [];
   private firstEventMs: number | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
-  private readonly debounceMs: number;
+  private debounceMs: number = DEFAULT_DEBOUNCE_MS;
 
   /**
    * 启动 chokidar 监听

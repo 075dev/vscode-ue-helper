@@ -22,7 +22,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { fileURLToPath } from 'node:url';
 
 // ============== Mocks ==============
 
@@ -105,10 +104,8 @@ describe('compileCommands 5 阶段细化插桩 (Phase 7 PLAN B / per D-03)', () 
 
   /* ==================== 静态扫描测试：阶段 1/2/3/5 ==================== */
 
-  // 定位 compileCommands.ts 源文件
-  const compileCommandsSrcPath = fileURLToPath(
-    new URL('../../../src/clangd/compileCommands.ts', import.meta.url),
-  );
+  // 定位 compileCommands.ts 源文件（vitest 工作目录为项目根）
+  const compileCommandsSrcPath = path.resolve(process.cwd(), 'src/clangd/compileCommands.ts');
 
   it('阶段 1：compileCommands.entry 埋点存在（源文件扫描）', async () => {
     const src = await fs.readFile(compileCommandsSrcPath, 'utf-8');

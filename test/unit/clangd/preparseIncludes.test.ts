@@ -159,12 +159,13 @@ describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
   });
 
   it('注入 mock perfSession 时 recordPreparseResult 被调用', async () => {
-    let recorded: { mode: string; baseCount: number; userCount: number } | null = null;
+    type Recorded = { mode: string; baseCount: number; userCount: number };
+    const recordedBox: { value: Recorded | null } = { value: null };
 
     const mockSession: PerfSession = {
       record: () => {},
       recordPreparseResult: (mode, baseCount, userCount) => {
-        recorded = { mode, baseCount, userCount };
+        recordedBox.value = { mode, baseCount, userCount };
       },
       recordIncrementalScan: () => {},
       getCompileCommandsLastMs: () => 0,
@@ -178,10 +179,10 @@ describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
       perfSession: mockSession,
     });
 
-    expect(recorded).not.toBeNull();
-    // 非空断言：上面 expect.toBeNull 失败会终止测试，到这里 recorded 必非 null
-    expect(recorded?.mode).toBe('fast');
-    expect(recorded?.baseCount).toBeGreaterThan(0);
+    expect(recordedBox.value).not.toBeNull();
+    // 非空断言：上面 expect.toBeNull 失败会终止测试，到这里 recordedBox.value 必非 null
+    expect(recordedBox.value!.mode).toBe('fast');
+    expect(recordedBox.value!.baseCount).toBeGreaterThan(0);
   });
 
   it('getPreparseStats 返回 perfLog 单例的命中率', () => {

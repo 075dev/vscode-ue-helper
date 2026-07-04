@@ -53,16 +53,16 @@ const mockState = vi.hoisted(() => {
   };
 
   let mockWatcher: ReturnType<typeof createMockWatcher> = createMockWatcher();
-  const watchMock = vi.fn(() => mockWatcher);
+  const watchMock = vi.fn((_patterns?: string | string[], _options?: unknown) => mockWatcher);
 
   return { createMockWatcher, getMockWatcher: () => mockWatcher, setMockWatcher: (w: ReturnType<typeof createMockWatcher>) => { mockWatcher = w; }, watchMock };
 });
 
 vi.mock('chokidar', () => ({
   default: {
-    watch: (...args: unknown[]) => mockState.watchMock(...args),
+    watch: (patterns: string | string[], options?: unknown) => mockState.watchMock(patterns, options),
   },
-  watch: (...args: unknown[]) => mockState.watchMock(...args),
+  watch: (patterns: string | string[], options?: unknown) => mockState.watchMock(patterns, options),
 }));
 
 import { IncrementalFileWatcher } from '@clangd/fileWatcher';

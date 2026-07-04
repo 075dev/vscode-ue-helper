@@ -53,7 +53,7 @@ const chokidarMock = vi.hoisted(() => {
     return watcher;
   };
   let mockWatcher: MockFSWatcher = createMockWatcher();
-  const watchMock = vi.fn(() => mockWatcher);
+  const watchMock = vi.fn((_patterns?: string | string[], _options?: unknown) => mockWatcher);
   return {
     createMockWatcher,
     getMock: () => mockWatcher,
@@ -66,9 +66,9 @@ const chokidarMock = vi.hoisted(() => {
 
 vi.mock('chokidar', () => ({
   default: {
-    watch: (...args: unknown[]) => chokidarMock.watchMock(...args),
+    watch: (patterns: string | string[], options?: unknown) => chokidarMock.watchMock(patterns, options),
   },
-  watch: (...args: unknown[]) => chokidarMock.watchMock(...args),
+  watch: (patterns: string | string[], options?: unknown) => chokidarMock.watchMock(patterns, options),
 }));
 
 /** 捕获所有 perfLog 调用 */
