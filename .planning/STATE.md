@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: — clangd 智能提示与集成完善
-current_phase: 8
-current_phase_name: 代码理解增强
-status: v1.2 re-scoped — old 汉化 CONTEXT.md removed, awaiting new Phase 7 discussion
-stopped_at: Phase 07 context gathered — ready for planning
-last_updated: "2026-07-04T07:01:33.984Z"
-last_activity: 2026-07-04
-last_activity_desc: Phase 07 complete, transitioned to Phase 8
+milestone: v1.3
+milestone_name: 插件工程化与打包规范化
+status: planning
+last_updated: "2026-07-05T11:11:33.054Z"
+last_activity: 2026-07-05
 progress:
-  total_phases: 6
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 ## Project Reference
@@ -72,10 +68,10 @@ All 3 phases implemented, 28 requirements covered, 498 tests passing across 35 t
 
 ## Current Position
 
-Phase: 8 — 代码理解增强
-Plan: Not started
-Status: v1.2 re-scoped — old 汉化 CONTEXT.md removed, awaiting new Phase 7 discussion
-Last activity: 2026-07-04 — Phase 07 complete, transitioned to Phase 8
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-05 — Milestone v1.3 started
 
 ## Phase Dependencies
 
