@@ -42,3 +42,13 @@ compile_commands.json
 .vscode/.code-workspace.backup
 .vscode/clangd-perf-cache/   # Phase 7 perf cache (per D-14)
 .omo
+
+# GSD runtime
+.gsd-worktrees/
+.gsd-backups/
+.gsd/activity/
+.gsd/runtime/
+.gsd/auto.lock
+.gsd/gsd.db*
+.gsd/completed-units*.json
+.gsd/event-log.jsonl
