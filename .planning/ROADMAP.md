@@ -17,7 +17,7 @@
 
 - ✅ **v1.0 控制面板** — Phases 1-3 (shipped 2026-07-01)
 - ✅ **v1.1 Proxy 本地化增强** — Phases 4-6 (shipped 2026-07-01)
-- 🔄 **v1.3 插件工程化与打包规范化** — Phases 11-12 (active 2026-07-05)
+- ✅ **v1.3 插件工程化与打包规范化** — Phases 11-12 (shipped 2026-07-05)
 - ⏸️ **v1.2 clangd 智能提示与集成完善** — Phases 7-10 (parked, await v1.3)
 - ~~❌ **v1.2 汉化规则覆盖完善**~~ — *abandoned 2026-07-04，主题变更*
 
@@ -51,11 +51,11 @@
 
 </details>
 
-<details open>
-<summary>🔄 v1.3 插件工程化与打包规范化 (Phases 11-12) — ACTIVE 2026-07-05</summary>
+<details>
+<summary>✅ v1.3 插件工程化与打包规范化 (Phases 11-12) — SHIPPED 2026-07-05</summary>
 
-- [ ] **Phase 11: 打包与清单修复** - LICENSE 文件 + repository 字段 + 构建 clean 步骤 + 排除 *.map
-- [ ] **Phase 12: 根目录清理与端到端验证** - 删除临时文件 + .vscodeignore 调查 + 完整验证
+- [x] **Phase 11: 打包与清单修复** - LICENSE 文件 + repository 字段 + 构建 clean 步骤 + 排除 *.map (completed 2026-07-05)
+- [x] **Phase 12: 根目录清理与端到端验证** - 删除临时文件 + .vscodeignore 调查 + 完整验证 (completed 2026-07-05)
 
 </details>
 
@@ -232,5 +232,5 @@ Plans:
 | 8. 代码理解增强 | v1.2 | 0/0 | Re-scoped | - |
 | 9. 工具链集成 | v1.2 | 0/0 | Re-scoped | - |
 | 10. 诊断增强 | v1.2 | 0/0 | Re-scoped | - |
-| 11. 打包与清单修复 | v1.3 | 0/0 | Planning | - |
-| 12. 根目录清理与端到端验证 | v1.3 | 0/0 | Planning | - |
+| 11. 打包与清单修复 | v1.3 | 1/1 | Complete | 2026-07-05 |
+| 12. 根目录清理与端到端验证 | v1.3 | 1/1 | Complete | 2026-07-05 |
