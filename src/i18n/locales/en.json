@@ -186,5 +186,8 @@
   "perf.cacheMiss": "Cache miss, running UBT",
   "perf.showInStatusBar": "Show performance metrics in status bar",
   "perf.showInStatusBar.desc": "Show performance metrics (compile_commands gen time, preparse cache hit rate, incremental scan latency) in status bar.",
-  "config.showPerfInStatusBar.desc": "Show performance metrics in status bar."
+  "config.showPerfInStatusBar.desc": "Show performance metrics in status bar.",
+  "headerWatcher.regenerating": "$(sync~spin) VSCodeUEHelper: UHT regenerating...",
+  "headerWatcher.synced": "$(check) VSCodeUEHelper: UHT synced",
+  "headerWatcher.failed": "$(warning) VSCodeUEHelper: UHT regen failed (see Output)"
 }

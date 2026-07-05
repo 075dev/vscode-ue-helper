@@ -186,5 +186,8 @@
   "perf.cacheMiss": "缓存未命中，运行 UBT / Cache miss, running UBT",
   "perf.showInStatusBar": "在状态栏显示性能指标 / Show performance metrics in status bar",
   "perf.showInStatusBar.desc": "在状态栏显示性能指标（compile_commands 生成耗时、preparse 缓存命中率、增量扫描延迟）。",
-  "config.showPerfInStatusBar.desc": "在状态栏显示性能指标。"
+  "config.showPerfInStatusBar.desc": "在状态栏显示性能指标。",
+  "headerWatcher.regenerating": "$(sync~spin) VSCodeUEHelper: UHT 重新生成中...",
+  "headerWatcher.synced": "$(check) VSCodeUEHelper: UHT 已同步",
+  "headerWatcher.failed": "$(warning) VSCodeUEHelper: UHT 重生成失败（详情见 Output）"
 }

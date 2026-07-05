@@ -193,6 +193,14 @@ export class Config {
   get showPerfInStatusBar(): boolean {
     return this.root.get<boolean>("showPerfInStatusBar") ?? true;
   }
+
+  /**
+   * Phase 8 D-05/D-06: UE reflection header 自动同步 watcher 是否启用。
+   * 默认开启，用户可关闭以避免频繁 UBT 调用。
+   */
+  get clangdHeaderWatcherEnabled(): boolean {
+    return this.root.get<boolean>('clangdHeaderWatcher.enabled') ?? true;
+  }
 // ===== 写入 / 监听 =====
 
   /**
