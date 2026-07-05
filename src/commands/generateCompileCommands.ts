@@ -28,11 +28,15 @@ import {
 } from '@clangd';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
+import { cancelHeaderWatcherTrigger } from '@clangd/headerWatcher';
 
 export async function executeGenerateCompileCommands(
   logger: Logger,
   detection: DetectionHandles,
 ): Promise<void> {
+  // D-12/D-13: 取消自动 watcher 的 pending debounce，避免双跑 UBT
+  cancelHeaderWatcherTrigger();
+
   const project =
     (await pickProject(await detection.scanner.scan())) ??
     (await detection.scanner.findSingle());

@@ -14,6 +14,7 @@ import { ClangdOps } from '@clangd/clangdOps';
 import { activateDetection } from '@detection';
 import { activateBuild } from '@build';
 import { activateClangd } from '@clangd';
+import { startHeaderWatcher } from '@clangd/headerWatcher';
 import { activateUI } from '@ui';
 import { activateCommands } from '@commands';
 import { showProjectInfo } from '@commands/showProjectInfo';
@@ -45,6 +46,8 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     const build = activateBuild(context, config, logger, detection);
     // [Phase 8 Stage 1] 注入 ClangdOps 给 activateClangd，让 CompletionModeController 走统一 API
     const clangd = activateClangd(context, config, logger, detection, workspace, clangdOps);
+    // [Phase 8] UE 反射头保存自动同步 watcher（D-14：在 activateClangd 之后注册，确保 WorkspaceState 已就绪）
+    startHeaderWatcher(context, config, logger, workspace);
     const ui = activateUI(context, config, logger, detection);
     activateCommands(context, config, logger, detection, clangd, workspace);
 
