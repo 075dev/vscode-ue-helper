@@ -54,7 +54,7 @@
     "pr_body_sections": []
   },
   "hooks": {
-    "context_warnings": false
+    "context_warnings": true
   },
   "project_code": null,
   "phase_naming": "sequential",
@@ -65,7 +65,7 @@
     "source_grounding_authority": "grep"
   },
   "intel": {
-    "enabled": true
+    "enabled": false
   },
   "graphify": {
     "enabled": true,
