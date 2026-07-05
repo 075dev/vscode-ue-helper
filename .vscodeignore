@@ -22,5 +22,5 @@ CLAUDE.md
 *.vsix
 *.map
 .DS_Store
-temp_writer.js
-temp_writer.mjs
+.planning/**
+.codegraph/**
