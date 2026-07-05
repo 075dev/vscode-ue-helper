@@ -56,7 +56,6 @@
   "showInfo.mcpHost": "MCP Host:         {value}",
   "showInfo.mcpHostNone": "(none — plain VS Code)",
   "showInfo.logLevel": "Log Level:        {value}",
-  "showInfo.openPlan": "Open Plan",
   "showInfo.openOutput": "Open Output",
   "showInfo.noEnginesWithWs": "VSCodeUEHelper — No Unreal Engine detected.\n\nProject: {project}\nWorkspace: {workspace}\n\nEngines are read from .code-workspace folders[].\nOpen the file and verify the UE install paths.",
   "showInfo.noEnginesNoWsWithUE": "VSCodeUEHelper — .code-workspace missing.\n\nProject: {project}\nWorkspace: {workspace}\n\nUE is installed (system association detected) but no .code-workspace file exists.\nGenerate one from the .uproject's EngineAssociation.",

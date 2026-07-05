@@ -56,7 +56,6 @@
   "showInfo.mcpHost": "MCP 宿主:        {value}",
   "showInfo.mcpHostNone": "(无 — 纯 VS Code)",
   "showInfo.logLevel": "日志级别:       {value}",
-  "showInfo.openPlan": "打开计划",
   "showInfo.openOutput": "打开输出",
   "showInfo.noEnginesWithWs": "VSCodeUEHelper — 未检测到 Unreal 引擎。\n\n项目: {project}\n工作区: {workspace}\n\n引擎从 .code-workspace 的 folders[] 读取。\n打开该文件并核对 UE 安装路径。",
   "showInfo.noEnginesNoWsWithUE": "VSCodeUEHelper — 缺少 .code-workspace 文件。\n\n项目: {project}\n工作区: {workspace}\n\nUE 已安装(检测到系统关联),但 .code-workspace 文件不存在。\n根据 .uproject 的 EngineAssociation 生成一个。",

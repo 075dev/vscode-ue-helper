@@ -148,15 +148,9 @@ export async function showProjectInfo(
   const summary = lines.slice(0, 8).join('\n');
   const choice = await vscode.window.showInformationMessage(
     summary,
-    t('showInfo.openPlan'),
     t('showInfo.openOutput'),
   );
-  if (choice === t('showInfo.openPlan')) {
-    await vscode.commands.executeCommand(
-      'vscode.open',
-      vscode.Uri.file(`${workspace}/.claude/plans/vscode-ue-helper-plan.md`),
-    );
-  } else if (choice === t('showInfo.openOutput')) {
+  if (choice === t('showInfo.openOutput')) {
     logger.show();
   }
 }
