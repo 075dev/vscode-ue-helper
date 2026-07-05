@@ -20,9 +20,7 @@ CLAUDE.md
 .claude/**
 *.log
 *.vsix
+*.map
 .DS_Store
-.omo/**
-.codewiki/**
-.hermes/**
 temp_writer.js
 temp_writer.mjs
