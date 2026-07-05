@@ -2,19 +2,23 @@
 
 ## Active Milestone
 
-## v1.2 — clangd 智能提示与集成完善 (in progress)
+## v1.3 — 插件工程化与打包规范化 (active, started 2026-07-05)
 
-4 个阶段 (Phase 7-10)：性能优化 → 代码理解增强 → 工具链集成 → 诊断增强。
+2 个阶段 (Phase 11-12)：打包元数据 + 清单修复 → 根目录清理 + 端到端验证。
 
-> **⚠ v1.2 主题变更：** 原 v1.2 计划聚焦汉化规则扩展（2026-07-01 立项），2026-07-04
-> 决定回归 clangd 核心功能建设。废弃范围：Diagnostics 规则表 58→150+ 扩展、
-> Hover 内容汉化、规则表分类与性能测试（已并入已 shipped 的 v1.1 phase 5/6）。
+> **📌 启动原因：** 用户痛点——`npm run package` 报 3 个 WARNING，且 `out/` 有旧构建残留导致 vsix 体积膨胀 (7.67MB)。
+> 同时根目录有 3 个临时/空文件需要清理，`.vscodeignore` 含未经调查的工具目录规则。
+
+> **⚠ v1.2 状态：** Phase 7 已完成 context 收集，Phase 8-10 挂起等 v1.3 ship 后继续。
+> 原 v1.2 主题变更史保留：2026-07-04 从"汉化规则覆盖完善"调整为"clangd 完善"，
+> 原汉化规则扩展已并入 v1.1 phase 5/6 交付。
 
 ## Milestones
 
 - ✅ **v1.0 控制面板** — Phases 1-3 (shipped 2026-07-01)
-- ✅ **v1.1 Proxy 本地化增强** — completed 2026-07-01
-- 🔄 **v1.2 clangd 智能提示与集成完善** — Phases 7-10 (in progress, re-scoped 2026-07-04)
+- ✅ **v1.1 Proxy 本地化增强** — Phases 4-6 (shipped 2026-07-01)
+- 🔄 **v1.3 插件工程化与打包规范化** — Phases 11-12 (active 2026-07-05)
+- ⏸️ **v1.2 clangd 智能提示与集成完善** — Phases 7-10 (parked, await v1.3)
 - ~~❌ **v1.2 汉化规则覆盖完善**~~ — *abandoned 2026-07-04，主题变更*
 
 ## Phases
@@ -37,13 +41,21 @@
 
 </details>
 
-<details open>
-<summary>🔄 v1.2 clangd 智能提示与集成完善 (Phases 7-10) — RE-SCOPED 2026-07-04</summary>
+<details>
+<summary>⏸️ v1.2 clangd 智能提示与集成完善 (Phases 7-10) — PARKED 2026-07-05</summary>
 
 - [x] **Phase 7: clangd 性能优化** - compile_commands.json 生成加速、preparse-includes 缓存、增量扫描 (completed 2026-07-04)
 - [ ] **Phase 8: 代码理解增强** - UE 类型系统补全、include 自动补全、跳转定义增强、引用搜索
 - [ ] **Phase 9: 工具链集成** - UE 编辑器双向通信、Source 浏览器集成、Hot Reload 联动、调试适配
 - [ ] **Phase 10: 诊断增强** - 自定义诊断规则、UE 特定错误诊断补全、修复建议、快速修复
+
+</details>
+
+<details open>
+<summary>🔄 v1.3 插件工程化与打包规范化 (Phases 11-12) — ACTIVE 2026-07-05</summary>
+
+- [ ] **Phase 11: 打包与清单修复** - LICENSE 文件 + repository 字段 + 构建 clean 步骤 + 排除 *.map
+- [ ] **Phase 12: 根目录清理与端到端验证** - 删除临时文件 + .vscodeignore 调查 + 完整验证
 
 </details>
 
@@ -170,6 +182,42 @@ Plans:
 
 > **⚠ ABANDONED 2026-07-04** — v1.2 主题调整为 clangd 完善。汉化规则表扩展（58→150+）已并入 v1.1 Phase 4/5。残留 07-CONTEXT.md 已删除，磁盘已清理。新主题见 Phase 7: clangd 性能优化。
 
+### Phase 11: 打包与清单修复
+
+**Goal**: 修复 `npm run package` 的 3 个 WARNING（missing repository / missing LICENSE / bundling），让打包输出干净；新增构建前的 `out/` 清理步骤。
+
+**Depends on**: 无
+
+**Requirements**: PKG-01, PKG-02, PKG-03, PKG-04, STR-02
+
+**Success Criteria** (what must be TRUE):
+
+  1. `npm run package` 输出包含 0 个 WARNING（特别是 `repository field is missing`、`LICENSE not found`、bundling 警告）
+  2. 生成的 `.vsix` 不包含 `*.map` 文件
+  3. `npm run package` 前会自动清理 `out/src/` 和 `out/test/` 目录（即每次重打包都从干净 `out/` 开始）
+  4. `.vscodeignore` 中已移除项目未使用的工具目录规则（STR-02）
+
+**Plans**: TBD
+
+### Phase 12: 根目录清理与端到端验证
+
+**Goal**: 清理根目录临时/空文件残留；执行完整的端到端验证（typecheck + lint + test + package）确保 v1.3 改动无回归。
+
+**Depends on**: Phase 11
+
+**Requirements**: STR-01, VAL-01, VAL-02, VAL-03, VAL-04
+
+**Success Criteria** (what must be TRUE):
+
+  1. 仓库根目录不再存在 `temp_writer.js`、`temp_writer.mjs`、`ANALYSIS_detection_build.md`
+  2. `npm run typecheck` 通过
+  3. `npm run lint` 通过
+  4. `npm run test:unit` 通过（无新增失败）
+  5. `.vsix` 文件大小 < 2MB
+  6. `.vsix` 在 VS Code Extension Development Host 安装并激活成功（状态栏出现）
+
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -184,3 +232,5 @@ Plans:
 | 8. 代码理解增强 | v1.2 | 0/0 | Re-scoped | - |
 | 9. 工具链集成 | v1.2 | 0/0 | Re-scoped | - |
 | 10. 诊断增强 | v1.2 | 0/0 | Re-scoped | - |
+| 11. 打包与清单修复 | v1.3 | 0/0 | Planning | - |
+| 12. 根目录清理与端到端验证 | v1.3 | 0/0 | Planning | - |
