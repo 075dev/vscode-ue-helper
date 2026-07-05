@@ -1,19 +1,24 @@
 /**
  * clangdOps —— 统一 .clangd 操作 API（Phase 8 架构重构）
  *
- * 设计原则：
+ * 设计原则（最小化 API）：
  * 1. 所有 .clangd 读写都通过 ClangdOps，禁止调用方直接 path.join + fs.writeFile
  * 2. 基于 WorkspaceState 的派生路径，调用方不传 projectPath
  * 3. 原子写入：temp + rename（per PATTERNS §3 第 280-285 行）
  * 4. mutate 模式：读 yaml → 应用 mutator → 写回，单事务
  *
- * API 分类：
- * - 读取：readConfig
- * - 全量：writeFull
- * - 部分修改：mutate, setAddFlag, removeAddFlag, replaceAddBlock, setIndexBackground
- * - 系统头文件：updateSystemIncludes（与 setSystemIncludes 命令配合）
+ * 4 个核心 API：
+ * - readConfig  —— 读取 + YAML 解析
+ * - exists      —— 检查 .clangd 存在性
+ * - writeFull   —— 全量重写（用 defaultClangdConfig 重建）
+ * - mutate      —— 事务性 read-modify-write（调用方用闭包表达任意修改）
  *
- * 缺失处理：所有方法检查 workspace.clangdConfigPath，缺失则由 WorkspaceState 弹错并返回失败。
+ * ❌ 不提供 setAddFlag / removeAddFlag / replaceAddBlock / setIndexBackground /
+ *    updateSystemIncludes 之类的细粒度 setter——它们只是 mutate 闭包的固化，
+ *    对调用方没价值（增加 API 表面 + 难扩展 + 难组合）。
+ *
+ * 缺失处理：所有方法检查 workspace.clangdConfigPath，缺失则由 WorkspaceState
+ * 弹错并返回失败。
  */
 
 import * as fs from 'node:fs/promises';
@@ -22,7 +27,7 @@ import * as yaml from 'yaml';
 import { Logger } from '@core/logger';
 import { WorkspaceState } from '@core/workspace';
 import { ClangdConfig } from './types';
-import { ClangdConfigOptions, defaultClangdConfig, renderClangdConfig, replaceSystemIncludeBlock } from './clangdConfig';
+import { ClangdConfigOptions, defaultClangdConfig, renderClangdConfig } from './clangdConfig';
 
 export interface ClangdOpsOptions {
   workspace: WorkspaceState;
@@ -32,13 +37,12 @@ export interface ClangdOpsOptions {
 /** mutate 函数的 mutator 参数 */
 export interface ClangdMutatorContext {
   config: ClangdConfig;
-  /** 改完直接返回（不需手动赋值） */
 }
 
 /** mutate 操作结果 */
 export type ClangdMutateResult =
   | { ok: true }
-  | { ok: false; reason: 'no-config-path' | 'no-existing-config' | 'parse-failed' | 'write-failed'; error?: unknown };
+  | { ok: false; reason: 'no-config-path' | 'parse-failed' | 'write-failed'; error?: unknown };
 
 export class ClangdOps {
   constructor(private readonly opts: ClangdOpsOptions) {}
@@ -91,7 +95,8 @@ export class ClangdOps {
   /**
    * 全量写入 .clangd（覆盖整个文件）
    *
-   * 注意：这是 writeClangdConfig 的内部实现保留。调用方应优先使用 mutate 系列方法。
+   * 用 defaultClangdConfig 重建完整配置，调用方传 options。
+   * 适用场景：createProject 初始化、completionMode 切换 fast/slow。
    */
   async writeFull(configOpts: ClangdConfigOptions): Promise<{ path: string } | null> {
     const target = this.workspace.clangdConfigPath;
@@ -107,12 +112,23 @@ export class ClangdOps {
     }
   }
 
-  // ========== 部分修改 ==========
+  // ========== 事务性修改 ==========
 
   /**
    * 读 yaml → 应用 mutator → 原子写回（mutate-then-write 单事务）
    *
+   * 调用方在 mutator 闭包内任意修改 config 字段，ClangdOps 负责事务。
    * 如果 .clangd 不存在，会用 defaultClangdConfig 初始化后再 mutate。
+   *
+   * 示例（替换系统头文件块）：
+   * ```ts
+   * await clangdOps.mutate(({ config }) => {
+   *   const add = config.CompileFlags?.Add ?? [];
+   *   const SYSTEM_PREFIXES = ['/X', '/imsvc', '-fms-compatibility-version=', '/std:'];
+   *   const kept = add.filter(f => !SYSTEM_PREFIXES.some(p => f.startsWith(p)));
+   *   config.CompileFlags = { ...config.CompileFlags, Add: [...newFlags, ...kept] };
+   * });
+   * ```
    */
   async mutate(mutator: (ctx: ClangdMutatorContext) => void): Promise<ClangdMutateResult> {
     const target = this.workspace.clangdConfigPath;
@@ -153,93 +169,7 @@ export class ClangdOps {
     }
   }
 
-  /**
-   * 在 CompileFlags.Add 中添加 flag（默认 prepend，可选 append）
-   *
-   * 自动去重：相同的 flag 不会重复添加。
-   */
-  async setAddFlag(flag: string, mode: 'prepend' | 'append' = 'prepend'): Promise<ClangdMutateResult> {
-    return this.mutate(({ config }) => {
-      const cf = this._ensureCompileFlags(config);
-      const add = (cf.Add ??= []);
-      // 去重
-      if (!add.includes(flag)) {
-        if (mode === 'prepend') {
-          add.unshift(flag);
-        } else {
-          add.push(flag);
-        }
-      }
-    });
-  }
-
-  /**
-   * 从 CompileFlags.Add 中移除匹配 predicate 的 flag
-   */
-  async removeAddFlag(predicate: (flag: string) => boolean): Promise<ClangdMutateResult> {
-    return this.mutate(({ config }) => {
-      const cf = this._ensureCompileFlags(config);
-      if (Array.isArray(cf.Add)) {
-        cf.Add = cf.Add.filter((f) => !predicate(f));
-      }
-    });
-  }
-
-  /**
-   * 替换 CompileFlags.Add 中匹配 predicate 的 flag 块（per replaceSystemIncludeBlock 模式）
-   *
-   * 适用场景：setSystemIncludes 等需要「保留某些 flag、替换某段」的逻辑。
-   */
-  async replaceAddBlock(
-    predicate: (flag: string) => boolean,
-    replacements: string[],
-  ): Promise<ClangdMutateResult> {
-    return this.mutate(({ config }) => {
-      const cf = this._ensureCompileFlags(config);
-      const oldAdd = Array.isArray(cf.Add) ? [...cf.Add] : [];
-      const kept = oldAdd.filter((f) => !predicate(f));
-      cf.Add = [...replacements, ...kept];
-    });
-  }
-
-  /**
-   * 设置 Index.Background 字段
-   */
-  async setIndexBackground(mode: 'Build' | 'Skip'): Promise<ClangdMutateResult> {
-    return this.mutate(({ config }) => {
-      config.Index = { Background: mode };
-    });
-  }
-
-  /**
-   * 替换系统头文件 flag 块（per setSystemIncludes 命令）
-   *
-   * 保留原 replaceSystemIncludeBlock 的行为：用 yaml 库解析 → 过滤旧系统 flag → 插入新 flag。
-   */
-  async updateSystemIncludes(newFlags: string[]): Promise<ClangdMutateResult> {
-    const target = this.workspace.clangdConfigPath;
-    if (!target) {return { ok: false, reason: 'no-config-path' };}
-
-    try {
-      const text = await fs.readFile(target, 'utf-8');
-      const newText = replaceSystemIncludeBlock(text, newFlags);
-      await this._atomicWrite(target, newText);
-      this.logger.info('[clangdOps] system includes updated');
-      return { ok: true };
-    } catch (err) {
-      this.logger.error(`[clangdOps] updateSystemIncludes failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { ok: false, reason: 'write-failed', error: err };
-    }
-  }
-
   // ========== 私有工具 ==========
-
-  private _ensureCompileFlags(config: ClangdConfig): NonNullable<ClangdConfig['CompileFlags']> {
-    if (!config.CompileFlags) {
-      config.CompileFlags = { Add: [] } as unknown as NonNullable<ClangdConfig['CompileFlags']>;
-    }
-    return config.CompileFlags as NonNullable<ClangdConfig['CompileFlags']>;
-  }
 
   /**
    * 原子写入：先写临时文件再 rename（per PATTERNS §3 第 280-285 行）

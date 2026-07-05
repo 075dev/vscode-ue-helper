@@ -39,7 +39,7 @@ export async function executeSetSystemIncludes(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
-  workspace?: WorkspaceState,
+  _workspace?: WorkspaceState,
   clangdOps?: ClangdOps,
 ): Promise<void> {
   if (process.platform !== 'win32') {
@@ -160,26 +160,38 @@ export async function executeSetSystemIncludes(
     fmsCompatibilityVersion: detected.fmsCompatibilityVersion,
   });
 
-  const projectDir = workspace?.projectDir ?? path.dirname(project.path);
-  const clangdFile = workspace?.clangdConfigPath ?? await findClangdConfig(project.path);
-  if (!clangdFile) {
-    // No .clangd yet — create one with the default + system flags.
-    if (clangdOps) {
+  // [Phase 8] 优先用 ClangdOps.mutate（原子事务），fallback 到旧 API
+  if (clangdOps) {
+    // .clangd 不存在时先 writeFull 初始化
+    if (!(await clangdOps.exists())) {
       await clangdOps.writeFull({});
+    }
+    const result = await clangdOps.mutate(({ config }) => {
+      const oldAdd = Array.isArray(config.CompileFlags?.Add) ? config.CompileFlags!.Add! : [];
+      const SYSTEM_PREFIXES = ['/X', '/imsvc', '-fms-compatibility-version=', '/std:'];
+      const kept = oldAdd.filter(
+        (f) => !SYSTEM_PREFIXES.some((p) => f.replace(/^["'](.*)["']$/, '$1').startsWith(p)),
+      );
+      config.CompileFlags = { ...config.CompileFlags, Add: [...newFlags, ...kept] };
+    });
+    if (result.ok) {
+      logger.info(`[setSystemIncludes] wrote ${newFlags.length} flags to .clangd via mutate`);
     } else {
+      logger.error(`[setSystemIncludes] mutate failed: ${result.reason}`);
+    }
+  } else {
+    // 旧 fallback 路径
+    const projectDir = path.dirname(project.path);
+    const clangdFile = await findClangdConfig(project.path);
+    if (!clangdFile) {
       await writeClangdConfig(project.path);
     }
-  }
-  const before = await fs.readFile(clangdFile ?? path.join(projectDir, '.clangd'), 'utf-8');
-  const after = replaceSystemIncludeBlock(before, newFlags);
-  if (after !== before) {
-    if (clangdOps) {
-      // [Phase 8] 优先用 ClangdOps 原子写入
-      await clangdOps.updateSystemIncludes(newFlags);
-    } else {
+    const before = await fs.readFile(clangdFile ?? path.join(projectDir, '.clangd'), 'utf-8');
+    const after = replaceSystemIncludeBlock(before, newFlags);
+    if (after !== before) {
       await fs.writeFile(clangdFile ?? path.join(projectDir, '.clangd'), after, 'utf-8');
+      logger.info(`[setSystemIncludes] wrote ${newFlags.length} flags to .clangd (legacy)`);
     }
-    logger.info(`[setSystemIncludes] wrote ${newFlags.length} flags to .clangd`);
   }
 
   void vscode.window.showInformationMessage(
