@@ -4,6 +4,10 @@
   "description": "All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, and optional MCP AI agent integration.",
   "version": "0.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/vscode-ue-helper.git"
+  },
   "publisher": "vscode-ue-helper",
   "engines": {
     "vscode": "^1.85.0",
@@ -416,7 +420,8 @@
     "llvm-vs-code-extensions.vscode-clangd"
   ],
   "scripts": {
-    "build": "node esbuild.config.mjs",
+    "build": "npm run clean && node esbuild.config.mjs",
+    "clean": "node scripts/clean-out.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
@@ -428,6 +433,7 @@
     "test:unit:watch": "vitest",
     "test:integration": "node test/integration/runTests.js",
     "test": "npm run test:unit && npm run test:integration",
+    "prepackage": "npm run build",
     "package": "vsce package",
     "publish": "vsce publish",
     "perf:baseline": "node scripts/measure-proxy-overhead.mjs --baseline",
