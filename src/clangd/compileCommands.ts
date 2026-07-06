@@ -84,16 +84,6 @@ export interface GenerateOptions {
   architecture?: string;
   /** [Phase 8] 可选 WorkspaceState 注入。提供时优先用 workspace 派生路径。 */
   workspace?: WorkspaceState;
-  /**
-   * [Phase 8 HeaderWatcher] UHT-only 模式。
-   *
-   * 为 true 时：跳过 Phase 7 指纹缓存快路径（强制跑 UBT/UHT 重新生成 .generated.h），
-   * UBT 执行完毕后早返，不搜索 / 不生成 / 不缓存 compile_commands.json。
-   *
-   * 适用场景：.h 保存后 clangd 文件监视能自动感知 .generated.h 变化，
-   * 无需重建整个 compile_commands.json（也不需要重启 clangd）。
-   */
-  uhtOnly?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -349,19 +339,13 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   );
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
-  // [Phase 8] uhtOnly 模式跳过缓存快路径 —— 强制跑 UBT/UHT 以重新生成 .generated.h
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
   const cache = new CompileCommandsCache({ logger: log });
-  const uhtOnly = opts.uhtOnly === true;
   let cachedEntry: CachedCompileCommands | undefined;
   try {
-    if (uhtOnly) {
-      log.info(`[compileCommands] uhtOnly mode —— skipping Phase 7 cache fast-path, forcing UBT/UHT re-run`);
-    }
     const fpStart = performance.now();
-    // uhtOnly 模式下跳过缓存读取，直接标记为 cache miss
-    const fp = uhtOnly ? { fingerprint: '', computedMs: 0, files: [] } : await computeFingerprint(projectDir);
-    cachedEntry = uhtOnly ? undefined : await cache.tryRead(projectDir);
+    const fp = await computeFingerprint(projectDir);
+    cachedEntry = await cache.tryRead(projectDir);
     const fpMs = performance.now() - fpStart;
 
     // 命中条件：cache 存在 + fingerprint 完全一致 + ccPath 仍存在
@@ -484,15 +468,6 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     log.warn(`[perf] instrumentation ubtStart failed: ${err instanceof Error ? err.message : String(err)}`);
   }
   await executeShellTask(ubtRelPath, args, opts.engineRoot, log, taskEnv);
-
-  // [Phase 8] uhtOnly 模式：UBT/UHT 已完成 .generated.h 重新生成，早返。
-  // 不再搜索 / 生成 / 缓存 compile_commands.json，也不需要链接到工程 clangdHelperDir。
-  // clangd 文件监视会感知 .generated.h 变化并重索引 → 宏报错自动消失。
-  if (uhtOnly) {
-    log.info(`[compileCommands] uhtOnly done —— UBT/UHT finished, .generated.h regenerated`);
-    return path.join(projectDir, FILE_NAME_COMPILE_COMMANDS);
-  }
-
   try {
     perfLog.record({
       event: 'ubt.taskCompleted',

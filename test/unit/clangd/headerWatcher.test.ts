@@ -27,16 +27,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // 用 vi.hoisted 把 mock 状态提升到文件顶部，让 vi.mock 工厂和测试体共享
 const mocks = vi.hoisted(() => {
   return {
-    /** 共享的 generateCompileCommands vi.fn —— 模拟模块导出 */
-    gcc: vi.fn(() => Promise.resolve({ compileCommandsPath: '/fake/cc.json', cacheHit: false, fingerprint: 'fp-test' })),
     /** 共享的 readFileMock vi.fn —— 模拟 fs.promises.readFile */
     readFileMock: vi.fn(),
   };
 });
-
-vi.mock('@clangd/compileCommands', () => ({
-  generateCompileCommands: mocks.gcc,
-}));
 
 vi.mock('@i18n', () => ({
   t: (key: string) => key,
@@ -46,13 +40,26 @@ vi.mock('node:fs/promises', () => ({
   readFile: mocks.readFileMock,
 }));
 
+// Mock ueHelpers（headerWatcher.ts 内部 import 这些）
+vi.mock('@clangd/ueHelpers', () => ({
+  getUbtPath: vi.fn(async () => 'D:/UE/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe'),
+  getBuildTargetNames: vi.fn(async () => ['MyProjEditor']),
+  getUnrealPlatform: vi.fn(() => 'Win64'),
+}));
+
 // 本地别名，让测试体 gherkin 生成更清晰
-const generateCompileCommands = mocks.gcc;
 const readFileMock = mocks.readFileMock;
 
 // ============== Test code ==============
 
 import { startHeaderWatcher, cancelHeaderWatcherTrigger } from '@clangd/headerWatcher';
+
+// 假 UBT executor：单测时不真正跑 UHT，只记录调用并上报成功
+const mocksUht = vi.hoisted(() => ({
+  fakeUbtExecutor: vi.fn(async () => 0),
+}));
+
+const fakeUbtExecutor = mocksUht.fakeUbtExecutor;
 
 // ============== Helpers ==============
 
@@ -98,6 +105,7 @@ function makeFakeExtensionContext(): any {
 
 describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
   let saveListener: ((doc: { uri: { fsPath: string } }) => void) | undefined;
+  let vscode: typeof import('vscode');
 
   beforeEach(async () => {
     // Mock timers
@@ -107,16 +115,8 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     readFileMock.mockReset();
     readFileMock.mockImplementation(async (_p: string, _enc: string) => '// UCLASS()\nclass A {};');
 
-    // Reset generateCompileCommands mock
-    generateCompileCommands.mockReset();
-    generateCompileCommands.mockResolvedValue({
-      compileCommandsPath: '/fake/cc.json',
-      cacheHit: false,
-      fingerprint: '',
-    } as never);
-
     // Capture listener via per-test mockImplementation
-    const vscode = await import('vscode');
+    vscode = await import('vscode');
     saveListener = undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (vi.mocked(vscode.workspace.onDidSaveTextDocument) as any).mockImplementation(
@@ -131,51 +131,63 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (vscode.window as any).setStatusBarMessage = vi.fn();
     }
+
+    // Uri.joinPath mock（Uri.file 已有）
+    (vscode.Uri as any).joinPath = vi.fn((...segments: string[]) => {
+      const fsPath = segments.join('/').replace(/\/+/g, '/').replace(/^\//, '');
+      return { fsPath, path: fsPath, scheme: 'file' };
+    });
+
+    // 重置 fakeUbtExecutor 计数器，避免跨测试污染
+    fakeUbtExecutor.mockReset();
+    fakeUbtExecutor.mockResolvedValue(0);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  /** 辅助：快速完成等待，让 async runUbtRegen 中的 microtasks/fake-timer 队列排空 */
+  /**
+   * 辅助：快速完成等待，让 async runUbtRegen 中的 microtasks/fake-timer 队列排空。
+   */
   async function flush(): Promise<void> {
     // 先把 fake timers 队列里的 setTimeout 跑掉
     await vi.advanceTimersToNextTimerAsync();
-    // 再等微任务链
+    // 再等微任务链（runHeaderToolOnly 被 mock 为 async noop，会自动完成）
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
   }
 
   /**
-   * D-02/D-04/D-07：.h + 反射宏 → 经过 1500ms debounce 后触发一次 generateCompileCommands
+   * D-02/D-04/D-07：.h + 反射宏 → 经过 1500ms debounce 后触发 runHeaderToolOnly（只跑 UHT codegen）
    */
-  it('triggers UBT regen on .h save containing UCLASS macro (D-02/D-04/D-07)', async () => {
+  it('triggers runHeaderToolOnly on .h save containing UCLASS macro (D-02/D-04/D-07)', async () => {
     const workspace = makeWorkspace();
     const config = makeConfig();
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, workspace);
+    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor);
 
     // 模拟保存 MyActor.h（含 UCLASS）
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 
     // debounce 期间的 1499ms 内不应触发
     await vi.advanceTimersByTimeAsync(1499);
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
 
     // 再推进 1ms（刚好 1500ms）→ 触发
     await vi.advanceTimersByTimeAsync(1);
     await flush();
-    expect(generateCompileCommands).toHaveBeenCalledTimes(1);
-    expect(generateCompileCommands).toHaveBeenCalledWith(
-      expect.objectContaining({
-        project: '/proj/MyProj.uproject',
-        engineRoot: '/eng',
-        logger,
-        workspace,
-      }),
-    );
+    expect(fakeUbtExecutor).toHaveBeenCalledTimes(1);
+    // 验证 UBT 调用参数包含 -Mode=UnrealHeaderTool
+    const args = (fakeUbtExecutor.mock.calls[0] as any[])[1] as string[];
+    expect(args).toEqual(expect.arrayContaining([
+      '-Mode=UnrealHeaderTool',
+      expect.stringContaining('MyProjEditor'),
+      expect.stringContaining('-Project='),
+    ]));
   });
 
   /**
@@ -186,7 +198,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace());
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.cpp' } });
 
@@ -194,7 +206,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     await flush();
 
     expect(readFileMock).not.toHaveBeenCalled();
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
   });
 
   /**
@@ -209,7 +221,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace());
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
 
     saveListener!({ uri: { fsPath: '/proj/Source/PlainHeader.h' } });
 
@@ -217,18 +229,18 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     await flush();
 
     expect(readFileMock).toHaveBeenCalledTimes(1);
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
   });
 
   /**
-   * D-02 + RESEARCH.md Pitfall 5：.generated.h 重入保护 — 不调用 readFile / generateCompileCommands
+   * D-02 + RESEARCH.md Pitfall 5：.generated.h 重入保护 — 不调用 readFile / UBT task
    */
   it('skips .generated.h save — re-entry guard (D-02/Pitfall 5)', async () => {
     const config = makeConfig();
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace());
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
 
     saveListener!({ uri: { fsPath: '/proj/Source/Foo.generated.h' } });
 
@@ -236,18 +248,18 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     await flush();
 
     expect(readFileMock).not.toHaveBeenCalled();
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
   });
 
   /**
-   * D-04：快速连续 3 次 .h 保存 → debounce 合并，仅一次 generateCompileCommands
+   * D-04：快速连续 3 次 .h 保存 → debounce 合并，仅一次 UBT task
    */
-  it('debounces 3 rapid .h saves into 1 UBT trigger (D-04)', async () => {
+  it('debounces 3 rapid .h saves into 1 UHT task (D-04)', async () => {
     const config = makeConfig();
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace());
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
 
     // 快速保存 3 个不同 .h（每次推进 100ms，模拟真实打字）
     saveListener!({ uri: { fsPath: '/proj/Source/A.h' } });
@@ -260,7 +272,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     await vi.advanceTimersByTimeAsync(1500);
     await flush();
 
-    expect(generateCompileCommands).toHaveBeenCalledTimes(1);
+    expect(fakeUbtExecutor).toHaveBeenCalledTimes(1);
   });
 
   /**
@@ -272,13 +284,13 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const ctx = makeFakeExtensionContext();
     const workspace = makeWorkspace();
 
-    startHeaderWatcher(ctx, config, logger, workspace);
+    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 
     // 推进到 800ms（debounce 未到期）
     await vi.advanceTimersByTimeAsync(800);
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
 
     // 手动命令调用 cancel
     cancelHeaderWatcherTrigger();
@@ -287,7 +299,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     await vi.advanceTimersByTimeAsync(800);
     await flush();
 
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
     // logger 应该记录了 cancelled 日志
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('pending trigger cancelled'),
@@ -307,14 +319,14 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     (workspace as any).project = null;
     (workspace as any).engine = null;
 
-    startHeaderWatcher(ctx, config, logger, workspace);
+    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 
     await vi.advanceTimersByTimeAsync(1500);
     await flush();
 
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('skipped'),
     );
@@ -328,7 +340,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, disabledConfig, logger, makeWorkspace());
+    startHeaderWatcher(ctx, disabledConfig, logger, makeWorkspace(), fakeUbtExecutor);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 
@@ -336,6 +348,6 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     await flush();
 
     expect(readFileMock).not.toHaveBeenCalled();
-    expect(generateCompileCommands).not.toHaveBeenCalled();
+    expect(fakeUbtExecutor).not.toHaveBeenCalled();
   });
 });

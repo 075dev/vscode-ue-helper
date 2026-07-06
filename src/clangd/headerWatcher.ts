@@ -27,8 +27,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { generateCompileCommands } from './compileCommands';
-import type { GenerateOptions } from './compileCommands';
+import { getBuildTargetNames, getUbtPath, getUnrealPlatform } from './ueHelpers';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
@@ -72,6 +71,11 @@ let moduleTimerHandle: NodeJS.Timeout | null = null;
  *
  * 生命周期绑定到 context.subscriptions，不需要 dispose 时自动清理。
  */
+/**
+ * UBT UHT 执行器的类型（参数对齐 ubtShellTask 的签名）。
+ */
+type UhtExecutor = (cmd: string, args: readonly string[], cwd: string, log: Logger) => Promise<number>;
+
 class HeaderWatcher {
   /** 当前 debounce timer */
   private debounceTimer: NodeJS.Timeout | null = null;
@@ -83,6 +87,8 @@ class HeaderWatcher {
     /** Logger —— 留给外部 cancelHeaderWatcherTrigger 使用 (D-12/D-13) */
     public readonly logger: Logger,
     private readonly config: Config,
+    /** 测试注入：UBT UHT 执行器。生产环境默认跑真实 UBT 任务。 */
+    private readonly uhtExecutor: UhtExecutor = ubtShellTask,
   ) {}
 
   /**
@@ -186,17 +192,10 @@ class HeaderWatcher {
     vscode.window.setStatusBarMessage(t('headerWatcher.regenerating'), STATUS_INPROGRESS_MS);
 
     try {
-      // D-07 / Phase 8: 复用 UBT/UHT 管线，但以 uhtOnly 模式运行。
-      // 仅重新生成 .generated.h 文件，不触碰 / 不重建 compile_commands.json。
-      // clangd 文件监视感知 .generated.h 变化后自动重索引 → UCLASS()/UFUNCTION() 宏报错消失。
-      // 好处：不需要刷新 compile_commands.json，也就无需重启 clangd。
-      await generateCompileCommands({
-        project: project.path,
-        engineRoot: engine.path,
-        logger: this.logger,
-        workspace: this.workspace,
-        uhtOnly: true,
-      } as GenerateOptions);
+      // [Phase 8] 仅跑 UHT 重新生成 .generated.h，不碰 compile_commands.json。
+      // 调用 UBT 的 UnrealHeaderTool 独立 mode（不生成 compile_commands.json）。
+      // clangd 文件监视感知 .generated.h 变化后自动重索引 → 宏报错消失。
+      await runHeaderToolOnlyWithExecutor(this.workspace, this.logger, this.uhtExecutor);
 
       // D-08: 成功
       vscode.window.setStatusBarMessage(t('headerWatcher.synced'), STATUS_SUCCESS_MS);
@@ -240,14 +239,18 @@ class HeaderWatcher {
  * Phase 8 入口：创建并启动一个 HeaderWatcher，推入 context.subscriptions
  *
  * disposable 封装了 watcher.dispose() —— 扩展停用时自动清理。
+ *
+ * @param uhtExecutor 可选的 UBT UHT 执行器注入 — 生产环境不传（默认走真实 UBT 任务），
+ *                    单测传入 fake executor 避免真正派发 VS Code Task。
  */
 export function startHeaderWatcher(
   context: vscode.ExtensionContext,
   config: Config,
   logger: Logger,
   workspace: WorkspaceState,
+  uhtExecutor?: UhtExecutor,
 ): vscode.Disposable {
-  const watcher = new HeaderWatcher(workspace, logger, config);
+  const watcher = new HeaderWatcher(workspace, logger, config, uhtExecutor);
   activeWatcher = watcher;
 
   const handle = watcher.start();
@@ -268,4 +271,125 @@ export function cancelHeaderWatcherTrigger(): void {
     moduleTimerHandle = null;
     activeWatcher?.logger.info(`${LOG_PREFIX} pending trigger cancelled by manual command`);
   }
+}
+
+/**
+ * Phase 8: 单独调用 UBT 的 `-Mode=UnrealHeaderTool` 只跑 UHT codegen。
+ *
+ * 为什么不用 generateCompileCommands：
+ *   UBT 的 `-Mode=GenerateClangDatabase` 在进程内部先跑 UHT 再自动生成 compile_commands.json，
+ *   无法拆开。而 HeaderWatcher 只需要 .generated.h 重新生成 —— clangd 文件监视会自动感知
+ *   .generated.h 变化并重索引，不需要 compile_commands.json 也不需要重启 clangd。
+ *
+ * 实现：复用 compileCommands.ts 的 executeShellTask 走 VS Code Task API
+ *   （对齐 generateCompileCommands 的 UBT 调用方式，含 quoting/cleanup/进度）。
+ *
+ * UBT UnrealHeaderTool mode 实测（UE 5.8）：
+ *   - 接受 -Target="<TargetName> <Platform> <Config> -Project=<uproject>" 参数
+ *   - 4 秒内完成整个工程的 UHT 检查（incremental，未变更模块跳过）
+ *   - 不生成 compile_commands.json，不触碰 Phase 7 缓存
+ */
+/**
+ * UBT UHT-only 运行器：注入 ubtExecutor 方便单测 mock（避免 vi.mock 拦截内部 ES module 导出调用的限制）。
+ *
+ * 生产环境调用方传入 ubtShellTask（真实 VS Code Task API）；单测传入 fake executor。
+ */
+export async function runHeaderToolOnlyWithExecutor(
+  workspace: WorkspaceState,
+  logger: Logger,
+  ubtExecutor: (cmd: string, args: readonly string[], cwd: string, log: Logger) => Promise<number>,
+  logPrefix: string = LOG_PREFIX,
+): Promise<void> {
+  const project = workspace.project;
+  const engine = workspace.engine;
+  if (!project || !engine) {
+    throw new Error(`${logPrefix} cannot run UHT: project/engine not ready`);
+  }
+
+  const engineUri = vscode.Uri.file(engine.path);
+  const ubtAbsPath = await getUbtPath(engineUri);
+  if (!ubtAbsPath) {
+    throw new Error(`[headerWatcher] UBT not found under ${engine.path}`);
+  }
+
+  const projectDir = workspace.projectDir;
+  if (!projectDir) {
+    throw new Error('[headerWatcher] projectDir not set');
+  }
+
+  const targetNames = await getBuildTargetNames(projectDir);
+  if (targetNames.length === 0) {
+    throw new Error(`[headerWatcher] no .Target.cs found in ${projectDir}/Source`);
+  }
+
+  const buildTargetName = targetNames[0]!;
+  const platform = getUnrealPlatform(process.platform);
+  if (!platform) {
+    throw new Error(`[headerWatcher] unsupported platform: ${process.platform}`);
+  }
+
+  // 将 UBT 绝对路径转为引擎相对路径（对齐 compileCommands.ts 的 ubtRelPath 策略）
+  const ubtRelPath = `.${path.sep}${path.relative(engine.path, ubtAbsPath)}`;
+
+  // UBT UnrealHeaderTool mode 参数（对齐 UBT -Mode=UnrealHeaderTool -Help 输出）
+  const ubtArgs = [
+    '-Mode=UnrealHeaderTool',
+    `-Target=${buildTargetName} ${platform} Development -Project=${project.path}`,
+  ];
+
+  logger.info(`${logPrefix} starting UHT-only: ${ubtRelPath} ${ubtArgs.join(' ')}`);
+
+  // 复用 compileCommands.ts 已有的 UBT 任务包装（VS Code Task API + quoting + cleanup）
+  const exitCode = await ubtExecutor(ubtRelPath, ubtArgs, engine.path, logger);
+  if (exitCode !== 0) {
+    throw new Error(`${logPrefix} UHT task exited with code ${exitCode}`);
+  }
+
+  logger.info(`${logPrefix} UHT-only completed successfully`);
+}
+
+/**
+ * 极简 VS Code Task API 包装，复用 compileCommands.ts 同一模式跑 UBT。
+ * 与那里不同的：这里是模块私有函数，并且使用 headerWatcher-specific 任务名。
+ */
+function ubtShellTask(
+  cmd: string,
+  args: ReadonlyArray<string>,
+  cwd: string,
+  log: Logger,
+): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const unrealFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd));
+    const scope = unrealFolder ?? vscode.workspace.workspaceFolders?.[0];
+    if (!scope) {
+      reject(new Error('[headerWatcher] No workspace folder open.'));
+      return;
+    }
+
+    const task: vscode.Task = new vscode.Task(
+      { type: 'shell' },
+      scope,
+      'vscodeUEHelper: HeaderWatcher UHT',
+      'headerWatcher',
+      new vscode.ShellExecution(cmd, [...args], {
+        cwd,
+        executable: process.platform === 'win32' ? 'PowerShell.exe' : undefined,
+      }),
+    );
+    task.group = vscode.TaskGroup.Build;
+    task.problemMatchers = ['$msCompile'];
+
+    vscode.tasks.executeTask(task).then(
+      (execution) => {
+        const disposable = vscode.tasks.onDidEndTaskProcess((e) => {
+          if (e.execution === execution) {
+            disposable.dispose();
+            log.info(`${LOG_PREFIX} UHT task exited with code ${e.exitCode}`);
+            resolve(e.exitCode ?? 0);
+          }
+        });
+      },
+      (err) => reject(err),
+    );
+  });
 }
