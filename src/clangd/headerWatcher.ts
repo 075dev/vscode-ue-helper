@@ -27,7 +27,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import chokidar from 'chokidar';
 import { getBuildTargetNames, getUbtPath, getUnrealPlatform } from './ueHelpers';
 import { triggerReparse } from './proxy/generatedHeaderWatcher';
 import type { Config } from '@core/config';
@@ -39,14 +38,6 @@ import { t } from '@i18n';
 /*  常量                                                                */
 /* ------------------------------------------------------------------ */
 
-/** D-04: debounce 时长（毫秒） */
-const DEBOUNCE_MS = 1500;
-/** D-02: UE 反射宏正则 —— 匹配头文件内容中的反射宏 */
-const UE_MACRO_RE = /\b(?:UCLASS|USTRUCT|UENUM|UINTERFACE|UFUNCTION|UPROPERTY|GENERATED_BODY|UMETA)\b/;
-/** D-02: 重入保护 —— 防止 UHT 写 .generated.h 时二次触发 */
-const GENERATED_HEADER_SUFFIX = '.generated.h';
-/** D-02: 仅监听 .h 后缀（不含 .hpp / .inl / .cpp） */
-const HEADER_SUFFIX = '.h';
 /** D-10: Output channel 日志前缀 */
 const LOG_PREFIX = '[headerWatcher]';
 
@@ -84,37 +75,9 @@ type UhtExecutor = (cmd: string, args: readonly string[], cwd: string, log: Logg
  */
 type ClangdNotifier = (projectDir: string, ubtStartTimeMs: number, logger: Logger) => Promise<void>;
 
-/**
- * chokidar 监听的 .h 文件 glob 模式（相对于 projectDir）。
- * 覆盖 Source/ 和 Plugins//Source/ 下的所有 .h 文件。
- */
-const WATCH_PATTERNS = ['Source/**/*.h', 'Plugins/**/Source/**/*.h'];
-
-/**
- * chokidar 忽略模式 — 排除 Intermediate/Binaries 等非源码目录。
- */
-const WATCH_IGNORED = [
-  '**/Intermediate/**',
-  '**/Binaries/**',
-  '**/DerivedDataCache/**',
-  '**/Saved/**',
-  '**/.git/**',
-  '**/node_modules/**',
-];
-
-/**
- * chokidar awaitWriteFinish 稳定阈值（毫秒）。
- * 文件写入停止后等待这段时间再触发，对齐原 onDidSaveTextDocument 的 1500ms debounce。
- */
-const AWAIT_WRITE_FINISH_MS = 1500;
-
-class HeaderWatcher {
+export class HeaderWatcher {
   /** 当前 debounce timer */
   private debounceTimer: NodeJS.Timeout | null = null;
-  /** 所有 VS Code 订阅（onDidSaveTextDocument 等） */
-  private disposables: vscode.Disposable[] = [];
-  /** chokidar watcher 实例 */
-  private chokidarWatcher: chokidar.FSWatcher | null = null;
 
   constructor(
     private readonly workspace: WorkspaceState,
@@ -128,112 +91,33 @@ class HeaderWatcher {
   ) {}
 
   /**
-   * 启动 watcher —— 用 chokidar 监听 .h 文件变更（D-01 改进）。
+   * Phase 8 HeaderWatcher — 手动触发 UBT。
    *
-   * 为什么用 chokidar 替代 onDidSaveTextDocument：
-   *   - onDidSaveTextDocument 要等 VS Code 保存流程走完才触发（~100-500ms 延迟）
-   *   - chokidar 直接监听文件系统事件，文件写入完成后立即触发（~50-100ms 延迟）
-   *   - 这让 UBT 更早启动，与 clangd 第一次 re-parse 更好并行
+   * 自动触发已移除：现在 UBT 的触发由 proxy 侧的 UeDiagnosticWatcher 承担
+   * （被动响应模式：clangd 报告 UE 宏报错 → proxy 触发 UBT → UBT 完成后
+   * proxy 注入 didChangeWatchedFiles → clangd re-parse → 报错消失）。
    *
-   * 返回的 Disposable 已推入 context.subscriptions，无需调用方手动管理。
+   * 此方法保留用于：
+   * - 用户手动执行命令触发 UBT
+   * - 测试注入场景
+   *
+   * @param fsPath - 触发 UBT 的 .h 文件路径（仅用于日志）
    */
-  start(): vscode.Disposable {
-    const projectDir = this.workspace.projectDir;
-    if (projectDir) {
-      const patterns = WATCH_PATTERNS.map((p) => path.join(projectDir, p));
-      this.chokidarWatcher = chokidar.watch(patterns, {
-        ignored: WATCH_IGNORED,
-        ignoreInitial: true,
-        persistent: true,
-        awaitWriteFinish: {
-          stabilityThreshold: AWAIT_WRITE_FINISH_MS,
-          pollInterval: 50,
-        },
-      });
-      this.chokidarWatcher.on('change', (filePath) => {
-        void this.handleSave(filePath);
-      });
-      this.chokidarWatcher.on('add', (filePath) => {
-        void this.handleSave(filePath);
-      });
-    }
-
-    this.logger.info(`${LOG_PREFIX} started (chokidar)`);
-
-    // 返回封装 disposable —— dispose 时清理内部状态
-    return new vscode.Disposable(() => this.dispose());
-  }
-
-  /**
-   * D-02/D-03/D-05 过滤链：对每次保存事件做完整的项目/扩展/反射宏检测
-   *
-   * 返回 true 表示 scheduleTrigger 已被调用（异步调度中），
-   * false 表示本次保存被过滤（原因见代码注释）。
-   */
-  private async handleSave(fsPath: string): Promise<void> {
-    // D-05: setting disabled → early-out
+  async triggerUbtRegen(fsPath: string): Promise<void> {
     if (!this.config.clangdHeaderWatcherEnabled) {
+      this.logger.info(`${LOG_PREFIX} skipped (setting disabled)`);
       return;
     }
-
-    // D-02: 仅 .h + 非 .generated.h（重入保护）
-    if (!fsPath.endsWith(HEADER_SUFFIX) || fsPath.endsWith(GENERATED_HEADER_SUFFIX)) {
-      return;
-    }
-
-    // D-15: projectFolder 未 ready → skip（detection 未完成）
     const projectDir = this.workspace.projectDir;
     if (!projectDir) {
-      this.logger.info(`${LOG_PREFIX} skipped (no projectDir) — detection not ready`);
+      this.logger.info(`${LOG_PREFIX} skipped (no projectDir)`);
       return;
     }
-
-    // D-03: 必须在 projectDir 目录内 —— 拒绝 '..' 前缀或绝对路径（防御路径穿越 T-08-02）
-    const rel = path.relative(projectDir, fsPath);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
-      return;
-    }
-
-    // D-02: 读取文件内容 + 反射宏正则检测
-    let content: string;
-    try {
-      content = await fs.readFile(fsPath, 'utf8');
-    } catch (err) {
-      this.logger.warn(
-        `${LOG_PREFIX} read failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return;
-    }
-    if (!UE_MACRO_RE.test(content)) {
-      return;
-    }
-
-    // 通过全部过滤 → 调度触发
-    this.scheduleTrigger(fsPath);
+    await this.runUbtRegen(fsPath);
   }
 
   /**
-   * D-04: 防抖调度 —— 清除前一个 timer，1500ms 后触发 UBT
-   *
-   * 双写模式：同时更新 this.debounceTimer 与 module-level moduleTimerHandle，
-   * 使 bare function cancelHeaderWatcherTrigger()（不持有实例引用）也能取消。
-   */
-  private scheduleTrigger(fsPath: string): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-    }
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null;
-      moduleTimerHandle = null;
-      void this.runUbtRegen(fsPath);
-    }, DEBOUNCE_MS);
-    // D-12/D-13: 双写 —— module cancel 也能命中
-    moduleTimerHandle = this.debounceTimer;
-    this.logger.info(`${LOG_PREFIX} scheduled UBT regen for ${fsPath}`);
-  }
-
-  /**
-   * D-07/D-08/D-09/D-10: 跑 UBT GenerateClangDatabase + 状态栏反馈
+   * D-07/D-08/D-09/D-10: 跑 UBT UnrealHeaderTool + 状态栏反馈
    *
    * 失败走 logger.warn（D-10 Output channel），不弹窗（D-09），不重试（D-11）。
    */
@@ -288,16 +172,21 @@ class HeaderWatcher {
   /**
    * 清理：取消 timer + 销毁所有订阅（多次调用安全）
    */
+  /**
+   * 启动 watcher — Phase 8 已改为被动诊断模式（proxy 侧 UeDiagnosticWatcher）。
+   *
+   * 此方法保留以保持 API 兼容，但不做任何监听。
+   * UBT 的触发现在由 proxy 侧承担：clangd 报告 UE 宏报错 → proxy 触发 UBT。
+   *
+   * 如需手动触发 UBT，请调用 triggerUbtRegen(fsPath)。
+   */
+  start(): vscode.Disposable {
+    this.logger.info(`${LOG_PREFIX} started (passive mode — proxy handles UBT trigger)`);
+    return new vscode.Disposable(() => this.dispose());
+  }
+
   dispose(): void {
     this.cancelPendingTrigger();
-    if (this.chokidarWatcher) {
-      void this.chokidarWatcher.close();
-      this.chokidarWatcher = null;
-    }
-    for (const d of this.disposables) {
-      try { d.dispose(); } catch { /* ignore */ }
-    }
-    this.disposables = [];
   }
 }
 

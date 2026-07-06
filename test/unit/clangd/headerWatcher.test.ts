@@ -75,14 +75,12 @@ vi.mock('chokidar', () => ({
   },
 }));
 
-const triggerChokidarChange = chokidarMock.changeHandler;
-
 // 本地别名，让测试体 gherkin 生成更清晰
 const readFileMock = mocks.readFileMock;
 
 // ============== Test code ==============
 
-import { startHeaderWatcher, cancelHeaderWatcherTrigger } from '@clangd/headerWatcher';
+import { HeaderWatcher } from '@clangd/headerWatcher';
 
 // 假 UBT executor：单测时不真正跑 UHT，只记录调用并上报成功
 const mocksUht = vi.hoisted(() => ({
@@ -133,12 +131,6 @@ function makeLogger(): any {
   };
 }
 
-/** 捕获 vscode Disposable 构造的 mock */
-function makeFakeExtensionContext(): any {
-  return {
-    subscriptions: [],
-  };
-}
 
 describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
   let vscode: typeof import('vscode');
@@ -177,47 +169,27 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
   });
 
   /**
-   * 辅助：快速完成等待，让 async runUbtRegen 中的 microtasks/fake-timer 队列排空。
+   * D-04/D-07：手动触发 triggerUbtRegen → UBT 执行 → 完成后通知 clangd
    */
-  async function flush(): Promise<void> {
-    // 先把 fake timers 队列里的 setTimeout 跑掉
-    await vi.advanceTimersToNextTimerAsync();
-    // 再等微任务链（runHeaderToolOnly 被 mock 为 async noop，会自动完成）
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-  }
-
-  /**
-   * D-02/D-04/D-07：.h + 反射宏 → 经过 1500ms debounce 后触发 runHeaderToolOnly（只跑 UHT codegen）
-   */
-  it('triggers runHeaderToolOnly on .h save containing UCLASS macro (D-02/D-04/D-07)', async () => {
+  it('triggerUbtRegen runs UBT and notifies clangd (D-04/D-07)', async () => {
     const workspace = makeWorkspace();
     const config = makeConfig();
     const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor, fakeClangdNotifier);
+    const watcher = new HeaderWatcher(workspace, logger, config, fakeUbtExecutor, fakeClangdNotifier);
 
-    // 模拟保存 MyActor.h（含 UCLASS）
-    triggerChokidarChange!('/proj/Source/MyActor.h');
+    // 手动触发 UBT
+    await watcher.triggerUbtRegen('/proj/Source/MyActor.h');
 
-    // debounce 期间的 1499ms 内不应触发
-    await vi.advanceTimersByTimeAsync(1499);
-    expect(fakeUbtExecutor).not.toHaveBeenCalled();
-
-    // 再推进 1ms（刚好 1500ms）→ 触发
-    await vi.advanceTimersByTimeAsync(1);
-    await flush();
+    // 验证 UBT 被调用
     expect(fakeUbtExecutor).toHaveBeenCalledTimes(1);
-    // 验证 UBT 调用参数包含 -Mode=UnrealHeaderTool
     const args = (fakeUbtExecutor.mock.calls[0] as any[])[1] as string[];
     expect(args).toEqual(expect.arrayContaining([
       '-Mode=UnrealHeaderTool',
       expect.stringContaining('MyProjEditor'),
       expect.stringContaining('-Project='),
     ]));
-    // 验证 UBT 完成后 clangd notifier 被调用（主动通知 clangd 重索引）
+    // 验证 UBT 完成后 clangd notifier 被调用
     expect(fakeClangdNotifier).toHaveBeenCalledTimes(1);
     expect(fakeClangdNotifier).toHaveBeenCalledWith(
       '/proj',
@@ -227,162 +199,59 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
   });
 
   /**
-   * D-02：.cpp 文件 → 不触发（early-out on extension check，readFile 也不调用）
+   * D-05：setting disabled → triggerUbtRegen 立即短路
    */
-  it('skips .cpp save — early-out, no readFile (D-02)', async () => {
-    const config = makeConfig();
-    const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
-
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
-
-    triggerChokidarChange!('/proj/Source/MyActor.cpp');
-
-    await vi.advanceTimersByTimeAsync(1500);
-    await flush();
-
-    expect(readFileMock).not.toHaveBeenCalled();
-    expect(fakeUbtExecutor).not.toHaveBeenCalled();
-  });
-
-  /**
-   * D-02：.h 文件但内容不含反射宏 → 不触发（通过 regex 过滤）
-   */
-  it('skips .h save without reflection macro (D-02)', async () => {
-    // 定制 readFile 返回无宏内容
-    readFileMock.mockReset();
-    readFileMock.mockResolvedValue('// plain header\nclass F {};');
-
-    const config = makeConfig();
-    const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
-
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
-
-    triggerChokidarChange!('/proj/Source/PlainHeader.h');
-
-    await vi.advanceTimersByTimeAsync(1500);
-    await flush();
-
-    expect(readFileMock).toHaveBeenCalledTimes(1);
-    expect(fakeUbtExecutor).not.toHaveBeenCalled();
-  });
-
-  /**
-   * D-02 + RESEARCH.md Pitfall 5：.generated.h 重入保护 — 不调用 readFile / UBT task
-   */
-  it('skips .generated.h save — re-entry guard (D-02/Pitfall 5)', async () => {
-    const config = makeConfig();
-    const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
-
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
-
-    triggerChokidarChange!('/proj/Source/Foo.generated.h');
-
-    await vi.advanceTimersByTimeAsync(1500);
-    await flush();
-
-    expect(readFileMock).not.toHaveBeenCalled();
-    expect(fakeUbtExecutor).not.toHaveBeenCalled();
-  });
-
-  /**
-   * D-04：快速连续 3 次 .h 保存 → debounce 合并，仅一次 UBT task
-   */
-  it('debounces 3 rapid .h saves into 1 UHT task (D-04)', async () => {
-    const config = makeConfig();
-    const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
-
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
-
-    // 快速保存 3 个不同 .h（每次推进 100ms，模拟真实打字）
-    triggerChokidarChange!('/proj/Source/A.h');
-    await vi.advanceTimersByTimeAsync(100);
-    triggerChokidarChange!('/proj/Source/B.h');
-    await vi.advanceTimersByTimeAsync(100);
-    triggerChokidarChange!('/proj/Source/C.h');
-
-    // 推进 debounce 窗口
-    await vi.advanceTimersByTimeAsync(1500);
-    await flush();
-
-    expect(fakeUbtExecutor).toHaveBeenCalledTimes(1);
-  });
-
-  /**
-   * D-12/D-13：cancelHeaderWatcherTrigger 从外部取消 pending debounce（双跑防护）
-   */
-  it('cancelHeaderWatcherTrigger cancels pending debounce (D-12/D-13)', async () => {
-    const config = makeConfig();
-    const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
+  it('triggerUbtRegen short-circuits when setting disabled (D-05)', async () => {
     const workspace = makeWorkspace();
+    const disabledConfig = makeConfig({ enabled: false });
+    const logger = makeLogger();
 
-    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor, fakeClangdNotifier);
+    const watcher = new HeaderWatcher(workspace, logger, disabledConfig, fakeUbtExecutor, fakeClangdNotifier);
 
-    triggerChokidarChange!('/proj/Source/MyActor.h');
-
-    // 推进到 800ms（debounce 未到期）
-    await vi.advanceTimersByTimeAsync(800);
-    expect(fakeUbtExecutor).not.toHaveBeenCalled();
-
-    // 手动命令调用 cancel
-    cancelHeaderWatcherTrigger();
-
-    // 再推进 800ms（debounce 应该不会触发了）
-    await vi.advanceTimersByTimeAsync(800);
-    await flush();
+    await watcher.triggerUbtRegen('/proj/Source/MyActor.h');
 
     expect(fakeUbtExecutor).not.toHaveBeenCalled();
-    // logger 应该记录了 cancelled 日志
     expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('pending trigger cancelled'),
+      expect.stringContaining('setting disabled'),
     );
   });
 
   /**
-   * D-15：projectDir 未 ready（detection 未完成）→ 不触发 + logger 记录跳过
+   * D-15：projectDir 未 ready → triggerUbtRegen 跳过
    */
-  it('skips when projectDir not ready — logs [headerWatcher] (D-15)', async () => {
-    const config = makeConfig();
-    const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
-    // D-15: 模拟 detection 尚未完成 → projectDir/project/engine 全部 null
+  it('triggerUbtRegen skips when projectDir not ready (D-15)', async () => {
     const workspace = makeWorkspace();
     (workspace as any).projectDir = null;
     (workspace as any).project = null;
     (workspace as any).engine = null;
+    const config = makeConfig();
+    const logger = makeLogger();
 
-    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor, fakeClangdNotifier);
+    const watcher = new HeaderWatcher(workspace, logger, config, fakeUbtExecutor, fakeClangdNotifier);
 
-    // projectDir 未 ready → chokidar 不会启动，但 handleSave 的 D-15 门控会 early-out
-    // 直接调用 handleSave 路径（通过 chokidar 不可达，因为 projectDir null）
-    // 验证：即使有文件变更事件，projectDir null 也不会触发 UBT
-    // 注：chokidar 未启动，triggerChokidarChange 不会有效果；这里验证 watcher 不崩溃 + 不触发 UBT
-    await vi.advanceTimersByTimeAsync(1500);
-    await flush();
+    await watcher.triggerUbtRegen('/proj/Source/MyActor.h');
 
     expect(fakeUbtExecutor).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('no projectDir'),
+    );
   });
 
   /**
-   * D-05：vscodeUEHelper.clangdHeaderWatcherEnabled=false → 立即短路，不 IO，不触发
+   * start() 不再做任何监听（被动模式由 proxy 承担）
    */
-  it('short-circuits when setting disabled — no IO, no trigger (D-05)', async () => {
-    const disabledConfig = makeConfig({ enabled: false });
+  it('start does not watch files (passive mode)', async () => {
+    const workspace = makeWorkspace();
+    const config = makeConfig();
     const logger = makeLogger();
-    const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, disabledConfig, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
+    const watcher = new HeaderWatcher(workspace, logger, config, fakeUbtExecutor, fakeClangdNotifier);
+    const disposable = watcher.start();
 
-    triggerChokidarChange!('/proj/Source/MyActor.h');
-
-    await vi.advanceTimersByTimeAsync(1500);
-    await flush();
-
-    expect(readFileMock).not.toHaveBeenCalled();
+    // start 后不应有任何 UBT 调用（没有文件监听）
     expect(fakeUbtExecutor).not.toHaveBeenCalled();
+
+    // dispose 不应崩溃
+    disposable.dispose();
   });
 });
