@@ -29,6 +29,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { generateCompileCommands } from './compileCommands';
 import type { GenerateOptions } from './compileCommands';
+import { CompileCommandsCache } from './compileCommandsCache';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
@@ -186,7 +187,16 @@ class HeaderWatcher {
     vscode.window.setStatusBarMessage(t('headerWatcher.regenerating'), STATUS_INPROGRESS_MS);
 
     try {
-      // D-07: 复用管线（Phase 7 指纹缓存命中时无开销）
+      // [BUGFIX] Phase 7 compileCommandsCache 的 fingerprint 仅含 .uproject/Build.cs/Target.cs，
+      // 不含 .h 文件变更 → HeaderWatcher 触发时总是 cache HIT 并跳过 UBT → .generated.h 不刷新。
+      // 所以在触发前主动 invalidate，强制走完整 UBT/UHT 路径以重新生成 .generated.h。
+      const fixCache = new CompileCommandsCache({ logger: this.logger });
+      const projectDir = this.workspace.projectDir;
+      if (projectDir) {
+        await fixCache.invalidate(projectDir);
+      }
+
+      // D-07: 复用管线
       await generateCompileCommands({
         project: project.path,
         engineRoot: engine.path,
