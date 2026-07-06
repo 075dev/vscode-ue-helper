@@ -31,7 +31,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import * as vscode from 'vscode';
+//import * as vscode from 'vscode';
 import chokidar from 'chokidar';
 import type { LspBridge } from './bridge';
 import type { Logger } from '@core/logger';
@@ -119,7 +119,7 @@ export class GeneratedHeaderWatcher {
 
       // 转换为 URI 格式（clangd 使用 file:// URI）
       const changes = payload.changedFiles.map((fsPath) => ({
-        uri: vscode.Uri.file(fsPath).toString(),
+        uri: 'file://' + fsPath,
         type: 2 as const, // 2 = Changed (FileChangeType)
       }));
 

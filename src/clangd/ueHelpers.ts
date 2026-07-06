@@ -5,7 +5,7 @@
  * 提供 UBT 路径查找、Unreal 平台映射、Build Target 扫描等基础能力。
  */
 
-import * as vscode from 'vscode';
+//import * as vscode from 'vscode';
 
 /* ------------------------------------------------------------------ */
 /*  常量（对齐原版 consts.ts）                                          */

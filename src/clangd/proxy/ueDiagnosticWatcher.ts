@@ -132,6 +132,12 @@ export class UeDiagnosticWatcher {
       message: string;
     }>;
   }): Promise<void> {
+    // 诊断：每次收到诊断都打印，帮助定位为什么持续触发
+    const allMessages = params.diagnostics.map((d) => `[${d.severity}] ${d.message.slice(0, 60)}`).join(', ');
+    this.logger.info(
+      `[ueDiagnosticWatcher] diagnostics for ${path.basename(params.uri)}: ${params.diagnostics.length} items - ${allMessages || '(none)'}`,
+    );
+
     // 只关注 Error（severity === 1）
     const errors = params.diagnostics.filter((d) => d.severity === 1);
 
@@ -201,10 +207,12 @@ export class UeDiagnosticWatcher {
     this.lastUbtTime = now;
     this.retryCount++;
 
+    // 诊断：打印所有 UE 错误消息，帮助定位为什么持续触发
+    this.logger.warn(
+      `[ueDiagnosticWatcher] TRIGGERING UBT (attempt ${this.retryCount}/${this.maxRetries}): consecutive_errors=${this.consecutiveErrorCount}, last_error_time=${new Date(this.lastErrorTime).toISOString()}`,
+    );
+
     try {
-      this.logger.info(
-        `[ueDiagnosticWatcher] triggering UBT (attempt ${this.retryCount}/${this.maxRetries})`,
-      );
       await this.runUbt();
 
       // UBT 完成后，启动文件监听等待 .generated.h 变化
