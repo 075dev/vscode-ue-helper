@@ -186,8 +186,9 @@ export function runProxy(
   wireBridgeStdio(stdio, bridge);
 
   // [Phase 8] 创建 UE 诊断监听器（被动响应模式：诊断到 UE 报错 → 触发 UBT）
+  // proxy 是 vscode-free 进程，ubtPath 和 buildTargetName 由 extension 侧解析后通过 CLI 传入
   let ueDiagnosticWatcher: UeDiagnosticWatcher | null = null;
-  if (options.projectDir && options.engineRoot) {
+  if (options.projectDir && options.engineRoot && options.ubtPath && options.buildTargetName) {
     ueDiagnosticWatcher = new UeDiagnosticWatcher(
       bridge,
       {
@@ -199,6 +200,8 @@ export function runProxy(
       {
         projectDir: options.projectDir,
         engineRoot: options.engineRoot,
+        ubtPath: options.ubtPath,
+        buildTargetName: options.buildTargetName,
         triggerThreshold: options.ueDiagnosticTriggerThreshold,
         minUbtIntervalMs: options.ueDiagnosticMinUbtIntervalMs,
         maxRetries: options.ueDiagnosticMaxRetries,

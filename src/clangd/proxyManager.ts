@@ -23,6 +23,7 @@ import { Logger } from '@core/logger';
 import { resolveRealClangdPath } from './proxy/realClangdResolver';
 import { ClangdSettingsManager } from './proxy/settingsManager';
 import { buildStatus, type ClangdProxyStatus } from './proxy/status';
+import { getBuildTargetNames, getUbtPath } from './ueHelpers';
 
 export interface ClangdProxyManagerDependencies {
   readonly fileExists?: (candidate: string) => boolean;
@@ -116,7 +117,7 @@ export class ClangdProxyManager {
 
     // 从 Config 与当前 clangd.path 解析真实 clangd，再构建 proxy 参数。
     const realClangdPath = this.resolveRealClangdPath(clangdConfig);
-    const proxyArgs = this.buildProxyArgs(realClangdPath);
+    const proxyArgs = await this.buildProxyArgs(realClangdPath);
 
     await this.settingsManager.enable(proxyArgs, originalArgs);
     this.logger.info('[proxyManager] proxy enabled');
@@ -152,7 +153,7 @@ export class ClangdProxyManager {
     const realClangdArgs = dashDashIdx === -1 ? [] : originalArgs.slice(dashDashIdx + 1);
 
     const realClangdPath = this.resolveRealClangdPath(clangdConfig);
-    const proxyArgs = this.buildProxyArgs(realClangdPath);
+    const proxyArgs = await this.buildProxyArgs(realClangdPath);
 
     await this.settingsManager.updateArgs(proxyArgs, realClangdArgs);
     this.logger.info('[proxyManager] proxy args reapplied');
@@ -190,9 +191,24 @@ export class ClangdProxyManager {
   }
 
   /**
+   * 解析 UBT 可执行文件路径（extension 侧有 vscode API）。
+   */
+  private async resolveUbtPath(engineRoot: string): Promise<string | null> {
+    return await getUbtPath(vscode.Uri.file(engineRoot));
+  }
+
+  /**
+   * 解析 Build Target 名称（取第一个 .Target.cs，Editor 优先）。
+   */
+  private async resolveBuildTarget(projectDir: string): Promise<string | null> {
+    const targets = await getBuildTargetNames(projectDir);
+    return targets[0] ?? null;
+  }
+
+  /**
    * 从 Config 与已解析 clangd 路径构建 proxy CLI 参数列表。
    */
-  private buildProxyArgs(realClangdPath: string): string[] {
+  private async buildProxyArgs(realClangdPath: string): Promise<string[]> {
     const args: string[] = ['--real-clangd', realClangdPath];
 
     // keepalive 配置
@@ -217,14 +233,28 @@ export class ClangdProxyManager {
       args.push('--dictionary-path', dictPath);
     }
 
-    // [Phase 8] 项目根目录 + 引擎根目录 — 启用 UE 诊断被动响应模式
+    // [Phase 8] UE 诊断被动响应模式参数
+    // extension 侧解析 UBT target/路径，proxy 是 vscode-free 进程无法调用 ueHelpers
     const projectDir = this.deps.projectDir;
     const engineRoot = this.deps.engineRoot;
     if (projectDir) {
       args.push('--project-dir', projectDir);
-    }
-    if (engineRoot) {
-      args.push('--engine-root', engineRoot);
+      if (engineRoot) {
+        args.push('--engine-root', engineRoot);
+        // 解析 UBT 路径 + Build Target 名称，传给 proxy
+        try {
+          const ubtPath = await this.resolveUbtPath(engineRoot);
+          if (ubtPath) {
+            args.push('--ubt-path', ubtPath);
+          }
+          const targetName = await this.resolveBuildTarget(projectDir);
+          if (targetName) {
+            args.push('--build-target', targetName);
+          }
+        } catch (err) {
+          this.logger.warn(`[proxyManager] failed to resolve UBT params: ${err}`);
+        }
+      }
     }
 
     return args;

@@ -37,8 +37,6 @@ import * as path from 'node:path';
 import chokidar from 'chokidar';
 import type { LspBridge } from './bridge';
 import type { Logger } from '@core/logger';
-import { getUbtPath } from './../ueHelpers';
-import { getBuildTargetNames, getUnrealPlatform } from './../ueHelpers';
 
 /** UE 宏报错正则 — clangd 对过期 generated.h 的典型错误消息 */
 const UE_MACRO_ERROR_PATTERNS: RegExp[] = [
@@ -73,6 +71,10 @@ export interface UeDiagnosticWatcherOptions {
   projectDir: string;
   /** 引擎根目录 */
   engineRoot: string;
+  /** UBT 可执行文件绝对路径（由 extension 侧解析后传入，proxy 是 vscode-free 进程） */
+  ubtPath: string;
+  /** Build Target 名称（如 XianDreamwalkingEditor，由 extension 侧解析后传入） */
+  buildTargetName: string;
   /** 触发阈值：连续多少次诊断到 UE 报错才触发 UBT */
   triggerThreshold?: number;
   /** 诊断窗口时间（毫秒） */
@@ -81,8 +83,6 @@ export interface UeDiagnosticWatcherOptions {
   minUbtIntervalMs?: number;
   /** 最大重试次数 */
   maxRetries?: number;
-  /** 自定义 UBT 路径（可选，不提供则自动查找） */
-  ubtPath?: string;
 }
 
 /**
@@ -221,24 +221,27 @@ export class UeDiagnosticWatcher {
    * 运行 UBT -Mode=UnrealHeaderTool。
    */
   private async runUbt(): Promise<void> {
-    const ubtPath = this.options.ubtPath ?? (await getUbtPath({ fsPath: this.options.engineRoot } as never));
-    if (!ubtPath) {
-      throw new Error(`UBT not found under ${this.options.engineRoot}`);
-    }
+    // ubtPath 和 buildTargetName 由 extension 侧解析后通过 CLI 参数传入
+    // proxy 是 vscode-free 进程，不能直接调用 ueHelpers（依赖 vscode API）
+    const { ubtPath, buildTargetName } = this.options;
 
-    const targetNames = await getBuildTargetNames(this.options.projectDir);
-    if (targetNames.length === 0) {
-      throw new Error(`No .Target.cs found in ${this.options.projectDir}/Source`);
-    }
-
-    const buildTargetName = targetNames[0]!;
-    const platform = getUnrealPlatform(process.platform);
+    // 平台字符串（Win64/Mac/Linux）— 不依赖 vscode，纯 Node.js
+    const platformMap: Record<string, string> = {
+      win32: 'Win64',
+      darwin: 'Mac',
+      linux: 'Linux',
+    };
+    const platform = platformMap[process.platform];
     if (!platform) {
       throw new Error(`Unsupported platform: ${process.platform}`);
     }
 
-    const projectFile = path.join(this.options.projectDir, `${path.basename(this.options.projectDir)}.uproject`);
+    const projectFile = path.join(
+      this.options.projectDir,
+      `${path.basename(this.options.projectDir)}.uproject`,
+    );
 
+    // 转为引擎相对路径（UBT 以引擎根目录为 cwd）
     const ubtRelPath = `.${path.sep}${path.relative(this.options.engineRoot, ubtPath)}`;
     const args = [
       '-Mode=UnrealHeaderTool',

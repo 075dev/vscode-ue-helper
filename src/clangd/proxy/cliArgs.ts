@@ -29,6 +29,10 @@ export interface CliOptions {
   projectDir?: string;
   /** [Phase 8] 引擎根目录。提供时启用 UE 诊断被动响应模式（诊断到 UE 报错 → 触发 UBT） */
   engineRoot?: string;
+  /** [Phase 8] UBT 可执行文件绝对路径（由 extension 侧解析后传入） */
+  ubtPath?: string;
+  /** [Phase 8] Build Target 名称（如 XianDreamwalkingEditor，由 extension 侧解析后传入） */
+  buildTargetName?: string;
   /** [Phase 8] UE 诊断触发阈值：连续多少次诊断到 UE 报错才触发 UBT（默认 2） */
   ueDiagnosticTriggerThreshold?: number;
   /** [Phase 8] UBT 最小间隔（毫秒），防止频繁触发（默认 10000） */
@@ -69,6 +73,8 @@ export function parseArgs(argv: string[]): ParseArgsResult {
     localizationMode: DEFAULT_LOCALIZATION_MODE,
     projectDir: undefined,
     engineRoot: undefined,
+    ubtPath: undefined,
+    buildTargetName: undefined,
     ueDiagnosticTriggerThreshold: undefined,
     ueDiagnosticMinUbtIntervalMs: undefined,
     ueDiagnosticMaxRetries: undefined,
@@ -157,6 +163,22 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         const val = proxyArgs[i];
         if (val !== undefined && !val.startsWith('--')) {
           options.engineRoot = val;
+        }
+        break;
+      }
+      case '--ubt-path': {
+        i++;
+        const val = proxyArgs[i];
+        if (val !== undefined && !val.startsWith('--')) {
+          options.ubtPath = val;
+        }
+        break;
+      }
+      case '--build-target': {
+        i++;
+        const val = proxyArgs[i];
+        if (val !== undefined && !val.startsWith('--')) {
+          options.buildTargetName = val;
         }
         break;
       }
