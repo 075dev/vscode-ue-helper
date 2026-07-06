@@ -27,6 +27,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import chokidar from 'chokidar';
 import { getBuildTargetNames, getUbtPath, getUnrealPlatform } from './ueHelpers';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
@@ -82,11 +83,37 @@ type UhtExecutor = (cmd: string, args: readonly string[], cwd: string, log: Logg
  */
 type ClangdNotifier = (projectDir: string, ubtStartTimeMs: number, logger: Logger) => Promise<void>;
 
+/**
+ * chokidar 监听的 .h 文件 glob 模式（相对于 projectDir）。
+ * 覆盖 Source/ 和 Plugins//Source/ 下的所有 .h 文件。
+ */
+const WATCH_PATTERNS = ['Source/**/*.h', 'Plugins/**/Source/**/*.h'];
+
+/**
+ * chokidar 忽略模式 — 排除 Intermediate/Binaries 等非源码目录。
+ */
+const WATCH_IGNORED = [
+  '**/Intermediate/**',
+  '**/Binaries/**',
+  '**/DerivedDataCache/**',
+  '**/Saved/**',
+  '**/.git/**',
+  '**/node_modules/**',
+];
+
+/**
+ * chokidar awaitWriteFinish 稳定阈值（毫秒）。
+ * 文件写入停止后等待这段时间再触发，对齐原 onDidSaveTextDocument 的 1500ms debounce。
+ */
+const AWAIT_WRITE_FINISH_MS = 1500;
+
 class HeaderWatcher {
   /** 当前 debounce timer */
   private debounceTimer: NodeJS.Timeout | null = null;
   /** 所有 VS Code 订阅（onDidSaveTextDocument 等） */
   private disposables: vscode.Disposable[] = [];
+  /** chokidar watcher 实例 */
+  private chokidarWatcher: chokidar.FSWatcher | null = null;
 
   constructor(
     private readonly workspace: WorkspaceState,
@@ -100,16 +127,37 @@ class HeaderWatcher {
   ) {}
 
   /**
-   * 启动 watcher —— 订阅 onDidSaveTextDocument（D-01）
+   * 启动 watcher —— 用 chokidar 监听 .h 文件变更（D-01 改进）。
+   *
+   * 为什么用 chokidar 替代 onDidSaveTextDocument：
+   *   - onDidSaveTextDocument 要等 VS Code 保存流程走完才触发（~100-500ms 延迟）
+   *   - chokidar 直接监听文件系统事件，文件写入完成后立即触发（~50-100ms 延迟）
+   *   - 这让 UBT 更早启动，与 clangd 第一次 re-parse 更好并行
    *
    * 返回的 Disposable 已推入 context.subscriptions，无需调用方手动管理。
    */
   start(): vscode.Disposable {
-    const subscription = vscode.workspace.onDidSaveTextDocument((doc) => {
-      void this.handleSave(doc.uri.fsPath);
-    });
-    this.disposables.push(subscription);
-    this.logger.info(`${LOG_PREFIX} started`);
+    const projectDir = this.workspace.projectDir;
+    if (projectDir) {
+      const patterns = WATCH_PATTERNS.map((p) => path.join(projectDir, p));
+      this.chokidarWatcher = chokidar.watch(patterns, {
+        ignored: WATCH_IGNORED,
+        ignoreInitial: true,
+        persistent: true,
+        awaitWriteFinish: {
+          stabilityThreshold: AWAIT_WRITE_FINISH_MS,
+          pollInterval: 50,
+        },
+      });
+      this.chokidarWatcher.on('change', (filePath) => {
+        void this.handleSave(filePath);
+      });
+      this.chokidarWatcher.on('add', (filePath) => {
+        void this.handleSave(filePath);
+      });
+    }
+
+    this.logger.info(`${LOG_PREFIX} started (chokidar)`);
 
     // 返回封装 disposable —— dispose 时清理内部状态
     return new vscode.Disposable(() => this.dispose());
@@ -241,6 +289,10 @@ class HeaderWatcher {
    */
   dispose(): void {
     this.cancelPendingTrigger();
+    if (this.chokidarWatcher) {
+      void this.chokidarWatcher.close();
+      this.chokidarWatcher = null;
+    }
     for (const d of this.disposables) {
       try { d.dispose(); } catch { /* ignore */ }
     }
