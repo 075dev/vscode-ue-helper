@@ -61,6 +61,13 @@ const mocksUht = vi.hoisted(() => ({
 
 const fakeUbtExecutor = mocksUht.fakeUbtExecutor;
 
+// 假 clangd notifier：单测时不真正扫描文件系统，只记录调用
+const mocksNotify = vi.hoisted(() => ({
+  fakeClangdNotifier: vi.fn(async () => { /* noop */ }),
+}));
+
+const fakeClangdNotifier = mocksNotify.fakeClangdNotifier;
+
 // ============== Helpers ==============
 
 /** 部分 WorkspaceState stub（仅 watcher 读取的字段） */
@@ -138,9 +145,11 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
       return { fsPath, path: fsPath, scheme: 'file' };
     });
 
-    // 重置 fakeUbtExecutor 计数器，避免跨测试污染
+    // 重置 fake executor 计数器，避免跨测试污染
     fakeUbtExecutor.mockReset();
     fakeUbtExecutor.mockResolvedValue(0);
+    fakeClangdNotifier.mockReset();
+    fakeClangdNotifier.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -168,7 +177,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor, fakeClangdNotifier);
 
     // 模拟保存 MyActor.h（含 UCLASS）
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
@@ -188,6 +197,13 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
       expect.stringContaining('MyProjEditor'),
       expect.stringContaining('-Project='),
     ]));
+    // 验证 UBT 完成后 clangd notifier 被调用（主动通知 clangd 重索引）
+    expect(fakeClangdNotifier).toHaveBeenCalledTimes(1);
+    expect(fakeClangdNotifier).toHaveBeenCalledWith(
+      '/proj',
+      expect.any(Number),
+      logger,
+    );
   });
 
   /**
@@ -198,7 +214,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.cpp' } });
 
@@ -221,7 +237,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
 
     saveListener!({ uri: { fsPath: '/proj/Source/PlainHeader.h' } });
 
@@ -240,7 +256,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
 
     saveListener!({ uri: { fsPath: '/proj/Source/Foo.generated.h' } });
 
@@ -259,7 +275,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
 
     // 快速保存 3 个不同 .h（每次推进 100ms，模拟真实打字）
     saveListener!({ uri: { fsPath: '/proj/Source/A.h' } });
@@ -284,7 +300,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const ctx = makeFakeExtensionContext();
     const workspace = makeWorkspace();
 
-    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor, fakeClangdNotifier);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 
@@ -319,7 +335,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     (workspace as any).project = null;
     (workspace as any).engine = null;
 
-    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor);
+    startHeaderWatcher(ctx, config, logger, workspace, fakeUbtExecutor, fakeClangdNotifier);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 
@@ -340,7 +356,7 @@ describe('HeaderWatcher (Phase 8 / per D-02/D-03/D-04/D-05/D-12/D-15)', () => {
     const logger = makeLogger();
     const ctx = makeFakeExtensionContext();
 
-    startHeaderWatcher(ctx, disabledConfig, logger, makeWorkspace(), fakeUbtExecutor);
+    startHeaderWatcher(ctx, disabledConfig, logger, makeWorkspace(), fakeUbtExecutor, fakeClangdNotifier);
 
     saveListener!({ uri: { fsPath: '/proj/Source/MyActor.h' } });
 

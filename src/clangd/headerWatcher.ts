@@ -76,6 +76,12 @@ let moduleTimerHandle: NodeJS.Timeout | null = null;
  */
 type UhtExecutor = (cmd: string, args: readonly string[], cwd: string, log: Logger) => Promise<number>;
 
+/**
+ * UBT 完成后的 clangd 通知器类型。
+ * 参数：projectDir, ubtStartTimeMs → 异步通知 clangd 重新索引变更的 .generated.h。
+ */
+type ClangdNotifier = (projectDir: string, ubtStartTimeMs: number, logger: Logger) => Promise<void>;
+
 class HeaderWatcher {
   /** 当前 debounce timer */
   private debounceTimer: NodeJS.Timeout | null = null;
@@ -89,6 +95,8 @@ class HeaderWatcher {
     private readonly config: Config,
     /** 测试注入：UBT UHT 执行器。生产环境默认跑真实 UBT 任务。 */
     private readonly uhtExecutor: UhtExecutor = ubtShellTask,
+    /** 测试注入：clangd 通知器。生产环境默认走真实文件扫描 + VS Code FS 通知。 */
+    private readonly clangdNotifier: ClangdNotifier = notifyClangdOfGeneratedHeaderChangesImpl,
   ) {}
 
   /**
@@ -191,11 +199,20 @@ class HeaderWatcher {
     // D-08: 开始 —— $(sync~spin) 旋转进度
     vscode.window.setStatusBarMessage(t('headerWatcher.regenerating'), STATUS_INPROGRESS_MS);
 
+    // 记录 UBT 开始时间，用于后续判断哪些 .generated.h 被本次 UBT 修改
+    const ubtStartTime = Date.now();
+
     try {
       // [Phase 8] 仅跑 UHT 重新生成 .generated.h，不碰 compile_commands.json。
       // 调用 UBT 的 UnrealHeaderTool 独立 mode（不生成 compile_commands.json）。
-      // clangd 文件监视感知 .generated.h 变化后自动重索引 → 宏报错消失。
       await runHeaderToolOnlyWithExecutor(this.workspace, this.logger, this.uhtExecutor);
+
+      // [Phase 8] UBT 完成后，主动通知 clangd 重新索引变更的 .generated.h。
+      // 原因：clangd 文件监视有延迟，主动推 watchers 让 clangd 立即重索引。
+      const projectDir = this.workspace.projectDir;
+      if (projectDir) {
+        await this.clangdNotifier(projectDir, ubtStartTime, this.logger);
+      }
 
       // D-08: 成功
       vscode.window.setStatusBarMessage(t('headerWatcher.synced'), STATUS_SUCCESS_MS);
@@ -249,8 +266,9 @@ export function startHeaderWatcher(
   logger: Logger,
   workspace: WorkspaceState,
   uhtExecutor?: UhtExecutor,
+  clangdNotifier?: ClangdNotifier,
 ): vscode.Disposable {
-  const watcher = new HeaderWatcher(workspace, logger, config, uhtExecutor);
+  const watcher = new HeaderWatcher(workspace, logger, config, uhtExecutor, clangdNotifier);
   activeWatcher = watcher;
 
   const handle = watcher.start();
@@ -392,4 +410,122 @@ function ubtShellTask(
       (err) => reject(err),
     );
   });
+}
+
+/**
+ * Phase 8: UBT 完成后，主动通知 clangd 哪些 .generated.h 被改了。
+ *
+ * 问题：clangd 文件监视有延迟 —— UBT T+4s 写完 .generated.h 后，
+ * clangd 可能还要几百毫秒才触发 re-index，让用户感知报错闪烁。
+ *
+ * 解法：扫描 Intermediate/Build 下 mtime >= ubtStartTime 的 .generated.h，
+ * 对每个变更文件通过 writeFile 触发 VS Code 文件监视，
+ * VS Code 会自动把变更转发给 clangd 立即重索引。
+ */
+export async function notifyClangdOfGeneratedHeaderChangesImpl(
+  projectDir: string,
+  ubtStartTime: number,
+  logger: Logger,
+): Promise<void> {
+  const generatedHeaders = await findRecentlyModifiedGeneratedHeaders(projectDir, ubtStartTime);
+
+  if (generatedHeaders.length === 0) {
+    logger.info(`${LOG_PREFIX} no .generated.h modified since UBT start`);
+    return;
+  }
+
+  logger.info(
+    `${LOG_PREFIX} notifying clangd about ${generatedHeaders.length} changed .generated.h file(s)`,
+  );
+
+  // 用 VS Code 的 FileSystemEmitter 触发变更事件 —— VS Code 会把事件转发给 clangd
+  const emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+  // 注册一个临时 watcher 让 VS Code 转发事件（通过 onDidChange）
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(projectDir, 'Intermediate/Build/**/Inc/**/UHT/*.generated.h'),
+  );
+  watcher.onDidChange((uri) => {
+    // VS Code 会自动把事件转发给 clangd，这里只记录日志
+    logger.info(`[headerWatcher] file change event forwarded: ${uri.fsPath}`);
+  });
+
+  // 对每个变更文件：读取内容后写回（更新时间戳触发 watcher）
+  for (const fsPath of generatedHeaders) {
+    try {
+      const uri = vscode.Uri.file(fsPath);
+      const content = await fs.readFile(fsPath);
+      // 写回相同内容 —— 强制更新 mtime 触发 watcher
+      await vscode.workspace.fs.writeFile(uri, content);
+    } catch (err) {
+      logger.warn(
+        `[headerWatcher] failed to touch ${fsPath}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // 清理临时 watcher
+  watcher.dispose();
+  emitter.dispose();
+}
+
+/**
+ * 扫描工程 Intermediate/Build 下所有 .generated.h，返回 mtime >= sinceTimeMs 的文件路径。
+ */
+async function findRecentlyModifiedGeneratedHeaders(
+  projectDir: string,
+  sinceTimeMs: number,
+): Promise<string[]> {
+  const result: string[] = [];
+  const baseDir = path.join(projectDir, 'Intermediate', 'Build');
+
+  // 平台目录（Win64/Mac/Linux 等）
+  let platformDirs: string[];
+  try {
+    const entries = await fs.readdir(baseDir, { withFileTypes: true });
+    platformDirs = entries.filter((e) => e.isDirectory()).map((e) => path.join(baseDir, e.name));
+  } catch {
+    return result;
+  }
+
+  for (const platformDir of platformDirs) {
+    await scanDirForGeneratedHeaders(platformDir, sinceTimeMs, result);
+  }
+
+  return result;
+}
+
+/**
+ * 递归扫描目录下的 *.generated.h 文件，mtime >= sinceTimeMs 的加入 result。
+ */
+async function scanDirForGeneratedHeaders(
+  dir: string,
+  sinceTimeMs: number,
+  result: string[],
+): Promise<void> {
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+  try {
+    entries = (await fs.readdir(dir, { withFileTypes: true })) as unknown as Array<{
+      name: string;
+      isDirectory(): boolean;
+      isFile(): boolean;
+    }>;
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await scanDirForGeneratedHeaders(fullPath, sinceTimeMs, result);
+    } else if (entry.isFile() && entry.name.endsWith('.generated.h')) {
+      try {
+        const stat = await fs.stat(fullPath);
+        if (stat.mtimeMs >= sinceTimeMs) {
+          result.push(fullPath);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
 }
