@@ -29,7 +29,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { generateCompileCommands } from './compileCommands';
 import type { GenerateOptions } from './compileCommands';
-import { CompileCommandsCache } from './compileCommandsCache';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
@@ -187,21 +186,16 @@ class HeaderWatcher {
     vscode.window.setStatusBarMessage(t('headerWatcher.regenerating'), STATUS_INPROGRESS_MS);
 
     try {
-      // [BUGFIX] Phase 7 compileCommandsCache 的 fingerprint 仅含 .uproject/Build.cs/Target.cs，
-      // 不含 .h 文件变更 → HeaderWatcher 触发时总是 cache HIT 并跳过 UBT → .generated.h 不刷新。
-      // 所以在触发前主动 invalidate，强制走完整 UBT/UHT 路径以重新生成 .generated.h。
-      const fixCache = new CompileCommandsCache({ logger: this.logger });
-      const projectDir = this.workspace.projectDir;
-      if (projectDir) {
-        await fixCache.invalidate(projectDir);
-      }
-
-      // D-07: 复用管线
+      // D-07 / Phase 8: 复用 UBT/UHT 管线，但以 uhtOnly 模式运行。
+      // 仅重新生成 .generated.h 文件，不触碰 / 不重建 compile_commands.json。
+      // clangd 文件监视感知 .generated.h 变化后自动重索引 → UCLASS()/UFUNCTION() 宏报错消失。
+      // 好处：不需要刷新 compile_commands.json，也就无需重启 clangd。
       await generateCompileCommands({
         project: project.path,
         engineRoot: engine.path,
         logger: this.logger,
         workspace: this.workspace,
+        uhtOnly: true,
       } as GenerateOptions);
 
       // D-08: 成功
