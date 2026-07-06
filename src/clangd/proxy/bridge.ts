@@ -53,6 +53,16 @@ export interface BridgeHooks {
   onServerResponse?: (msg: JsonRpcMessage, method: string | undefined) => void;
   /** 服务器通知时调用 */
   onServerNotification?: (msg: JsonRpcMessage) => void;
+  /** [Phase 8] textDocument/publishDiagnostics 通知时调用（用于 UE 诊断拦截） */
+  onPublishDiagnostics?: (params: {
+    uri: string;
+    diagnostics: Array<{
+      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      severity: number;
+      source?: string;
+      message: string;
+    }>;
+  }) => void;
 }
 
 /** 本地化选项 */
@@ -314,6 +324,20 @@ export class LspBridge {
       this.hooks?.onServerNotification?.(msg);
       // 对 publishDiagnostics 通知应用本地化
       if (method === 'textDocument/publishDiagnostics') {
+        // [Phase 8] 转发诊断给 UE 诊断监听器（用于识别 UE 宏报错 + 触发 UBT）
+        const params = msg.params as {
+          uri: string;
+          diagnostics: Array<{
+            range: { start: { line: number; character: number }; end: { line: number; character: number } };
+            severity: number;
+            source?: string;
+            message: string;
+          }>;
+        };
+        if (params && params.uri && params.diagnostics) {
+          this.hooks?.onPublishDiagnostics?.(params);
+        }
+
         const localized = this.localizeDiagnosticsNotification(msg);
         this.sendToClient(localized);
         return;

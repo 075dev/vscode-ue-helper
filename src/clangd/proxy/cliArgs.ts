@@ -27,6 +27,16 @@ export interface CliOptions {
   dictionaryPath?: string;
   /** [Phase 8] 项目根目录（.uproject 所在目录）。提供时启用 .generated.h 变化监听 + clangd 主动通知 */
   projectDir?: string;
+  /** [Phase 8] 引擎根目录。提供时启用 UE 诊断被动响应模式（诊断到 UE 报错 → 触发 UBT） */
+  engineRoot?: string;
+  /** [Phase 8] UE 诊断触发阈值：连续多少次诊断到 UE 报错才触发 UBT（默认 2） */
+  ueDiagnosticTriggerThreshold?: number;
+  /** [Phase 8] UBT 最小间隔（毫秒），防止频繁触发（默认 10000） */
+  ueDiagnosticMinUbtIntervalMs?: number;
+  /** [Phase 8] 最大重试次数（默认 3） */
+  ueDiagnosticMaxRetries?: number;
+  /** [Phase 8] 是否启用主动模式（文件变化监听 + trigger 文件）。默认 false（只用被动诊断模式） */
+  enableGeneratedHeaderWatcher?: boolean;
   /** 传递给真实 clangd 的参数（-- 分隔符之后） */
   realClangdArgs: string[];
 }
@@ -57,6 +67,12 @@ export function parseArgs(argv: string[]): ParseArgsResult {
     logPath: undefined,
     localizationEnabled: false,
     localizationMode: DEFAULT_LOCALIZATION_MODE,
+    projectDir: undefined,
+    engineRoot: undefined,
+    ueDiagnosticTriggerThreshold: undefined,
+    ueDiagnosticMinUbtIntervalMs: undefined,
+    ueDiagnosticMaxRetries: undefined,
+    enableGeneratedHeaderWatcher: false,
     realClangdArgs: [],
   };
 
@@ -134,6 +150,45 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         if (val !== undefined && !val.startsWith('--')) {
           options.projectDir = val;
         }
+        break;
+      }
+      case '--engine-root': {
+        i++;
+        const val = proxyArgs[i];
+        if (val !== undefined && !val.startsWith('--')) {
+          options.engineRoot = val;
+        }
+        break;
+      }
+      case '--ue-diagnostic-trigger-threshold': {
+        i++;
+        const val = proxyArgs[i];
+        const num = Number(val);
+        if (val !== undefined && Number.isFinite(num) && Number.isInteger(num) && num > 0) {
+          options.ueDiagnosticTriggerThreshold = num;
+        }
+        break;
+      }
+      case '--ue-diagnostic-min-ubt-interval-ms': {
+        i++;
+        const val = proxyArgs[i];
+        const num = Number(val);
+        if (val !== undefined && Number.isFinite(num) && num >= 0) {
+          options.ueDiagnosticMinUbtIntervalMs = num;
+        }
+        break;
+      }
+      case '--ue-diagnostic-max-retries': {
+        i++;
+        const val = proxyArgs[i];
+        const num = Number(val);
+        if (val !== undefined && Number.isFinite(num) && Number.isInteger(num) && num >= 0) {
+          options.ueDiagnosticMaxRetries = num;
+        }
+        break;
+      }
+      case '--enable-generated-header-watcher': {
+        options.enableGeneratedHeaderWatcher = true;
         break;
       }
       default:

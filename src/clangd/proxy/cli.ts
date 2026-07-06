@@ -26,6 +26,7 @@ import { loadLocalizationFromSettings } from './settingsReader';
 import { UeDocLookup } from './ueDocLookup';
 import { setDocLookup } from './localization';
 import { GeneratedHeaderWatcher } from './generatedHeaderWatcher';
+import { UeDiagnosticWatcher } from './ueDiagnosticWatcher';
 import type { Logger } from '@core/logger';
 import type { CliIo, CliStdio } from './cliRuntime';
 
@@ -175,14 +176,40 @@ export function runProxy(
           initializeCompleted = true;
         }
       },
+      // [Phase 8] 转发诊断给 UE 诊断监听器
+      onPublishDiagnostics: (params) => {
+        void ueDiagnosticWatcher?.handleDiagnostics(params);
+      },
     },
   });
 
   wireBridgeStdio(stdio, bridge);
 
-  // [Phase 8] 启动 .generated.h 变化监听器 + clangd 主动通知
+  // [Phase 8] 创建 UE 诊断监听器（被动响应模式：诊断到 UE 报错 → 触发 UBT）
+  let ueDiagnosticWatcher: UeDiagnosticWatcher | null = null;
+  if (options.projectDir && options.engineRoot) {
+    ueDiagnosticWatcher = new UeDiagnosticWatcher(
+      bridge,
+      {
+        info: logFn,
+        warn: logFn,
+        error: logFn,
+        debug: logFn,
+      } as Logger,
+      {
+        projectDir: options.projectDir,
+        engineRoot: options.engineRoot,
+        triggerThreshold: options.ueDiagnosticTriggerThreshold,
+        minUbtIntervalMs: options.ueDiagnosticMinUbtIntervalMs,
+        maxRetries: options.ueDiagnosticMaxRetries,
+      },
+    );
+    logFn(`[clangd-proxy] UeDiagnosticWatcher started for ${options.projectDir}`);
+  }
+
+  // [Phase 8] 启动 .generated.h 变化监听器 + clangd 主动通知（主动模式，可选）
   let generatedHeaderWatcher: GeneratedHeaderWatcher | null = null;
-  if (options.projectDir) {
+  if (options.projectDir && options.enableGeneratedHeaderWatcher) {
     generatedHeaderWatcher = new GeneratedHeaderWatcher(bridge, {
       info: logFn,
       warn: logFn,
@@ -197,6 +224,7 @@ export function runProxy(
   const handleSignal = (): void => {
     logFn('[clangd-proxy] received signal, flushing...');
     generatedHeaderWatcher?.dispose();
+    ueDiagnosticWatcher?.dispose();
     bridge.handleSignal();
     bridge.close();
   };

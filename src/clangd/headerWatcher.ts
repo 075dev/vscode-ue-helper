@@ -466,25 +466,22 @@ function ubtShellTask(
 }
 
 /**
- * Phase 8: UBT 完成后，主动通知 clangd 哪些 .generated.h 被改了。
+ * Phase 8: headerWatcher 的 UBT 完成后回调 — 写 trigger 文件让 proxy 注入 clangd 通知。
  *
- * 问题：clangd 文件监视有延迟 —— UBT T+4s 写完 .generated.h 后，
- * clangd 可能还要几百毫秒才触发 re-index，让用户感知报错闪烁。
+ * 注意：现在 UBT 的触发主要来自 proxy 侧的被动诊断模式（UeDiagnosticWatcher），
+ * 但 headerWatcher 仍然可以主动触发 UBT（如用户手动执行命令时）。
+ * 此回调在两种模式完成后都会调用。
  *
- * 解法（两层通知）：
- *   1. **Proxy 通道**（主要）：写 trigger 文件 → proxy 的 GeneratedHeaderWatcher 检测到
- *      → 通过 LspBridge.injectClientNotification 直接推送 workspace/didChangeWatchedFiles
- *      给 clangd → clangd 立即重索引。绕过 VS Code 文件监视延迟。
- *   2. **VS Code 文件监视通道**（后备）：touch 变更的 .generated.h → VS Code 文件监视
- *      → 自动转发给 clangd。如果 proxy 未启用或失效，仍有此通道保底。
+ * @param projectDir - 项目根目录
+ * @param changedFiles - 变更的 .generated.h 文件绝对路径列表
  */
 export async function notifyClangdOfGeneratedHeaderChangesImpl(
   projectDir: string,
   ubtStartTime: number,
   logger: Logger,
 ): Promise<void> {
+  // 扫描实际变更的 .generated.h 文件
   const generatedHeaders = await findRecentlyModifiedGeneratedHeaders(projectDir, ubtStartTime);
-
   if (generatedHeaders.length === 0) {
     logger.info(`${LOG_PREFIX} no .generated.h modified since UBT start`);
     return;
@@ -494,17 +491,16 @@ export async function notifyClangdOfGeneratedHeaderChangesImpl(
     `${LOG_PREFIX} notifying clangd about ${generatedHeaders.length} changed .generated.h file(s)`,
   );
 
-  // 通道 1: 写 trigger 文件 → proxy 检测 → 注入 clangd 通知
+  // 写 trigger 文件 → proxy 的 GeneratedHeaderWatcher 检测 → 注入 clangd 通知
   try {
     await triggerReparse(projectDir, generatedHeaders);
-    logger.info(`${LOG_PREFIX} trigger file written for proxy notification`);
   } catch (err) {
     logger.warn(
       `[headerWatcher] failed to write trigger: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  // 通道 2: touch 文件 → VS Code 文件监视 → 转发给 clangd（后备）
+  // 后备通道：touch 文件 → VS Code 文件监视 → 转发给 clangd
   for (const fsPath of generatedHeaders) {
     try {
       const uri = vscode.Uri.file(fsPath);

@@ -114,6 +114,7 @@ export function activateClangd(
   const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
   const proxyManager = new ClangdProxyManager(context, config, logger, {
     projectDir: workspace?.projectDir ?? undefined,
+    engineRoot: workspace?.engineRoot ?? undefined,
   });
   const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
 

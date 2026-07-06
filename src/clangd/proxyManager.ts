@@ -28,6 +28,8 @@ export interface ClangdProxyManagerDependencies {
   readonly fileExists?: (candidate: string) => boolean;
   /** [Phase 8] 项目根目录（.uproject 所在目录）。提供时 proxy 启用 .generated.h 变化监听 */
   readonly projectDir?: string;
+  /** [Phase 8] 引擎根目录。提供时 proxy 启用 UE 诊断被动响应模式 */
+  readonly engineRoot?: string;
 }
 
 export class ClangdProxyManager {
@@ -215,11 +217,14 @@ export class ClangdProxyManager {
       args.push('--dictionary-path', dictPath);
     }
 
-    // [Phase 8] 项目根目录 — 启用 .generated.h 变化监听 + clangd 主动通知
-    // 从 extension context 的 workspaceState 获取（由 activateClangd 写入）
+    // [Phase 8] 项目根目录 + 引擎根目录 — 启用 UE 诊断被动响应模式
     const projectDir = this.deps.projectDir;
+    const engineRoot = this.deps.engineRoot;
     if (projectDir) {
       args.push('--project-dir', projectDir);
+    }
+    if (engineRoot) {
+      args.push('--engine-root', engineRoot);
     }
 
     return args;
