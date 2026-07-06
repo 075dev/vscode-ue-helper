@@ -628,4 +628,31 @@ export class LspBridge {
     this.flush();
     this.transport.close();
   }
+
+  // ─── 消息注入 API ──────────────────────────────────────────────
+
+  /**
+   * 向真实 clangd 注入一条客户端→服务器通知（Phase 8 HeaderWatcher 支持）。
+   *
+   * 用途：HeaderWatcher 完成 UBT codegen 后，通过 proxy 主动推送
+   * workspace/didChangeWatchedFiles 通知给 clangd，触发 clangd 立即重索引
+   * 变更的 .generated.h 文件。
+   *
+   * 为什么不走 extension → VS Code → clangd 路径：
+   *   - extension 无法直接发送 LSP 通知给 clangd（VS Code 语言客户端 API 不暴露）
+   *   - proxy 已经有到 clangd 的 stdin 通道，可以直接注入
+   *   - 绕过 VS Code 文件监视延迟（~100-500ms）
+   *
+   * @param method - 通知方法名（如 'workspace/didChangeWatchedFiles'）
+   * @param params - 通知参数
+   */
+  injectClientNotification(method: string, params: unknown): void {
+    const msg: JsonRpcMessage = {
+      jsonrpc: '2.0',
+      method,
+      params,
+    };
+    this.sendToServer(msg);
+    this.log?.(`[bridge] injected client notification: ${method}`);
+  }
 }

@@ -25,6 +25,8 @@ export interface CliOptions {
   localizationMode: 'append' | 'zh-only';
   /** UE 文档词典 JSON 路径（可选） */
   dictionaryPath?: string;
+  /** [Phase 8] 项目根目录（.uproject 所在目录）。提供时启用 .generated.h 变化监听 + clangd 主动通知 */
+  projectDir?: string;
   /** 传递给真实 clangd 的参数（-- 分隔符之后） */
   realClangdArgs: string[];
 }
@@ -123,6 +125,14 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         const val = proxyArgs[i];
         if (val !== undefined && !val.startsWith('--')) {
           options.dictionaryPath = val;
+        }
+        break;
+      }
+      case '--project-dir': {
+        i++;
+        const val = proxyArgs[i];
+        if (val !== undefined && !val.startsWith('--')) {
+          options.projectDir = val;
         }
         break;
       }

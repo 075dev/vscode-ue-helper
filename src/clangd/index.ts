@@ -112,7 +112,9 @@ export function activateClangd(
     completionMode.setClangdOps(clangdOps);
   }
   const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
-  const proxyManager = new ClangdProxyManager(context, config, logger);
+  const proxyManager = new ClangdProxyManager(context, config, logger, {
+    projectDir: workspace?.projectDir ?? undefined,
+  });
   const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
 
   // workspace 参数当前未使用（保留以备后续 stage 使用）

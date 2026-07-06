@@ -25,6 +25,8 @@ import { parseArgs } from './cliArgs';
 import { loadLocalizationFromSettings } from './settingsReader';
 import { UeDocLookup } from './ueDocLookup';
 import { setDocLookup } from './localization';
+import { GeneratedHeaderWatcher } from './generatedHeaderWatcher';
+import type { Logger } from '@core/logger';
 import type { CliIo, CliStdio } from './cliRuntime';
 
 export { parseArgs } from './cliArgs';
@@ -178,9 +180,23 @@ export function runProxy(
 
   wireBridgeStdio(stdio, bridge);
 
+  // [Phase 8] 启动 .generated.h 变化监听器 + clangd 主动通知
+  let generatedHeaderWatcher: GeneratedHeaderWatcher | null = null;
+  if (options.projectDir) {
+    generatedHeaderWatcher = new GeneratedHeaderWatcher(bridge, {
+      info: logFn,
+      warn: logFn,
+      error: logFn,
+      debug: logFn,
+    } as Logger);
+    generatedHeaderWatcher.start(options.projectDir);
+    logFn(`[clangd-proxy] GeneratedHeaderWatcher started for ${options.projectDir}`);
+  }
+
   // 注册信号处理器
   const handleSignal = (): void => {
     logFn('[clangd-proxy] received signal, flushing...');
+    generatedHeaderWatcher?.dispose();
     bridge.handleSignal();
     bridge.close();
   };

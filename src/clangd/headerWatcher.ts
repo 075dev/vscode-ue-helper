@@ -29,6 +29,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import chokidar from 'chokidar';
 import { getBuildTargetNames, getUbtPath, getUnrealPlatform } from './ueHelpers';
+import { triggerReparse } from './proxy/generatedHeaderWatcher';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
@@ -470,9 +471,12 @@ function ubtShellTask(
  * 问题：clangd 文件监视有延迟 —— UBT T+4s 写完 .generated.h 后，
  * clangd 可能还要几百毫秒才触发 re-index，让用户感知报错闪烁。
  *
- * 解法：扫描 Intermediate/Build 下 mtime >= ubtStartTime 的 .generated.h，
- * 对每个变更文件通过 writeFile 触发 VS Code 文件监视，
- * VS Code 会自动把变更转发给 clangd 立即重索引。
+ * 解法（两层通知）：
+ *   1. **Proxy 通道**（主要）：写 trigger 文件 → proxy 的 GeneratedHeaderWatcher 检测到
+ *      → 通过 LspBridge.injectClientNotification 直接推送 workspace/didChangeWatchedFiles
+ *      给 clangd → clangd 立即重索引。绕过 VS Code 文件监视延迟。
+ *   2. **VS Code 文件监视通道**（后备）：touch 变更的 .generated.h → VS Code 文件监视
+ *      → 自动转发给 clangd。如果 proxy 未启用或失效，仍有此通道保底。
  */
 export async function notifyClangdOfGeneratedHeaderChangesImpl(
   projectDir: string,
@@ -490,23 +494,21 @@ export async function notifyClangdOfGeneratedHeaderChangesImpl(
     `${LOG_PREFIX} notifying clangd about ${generatedHeaders.length} changed .generated.h file(s)`,
   );
 
-  // 用 VS Code 的 FileSystemEmitter 触发变更事件 —— VS Code 会把事件转发给 clangd
-  const emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
-  // 注册一个临时 watcher 让 VS Code 转发事件（通过 onDidChange）
-  const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(projectDir, 'Intermediate/Build/**/Inc/**/UHT/*.generated.h'),
-  );
-  watcher.onDidChange((uri) => {
-    // VS Code 会自动把事件转发给 clangd，这里只记录日志
-    logger.info(`[headerWatcher] file change event forwarded: ${uri.fsPath}`);
-  });
+  // 通道 1: 写 trigger 文件 → proxy 检测 → 注入 clangd 通知
+  try {
+    await triggerReparse(projectDir, generatedHeaders);
+    logger.info(`${LOG_PREFIX} trigger file written for proxy notification`);
+  } catch (err) {
+    logger.warn(
+      `[headerWatcher] failed to write trigger: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
-  // 对每个变更文件：读取内容后写回（更新时间戳触发 watcher）
+  // 通道 2: touch 文件 → VS Code 文件监视 → 转发给 clangd（后备）
   for (const fsPath of generatedHeaders) {
     try {
       const uri = vscode.Uri.file(fsPath);
       const content = await fs.readFile(fsPath);
-      // 写回相同内容 —— 强制更新 mtime 触发 watcher
       await vscode.workspace.fs.writeFile(uri, content);
     } catch (err) {
       logger.warn(
@@ -514,10 +516,6 @@ export async function notifyClangdOfGeneratedHeaderChangesImpl(
       );
     }
   }
-
-  // 清理临时 watcher
-  watcher.dispose();
-  emitter.dispose();
 }
 
 /**
