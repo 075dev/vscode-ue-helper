@@ -34,8 +34,9 @@
 
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import chokidar from 'chokidar';
 import type { LspBridge } from './bridge';
 import type { Logger } from '@core/logger';
@@ -113,6 +114,8 @@ export class UeDiagnosticWatcher {
   private retryCount = 0;
   /** 是否正在运行 UBT */
   private ubtRunning = false;
+  /** 本次 UBT 后是否已注入强制 re-parse（防止重复注入） */
+  private forceReparseDone = false;
   /** chokidar watcher（监听 .generated.h 变化） */
   private fileWatcher: chokidar.FSWatcher | null = null;
 
@@ -157,7 +160,17 @@ export class UeDiagnosticWatcher {
       }
       this.ueErrorFiles.add(normalizeFileUri(params.uri));
     } else {
+      // UE 报错已清除（forceReparse 成功或用户手动修复）→ 从待修复集合移除，
+      // 并重置重试计数。断路器只在"UBT 成功但报错持续不消"时才该跳闸；
+      // 报错一旦清除，下一轮新报错应从 0 开始计数，避免永久放弃。
+      const wasError = this.ueErrorFiles.has(normalizeFileUri(params.uri));
       this.ueErrorFiles.delete(normalizeFileUri(params.uri));
+      if (wasError) {
+        this.retryCount = 0;
+        this.logger.info(
+          `[ueDiagnosticWatcher] UE errors cleared in ${path.basename(params.uri)}, retry count reset`,
+        );
+      }
     }
   }
 
@@ -176,7 +189,8 @@ export class UeDiagnosticWatcher {
     this.logger.info(
       `[ueDiagnosticWatcher] save detected for UE-error file ${path.basename(uri)}, triggering UBT`,
     );
-    this.ueErrorFiles.delete(normalized);
+    // 不从 ueErrorFiles 删除：forceReparseOpenFiles 在 UBT 完成后需要读该集合决定对哪些文件
+    // 注入 didChange 强制 re-parse。文件由 handleDiagnostics 在报错真正清除时移除（并重置 retryCount）。
     void this.triggerUbtIfNeeded();
   }
 
@@ -210,6 +224,7 @@ export class UeDiagnosticWatcher {
     this.ubtRunning = true;
     this.lastUbtTime = now;
     this.retryCount++;
+    this.forceReparseDone = false;
 
     // 诊断：打印所有 UE 错误消息，帮助定位为什么持续触发
     this.logger.warn(
@@ -411,6 +426,14 @@ export class UeDiagnosticWatcher {
           return { uri, type: 2 }; // Changed
         }),
       });
+
+      // didChangeWatchedFiles 只失效 preamble include；UE 的 .generated.h 在 .h 末尾 include
+      //（main-file body，不在 preamble），clangd 不会 re-parse。额外注入 textDocument/didChange
+      //（全量内容，从磁盘读取 == didSave 后的缓冲区内容）强制 clangd re-parse，重读新 .generated.h。
+      if (!this.forceReparseDone) {
+        this.forceReparseDone = true;
+        this.forceReparseOpenFiles();
+      }
     };
 
     // 收集所有项目 .generated.h。UBT 成功后 generated.h 已就绪（无论本次是否改动），
@@ -448,6 +471,58 @@ export class UeDiagnosticWatcher {
     if (this.fileWatcher) {
       void this.fileWatcher.close();
       this.fileWatcher = null;
+    }
+  }
+
+  /**
+   * 强制 clangd re-parse 有 UE 报错的打开文件。
+   *
+   * didChangeWatchedFiles 只失效 preamble include；UE 的 .generated.h 在 .h 末尾 include
+   * （main-file body），clangd 不会因此 re-parse。读取磁盘 .h 内容（didSave 后 == 缓冲区内容），
+   * 注入 textDocument/didChange（全量内容），clangd 收到后替换 draft 并 re-parse，重读新 .generated.h。
+   */
+  private forceReparseOpenFiles(): void {
+    this.logger.info(
+      `[ueDiagnosticWatcher] forceReparse: ueErrorFiles.size=${this.ueErrorFiles.size}`,
+    );
+    if (this.ueErrorFiles.size === 0) {
+      this.logger.warn('[ueDiagnosticWatcher] forceReparse: no UE-error files tracked, skipping didChange injection');
+      return;
+    }
+    for (const uri of this.ueErrorFiles) {
+      let fsPath: string;
+      try {
+        fsPath = fileURLToPath(uri);
+      } catch {
+        this.logger.warn(`[ueDiagnosticWatcher] forceReparse: invalid uri ${uri}`);
+        continue;
+      }
+      let text: string;
+      try {
+        text = readFileSync(fsPath, 'utf8');
+      } catch (err) {
+        this.logger.warn(
+          `[ueDiagnosticWatcher] forceReparse: read failed ${path.basename(fsPath)}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        continue;
+      }
+      const version = this.bridge.getLastDocVersion(uri);
+      // 必须用 VS Code 原始 uri（didOpen 时的形式，如 file:///e%3A/...），clangd DraftStore 才能匹配；
+      // 用规范化 uri（file:///E:/...）会被 clangd 当作 "non-added document" 拒绝 didChange。
+      const originalUri = this.bridge.getOriginalUri(uri) ?? uri;
+      const textDocument: { uri: string; version?: number } = { uri: originalUri };
+      if (version !== undefined) {
+        textDocument.version = version;
+      }
+      this.bridge.injectClientNotification('textDocument/didChange', {
+        textDocument,
+        contentChanges: [{ text }],
+      });
+      this.logger.info(
+        `[ueDiagnosticWatcher] injected didChange to force re-parse: ${path.basename(fsPath)} (${text.length} chars)`,
+      );
     }
   }
 

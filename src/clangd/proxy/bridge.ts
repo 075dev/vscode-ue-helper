@@ -124,6 +124,11 @@ export class LspBridge {
   private readonly log: ((msg: string) => void) | undefined;
   /** 客户端输出回调 */
   private clientOutputHandler: ((frame: Buffer) => void) | null = null;
+  /** [Phase 8] 各文档最近一次 didOpen/didChange 的 version（用于强制 re-parse 注入 didChange） */
+  private readonly lastDocVersions = new Map<string, number>();
+  /** [Phase 8] 规范化 uri → VS Code 原始 uri。注入 didChange 必须用 VS Code 原始 uri，
+   *  否则 clangd DraftStore 查不到（"non-added document"），didChange 被拒绝。 */
+  private readonly originalUris = new Map<string, string>();
 
   constructor(transport: ServerTransport, options?: LspBridgeOptions) {
     this.transport = transport;
@@ -195,6 +200,10 @@ export class LspBridge {
         this.handleDidSave(msg);
         return;
       }
+      if (method === 'textDocument/didChange') {
+        this.handleDidChange(msg);
+        return;
+      }
       // 其他通知直接转发
       this.sendToServer(msg);
       return;
@@ -235,6 +244,11 @@ export class LspBridge {
     for (const action of actions) {
       this.executeKeepaliveAction(action);
     }
+
+    // 清理 version + 原始 uri 记录
+    const normalized = this.normalizeUri(uri);
+    this.lastDocVersions.delete(normalized);
+    this.originalUris.delete(normalized);
   }
 
   /**
@@ -257,6 +271,13 @@ export class LspBridge {
     for (const action of actions) {
       this.executeKeepaliveAction(action);
     }
+
+    // 记录 version（didOpen 携带初始 version）+ 原始 uri（注入 didChange 时必须用 VS Code 原始形式）
+    const version = td?.version;
+    if (typeof version === 'number') {
+      this.lastDocVersions.set(this.normalizeUri(uri), version);
+    }
+    this.originalUris.set(this.normalizeUri(uri), uri);
   }
 
   /**
@@ -273,6 +294,55 @@ export class LspBridge {
     if (typeof uri === 'string') {
       this.hooks?.onDidSave?.(uri);
     }
+  }
+
+  /**
+   * 处理 textDocument/didChange 通知。
+   *
+   * 转发给 clangd，并记录文档 version（用于 UeDiagnosticWatcher 在 UBT 成功后注入
+   * 强制 re-parse 的 didChange 时复用 version，避免与 VS Code 的 version 计数器失序）。
+   */
+  private handleDidChange(msg: JsonRpcMessage): void {
+    this.sendToServer(msg);
+    const params = msg.params as Record<string, unknown> | undefined;
+    const td = params?.textDocument as Record<string, unknown> | undefined;
+    const uri = td?.uri;
+    const version = td?.version;
+    if (typeof uri === 'string' && typeof version === 'number') {
+      this.lastDocVersions.set(this.normalizeUri(uri), version);
+    }
+    if (typeof uri === 'string') {
+      this.originalUris.set(this.normalizeUri(uri), uri);
+    }
+  }
+
+  /**
+   * [Phase 8] 获取文档最近一次记录的 version（didOpen/didChange）。
+   * UeDiagnosticWatcher 注入强制 re-parse 的 didChange 时复用，避免 version 失序。
+   * key 规范化（解码 %3A、盘符大写）以匹配 UeDiagnosticWatcher 存储的规范化 uri。
+   */
+  getLastDocVersion(uri: string): number | undefined {
+    return this.lastDocVersions.get(this.normalizeUri(uri));
+  }
+
+  /**
+   * [Phase 8] 获取 VS Code 原始 uri（didOpen/didChange 时记录）。
+   * 注入 textDocument/didChange 必须用此原始形式，clangd DraftStore 才能匹配到文档。
+   */
+  getOriginalUri(uri: string): string | undefined {
+    return this.originalUris.get(this.normalizeUri(uri));
+  }
+
+  /**
+   * 规范化 file URI：解码 %3A → ':'，盘符大写。
+   * VS Code didSave/didOpen 的 uri 用 %3A 编码，clangd publishDiagnostics 用 ':'，
+   * 统一为 clangd 内部形式（盘符大写）作为 lastDocVersions 的 key。
+   */
+  private normalizeUri(uri: string): string {
+    return decodeURIComponent(uri).replace(
+      /^file:\/\/\/([a-zA-Z]):/,
+      (_m, drive: string) => `file:///${drive.toUpperCase()}:`,
+    );
   }
 
   /**
