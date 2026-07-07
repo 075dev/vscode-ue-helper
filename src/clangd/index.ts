@@ -112,9 +112,11 @@ export function activateClangd(
     completionMode.setClangdOps(clangdOps);
   }
   const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
+  // 传 workspace 引用而非 projectDir/engineRoot 快照：activateClangd 同步执行时 detection
+  // 尚未 ready，读 workspace.projectDir 会触发 _notifyMissing 永久污染 getter。改成在
+  // enable/buildProxyArgs 时动态读（此时 ready 已完成）。
   const proxyManager = new ClangdProxyManager(context, config, logger, {
-    projectDir: workspace?.projectDir ?? undefined,
-    engineRoot: workspace?.engineRoot ?? undefined,
+    workspace,
   });
   const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
 

@@ -178,7 +178,12 @@ export function runProxy(
       },
       // [Phase 8] 转发诊断给 UE 诊断监听器
       onPublishDiagnostics: (params) => {
-        void ueDiagnosticWatcher?.handleDiagnostics(params);
+        ueDiagnosticWatcher?.handleDiagnostics(params);
+      },
+      // [Phase 8] 保存后才触发 UBT：publishDiagnostics 含未保存缓冲区，UBT 读磁盘旧内容重建无效；
+      // didSave 后磁盘已更新（含用户改动），UBT 重建 .generated.h 才有效。
+      onDidSave: (uri) => {
+        ueDiagnosticWatcher?.onDidSave(uri);
       },
     },
   });

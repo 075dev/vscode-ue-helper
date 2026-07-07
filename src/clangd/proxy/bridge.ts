@@ -63,6 +63,13 @@ export interface BridgeHooks {
       message: string;
     }>;
   }) => void;
+  /**
+   * [Phase 8] textDocument/didSave 通知时调用（保存事件）。
+   *
+   * UBT 触发改到保存后：publishDiagnostics 含未保存缓冲区，此时 UBT 读磁盘（旧内容）重建无效。
+   * didSave 时磁盘已更新，UBT 能读到刚保存的内容，重建 .generated.h 才有效。
+   */
+  onDidSave?: (uri: string) => void;
 }
 
 /** 本地化选项 */
@@ -184,6 +191,10 @@ export class LspBridge {
         this.handleDidOpen(msg);
         return;
       }
+      if (method === 'textDocument/didSave') {
+        this.handleDidSave(msg);
+        return;
+      }
       // 其他通知直接转发
       this.sendToServer(msg);
       return;
@@ -245,6 +256,22 @@ export class LspBridge {
 
     for (const action of actions) {
       this.executeKeepaliveAction(action);
+    }
+  }
+
+  /**
+   * 处理 textDocument/didSave 通知。
+   *
+   * 转发给 clangd，并触发 onDidSave hook。UeDiagnosticWatcher 据此在**保存后**触发 UBT
+   * （publishDiagnostics 含未保存缓冲区，此时 UBT 读磁盘旧内容重建无效；didSave 后磁盘已更新）。
+   */
+  private handleDidSave(msg: JsonRpcMessage): void {
+    this.sendToServer(msg);
+    const params = msg.params as Record<string, unknown> | undefined;
+    const td = params?.textDocument as Record<string, unknown> | undefined;
+    const uri = td?.uri;
+    if (typeof uri === 'string') {
+      this.hooks?.onDidSave?.(uri);
     }
   }
 

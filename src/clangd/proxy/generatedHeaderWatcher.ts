@@ -31,6 +31,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 //import * as vscode from 'vscode';
 import chokidar from 'chokidar';
 import type { LspBridge } from './bridge';
@@ -118,8 +119,10 @@ export class GeneratedHeaderWatcher {
       }
 
       // 转换为 URI 格式（clangd 使用 file:// URI）
+      // pathToFileURL 生成正确 file:/// URI（Windows: file:///C:/...），
+      // 旧实现 'file://' + fsPath 在 Windows 产生 file://C:\... clangd 不识别
       const changes = payload.changedFiles.map((fsPath) => ({
-        uri: 'file://' + fsPath,
+        uri: pathToFileURL(fsPath).toString(),
         type: 2 as const, // 2 = Changed (FileChangeType)
       }));
 

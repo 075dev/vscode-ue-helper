@@ -119,7 +119,7 @@ Phase 7 待发布 —— 走 `vsce publish`。
 | `vscodeUEHelper.lspLoggingLevel` | `info` | 日志详细级别 |
 | `vscodeUEHelper.clangdProxy.enabled` | `false` | 启用 Clangd LSP Proxy（关闭文件保活 + 汉化） |
 | `vscodeUEHelper.clangdProxy.realClangdPath` | 空 | **可选** 高级覆盖：留空时 proxy 会自动复用 `vscodeUEHelper.clangdPath` / 第三方 `clangd.path` / PATH；普通用户无需手动填写 |
-| `vscodeUEHelper.clangdProxy.logPath` | 空 | proxy 日志文件路径；为空时只写 stderr |
+| `vscodeUEHelper.clangdProxy.logPath` | 空 | proxy 日志文件路径；留空时扩展自动使用 `context.logUri/clangd-proxy.log`，并实时 tail 转发到 `VSCodeUEHelper Proxy` Output 面板 |
 | `vscodeUEHelper.clangdProxy.localization.enabled` | `false` | 启用诊断 / CodeAction / Hover 的汉化 |
 
 建议在 **workspace 级别**配置（写到 `.vscode/settings.json`），不要污染全局设置。
