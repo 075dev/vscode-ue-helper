@@ -125,6 +125,12 @@ export interface CachedCompileCommands {
   linkTarget: string;
   savedAt: string;
   fileCount: number;
+  /**
+   * P1-3: 标记此缓存条目来自 fallback 降级 DB（UBT 失败时生成）。
+   * 命中检查时 fallback 条目不走快路径 -> 下次仍重试 UBT（避免永久降级）。
+   * UBT 成功后覆盖为 undefined。
+   */
+  fallback?: boolean;
 }
 
 /**

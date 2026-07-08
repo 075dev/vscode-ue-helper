@@ -39,12 +39,6 @@
     "onCommand:vscodeUEHelper.diagnoseProject"
   ],
   "main": "out/extension.js",
-  "files": [
-    "out/**",
-    "resources/**",
-    "README.md",
-    "CHANGELOG.md"
-  ],
   "contributes": {
     "commands": [
       {
@@ -420,9 +414,6 @@
     ]
   },
   "extensionDependencies": [
-    "llvm-vs-code-extensions.vscode-clangd"
-  ],
-  "extensionPack": [
     "llvm-vs-code-extensions.vscode-clangd"
   ],
   "scripts": {

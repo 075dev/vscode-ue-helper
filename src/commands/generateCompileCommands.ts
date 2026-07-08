@@ -18,6 +18,7 @@
 
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
+import { Config } from '@core/config';
 import {
   generateCompileCommands,
   linkToWorkspaceRoot,
@@ -31,6 +32,7 @@ import type { DetectionHandles } from '@detection';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
 export async function executeGenerateCompileCommands(
+  config: Config,
   logger: Logger,
   detection: DetectionHandles,
 ): Promise<void> {
@@ -72,6 +74,8 @@ export async function executeGenerateCompileCommands(
         const jsonPath = await generateCompileCommands({
           project: project.path,
           engineRoot: engine.path,
+          buildType: config.configuration,
+          progress,
           logger,
         });
 

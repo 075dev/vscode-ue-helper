@@ -159,7 +159,12 @@ export class ClangdProxyManager {
     const realClangdPath = this.resolveRealClangdPath(clangdConfig);
     const proxyArgs = this.buildProxyArgs(realClangdPath);
 
-    await this.settingsManager.enable(proxyArgs, originalArgs);
+    // P1-2: 确保后台索引优先级为 normal（用户未显式设置时注入，可逆）
+    const ensuredRealArgs = ensureBackgroundIndexPriority(originalArgs);
+    if (ensuredRealArgs.length !== originalArgs.length) {
+      this.logger.info('[proxyManager] injected --background-index-priority=normal into clangd args (P1-2)');
+    }
+    await this.settingsManager.enable(proxyArgs, ensuredRealArgs);
     this.logger.info('[proxyManager] proxy enabled');
     // proxy 即将由 clangd 扩展启动，拉起 tailer 实时转发日志到 Output 面板
     this.startTailer();
@@ -199,7 +204,9 @@ export class ClangdProxyManager {
     const realClangdPath = this.resolveRealClangdPath(clangdConfig);
     const proxyArgs = this.buildProxyArgs(realClangdPath);
 
-    await this.settingsManager.updateArgs(proxyArgs, realClangdArgs);
+    // P1-2: reapply 也确保后台索引优先级（幂等，已含则不动）
+    const ensuredRealArgs = ensureBackgroundIndexPriority(realClangdArgs);
+    await this.settingsManager.updateArgs(proxyArgs, ensuredRealArgs);
     this.logger.info('[proxyManager] proxy args reapplied');
   }
 
@@ -369,6 +376,24 @@ export class ClangdProxyManager {
 
     return args;
   }
+}
+
+/**
+ * 确保真实 clangd 参数含 --background-index-priority=normal（P1-2）。
+ *
+ * .clangd 的 Index.Background:Build 等价于 --background-index，但 --background-index-priority
+ * 没有 .clangd 等价项，只能命令行注入。unreal-sense 实战：18k 文件 UE 项目里 background
+ * 优先级会让索引被每次按键饿死、永远建不完；normal 优先级让索引能正常建完。
+ *
+ * 仅在用户未显式设置 --background-index-priority 时追加，尊重用户配置。
+ * 注入可逆：disable 时 settingsManager 恢复备份的原始 arguments。
+ */
+export function ensureBackgroundIndexPriority(args: string[]): string[] {
+  const hasPriority = args.some((a) => a.startsWith('--background-index-priority'));
+  if (hasPriority) {
+    return args;
+  }
+  return [...args, '--background-index-priority=normal'];
 }
 
 function buildDefaultClangdSearchRoots(): readonly string[] {

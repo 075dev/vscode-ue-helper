@@ -206,6 +206,8 @@ export async function executeCreateProject(
         jsonPath = await generateCompileCommands({
           project: project.path,
           engineRoot: engine.path,
+          buildType: config.configuration,
+          progress,
           // GenerateClangDatabase 模式：实际生成 compile_commands.json
           // 参考：UE 5.x 用 -mode=GenerateClangDatabase，需要 LLVM/clang
           // isNative: true 用的是 -projectfiles，不会生成 compile_commands.json！

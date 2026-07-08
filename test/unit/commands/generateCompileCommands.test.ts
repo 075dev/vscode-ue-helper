@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import * as vscode from 'vscode';
 import type { Logger } from '@core/logger';
+import type { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import {
   addCompletionHelperToCompileCommands as realAddCompletionHelperToCompileCommands,
@@ -84,11 +85,15 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   const ENGINE_PATH = 'C:\\UE_5.4';
 
   let logger: Logger;
+  let config: Config;
   let detection: DetectionHandles;
 
   beforeEach(() => {
     // 重置所有 mock
     vi.clearAllMocks();
+
+    // ---- 构造 Config mock（P1-1: buildType 联动 config.configuration）----
+    config = { configuration: 'Development' } as unknown as Config;
 
     // ---- 构造 Logger mock ----
     logger = {
@@ -147,7 +152,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   /*  红测：当前代码调用 addCompletionHelperToCompileCommands 未传 linkPath */
   /* ================================================================ */
   it('RED: addCompletionHelperToCompileCommands 未被传入 linkPath 作为第二个参数（测试应失败直到修复）', async () => {
-    await executeGenerateCompileCommands(logger, detection);
+    await executeGenerateCompileCommands(config, logger, detection);
 
     // 断言 addCompletionHelperToCompileCommands 被调用
     expect(mockAddCompletionHelper).toHaveBeenCalled();
@@ -161,7 +166,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   /*  绿测：addCompletionHelperToCompileCommands 正确收到 linkPath         */
   /* ================================================================ */
   it('addCompletionHelperToCompileCommands 收到 project.path 和 linkPath 两个参数', async () => {
-    await executeGenerateCompileCommands(logger, detection);
+    await executeGenerateCompileCommands(config, logger, detection);
 
     expect(mockAddCompletionHelper).toHaveBeenCalledTimes(1);
     expect(mockAddCompletionHelper).toHaveBeenCalledWith(PROJECT_PATH, LINK_PATH);
@@ -174,7 +179,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     const customLinkPath = 'C:\\UEProjects\\MyGame\\custom\\compile_commands.json';
     mockLinkToWorkspaceRoot.mockResolvedValue(customLinkPath);
 
-    await executeGenerateCompileCommands(logger, detection);
+    await executeGenerateCompileCommands(config, logger, detection);
 
     expect(mockAddCompletionHelper).toHaveBeenCalledWith(PROJECT_PATH, customLinkPath);
   });
@@ -243,7 +248,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       mockPickProject.mockResolvedValue({ path: projectPath, name: 'MyGame', engineVersion: '5.4' });
 
       // When: 执行命令管线。
-      await executeGenerateCompileCommands(logger, detection);
+      await executeGenerateCompileCommands(config, logger, detection);
 
       // Then: helper entry 写入 linked compile_commands，而不是缺失的项目根文件。
       const linkedText = await fs.readFile(linkedCompileCommandsPath, 'utf-8');
@@ -269,7 +274,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   it('helper 写入失败时显示错误而不报告 compile_commands 更新成功', async () => {
     mockAddCompletionHelper.mockResolvedValue(false);
 
-    await executeGenerateCompileCommands(logger, detection);
+    await executeGenerateCompileCommands(config, logger, detection);
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       `Failed to generate compile_commands.json: Unable to add completion helper entry to ${LINK_PATH}`,
@@ -283,7 +288,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   /*  绿测：fillMissingCompileCommands 也使用 linkPath（保持现有行为）       */
   /* ================================================================ */
   it('fillMissingCompileCommands 也接收 linkPath（确保 fill 不受影响）', async () => {
-    await executeGenerateCompileCommands(logger, detection);
+    await executeGenerateCompileCommands(config, logger, detection);
 
     // fillMissingCompileCommands 应被调用且第一个参数为 linkPath
     expect(mockFillMissing).toHaveBeenCalled();

@@ -56,7 +56,7 @@ export function activateCommands(
     executeLiveCoding(config, logger, detection),
   );
   registerCommand(context, 'vscodeUEHelper.generateCompileCommands', () =>
-    executeGenerateCompileCommands(logger, detection),
+    executeGenerateCompileCommands(config, logger, detection),
   );
   registerCommand(context, 'vscodeUEHelper.diagnoseProject', () =>
     executeDiagnoseProject(logger, detection),

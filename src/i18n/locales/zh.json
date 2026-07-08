@@ -78,8 +78,9 @@
   "common.notSet": "(未设置)",
 
   "proxy.enable.alreadyEnabled": "Clangd LSP 代理已启用，无需重复操作。",
-  "proxy.enable.success": "Clangd LSP 代理已启用。建议重启 clangd 以生效。",
+  "proxy.enable.success": "Clangd LSP 代理已启用。请重新加载窗口以生效。",
   "proxy.enable.restartClangd": "重启 clangd",
+  "proxy.enable.reloadWindow": "重新加载窗口",
   "proxy.enable.failed": "启用 Clangd LSP 代理失败。",
 
   "proxy.disable.success": "Clangd LSP 代理已禁用，原始设置已恢复。",

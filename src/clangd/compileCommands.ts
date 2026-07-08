@@ -30,6 +30,7 @@ import type { WorkspaceState } from '@core/workspace';
 import { getUbtPath, getUnrealPlatform, getBuildTargetNames } from './ueHelpers';
 import { computeFingerprint } from './fingerprint';
 import { CompileCommandsCache } from './compileCommandsCache';
+import { generateFallbackCompileCommands } from './compileCommandsFallback';
 import { perfLog } from './perfLog';
 import type { CachedCompileCommands } from './types';
 
@@ -49,6 +50,13 @@ const CONFIG_SECTION_UNREAL_CLANGD = 'unreal-clangd';
 const UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT = 'Development';
 const UPDATE_COMPILE_COMMANDS_ARG_GEN_CLANGDB = '-Mode=GenerateClangDatabase';
 const UPDATE_COMPILE_COMMANDS_ARG_ARCHITECTURE_EMPTY = '-architecture=';
+/**
+ * 跳过 codegen（UHT 之外的编译动作）。GenerateClangDatabase 模式下加此参数，
+ * UBT 只生成 compile DB 不继续把 .cpp 编译成 .o，IntelliSense 场景省去无谓 codegen。
+ * 参考 unreal-sense.nvim 实测：首次 setup 提速显著。
+ * 兜底：可能令 UHT 不产 .generated.h，但 ueClangdCompat.h + 被动诊断链路已覆盖。
+ */
+const UPDATE_COMPILE_COMMANDS_ARG_NO_CODEGEN = '-NoExecCodeGenActions';
 
 /** Windows PowerShell 可执行文件名 */
 const POWERSHELL_FILE_NAME = 'PowerShell.exe';
@@ -82,6 +90,17 @@ export interface GenerateOptions {
   platform?: string;
   /** 目标架构（如 x64 / arm64），可选。 */
   architecture?: string;
+  /**
+   * UBT buildType（如 Development / DebugGame / Debug），默认 'Development'。
+   * 联动 config.configuration，让用户切换构建配置时 compile DB 同步。
+   * 注意：Debug 配置生成更慢，IntelliSense 场景建议 Development。
+   */
+  buildType?: string;
+  /**
+   * [P2-4] 可选进度回调，长任务阶段细分反馈（fingerprint / UBT / 定位 / fallback）。
+   * 调用方从 withProgress 的 callback 传入。
+   */
+  progress?: vscode.Progress<{ message?: string; increment?: number }>;
   /** [Phase 8] 可选 WorkspaceState 注入。提供时优先用 workspace 派生路径。 */
   workspace?: WorkspaceState;
 }
@@ -215,10 +234,13 @@ let optsSignal: AbortSignal | undefined;
 /* ------------------------------------------------------------------ */
 
 /**
- * 对齐原版 getUpdateCCArgs：
+ * 构造 Non-Native（GenerateClangDatabase）路径的 UBT 参数：
  *
- *   <buildTargetName> <unrealPlatform> Development <uprojectPath>
- *   -Compiler=Clang -mode=GenerateClangDataBase [-architecture=<arch>]
+ *   <buildTargetName> <unrealPlatform> <buildType> <uprojectPath>
+ *   -Mode=GenerateClangDatabase [-architecture=<arch>] -NoExecCodeGenActions
+ *
+ * - buildType 联动 config.configuration（默认 Development）
+ * - -NoExecCodeGenActions 跳过 codegen，只产 compile DB（P0-1 提速）
  */
 async function buildNonNativeArgs(opts: GenerateOptions): Promise<string[]> {
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
@@ -242,10 +264,13 @@ async function buildNonNativeArgs(opts: GenerateOptions): Promise<string[]> {
       'Please specify "platform" in GenerateOptions.');
   }
 
+  // buildType 联动 config.configuration（默认 Development）
+  const buildType = opts.buildType ?? UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT;
+
   const args: string[] = [
     buildTargetName,
     unrealPlatform,
-    UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT,
+    buildType,
     opts.project,
     UPDATE_COMPILE_COMMANDS_ARG_GEN_CLANGDB,
   ];
@@ -254,6 +279,9 @@ async function buildNonNativeArgs(opts: GenerateOptions): Promise<string[]> {
   if (opts.architecture) {
     args.push(`${UPDATE_COMPILE_COMMANDS_ARG_ARCHITECTURE_EMPTY}${opts.architecture}`);
   }
+
+  // 4. 跳过 codegen：GenerateClangDatabase 模式下只需 compile DB，无需继续编译 .cpp（P0-1）
+  args.push(UPDATE_COMPILE_COMMANDS_ARG_NO_CODEGEN);
 
   return args;
 }
@@ -340,6 +368,8 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
+  // [P2-4] 阶段反馈：计算指纹
+  opts.progress?.report({ message: 'Computing fingerprint...' });
   const cache = new CompileCommandsCache({ logger: log });
   let cachedEntry: CachedCompileCommands | undefined;
   try {
@@ -349,7 +379,8 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     const fpMs = performance.now() - fpStart;
 
     // 命中条件：cache 存在 + fingerprint 完全一致 + ccPath 仍存在
-    if (cachedEntry && cachedEntry.fingerprint === fp.fingerprint) {
+    // P1-3: fallback 条目不走快路径（下次仍重试 UBT，避免永久降级）
+    if (cachedEntry && cachedEntry.fingerprint === fp.fingerprint && !cachedEntry.fallback) {
       const ccExists = await fs
         .access(cachedEntry.ccPath)
         .then(() => true)
@@ -394,6 +425,8 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   }
 
   // 1. 查找 UBT 路径（RunUBT.bat/sh 优先）
+  // [P2-4] 阶段反馈：运行 UBT
+  opts.progress?.report({ message: 'Running UBT (GenerateClangDatabase)...' });
   const ubtAbsPath = await getUbtPath(engineUri);
   if (!ubtAbsPath) {
     throw new Error(
@@ -484,6 +517,8 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   //   <EngineRoot>/compile_commands.json
   // Native (-projectfiles): 只生成 .vcxproj，**不**生成 compile_commands.json
   //
+  // [P2-4] 阶段反馈：定位 compile_commands.json
+  opts.progress?.report({ message: 'Locating compile_commands.json...' });
   const candidates = [
     // 优先：UE 5.x GenerateClangDatabase 默认输出到引擎根目录
     path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS),
@@ -568,6 +603,51 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     });
   } catch (err) {
     log.warn(`[perf] instrumentation candidatesScanned (miss) failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // [P1-3] candidates 全部未命中 -> 尝试 fallback 降级 DB
+  // UBT 失败（UHT 错误等）时生成一份"够用"的 compile_commands.json，让 clangd 能附着
+  try {
+    // [P2-4] 阶段反馈：UBT 失败，生成降级 DB
+    opts.progress?.report({ message: 'UBT failed, generating fallback DB...' });
+    const fbResult = await generateFallbackCompileCommands({
+      project: opts.project,
+      engineRoot: opts.engineRoot,
+      logger: log,
+      workspace: opts.workspace,
+      buildType: opts.buildType,
+    });
+    if (fbResult) {
+      // 写缓存（标记 fallback：命中时不走快路径，下次仍重试 UBT）
+      try {
+        const fp = await computeFingerprint(projectDir);
+        await cache.write(projectDir, {
+          fingerprint: fp.fingerprint,
+          ccPath: fbResult.ccPath,
+          linkTarget: fbResult.ccPath,
+          savedAt: new Date().toISOString(),
+          fileCount: fbResult.entryCount,
+          fallback: true,
+        });
+        log.info(`[perf] fallback cache WRITTEN (fingerprint=${fp.fingerprint.slice(0, 12)}...)`);
+      } catch (cacheErr) {
+        const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
+        log.warn(`[perf] failed to write fallback cache: ${msg}`);
+      }
+      try {
+        perfLog.record({
+          event: 'compileCommands.totalElapsed',
+          elapsedMs: performance.now() - entryStart,
+          meta: { hit: false, outcome: 'fallback', ccPath: fbResult.ccPath },
+        });
+      } catch (err) {
+        log.warn(`[perf] instrumentation totalElapsed (fallback) failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return fbResult.ccPath;
+    }
+  } catch (fbErr) {
+    const msg = fbErr instanceof Error ? fbErr.message : String(fbErr);
+    log.warn(`[fallback] generateFallbackCompileCommands threw: ${msg}`);
   }
 
   // [Phase 7 PLAN B / per D-03] 阶段 5：generateCompileCommands 总耗时 — throw 前

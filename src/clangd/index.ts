@@ -27,6 +27,7 @@ import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
 import { ClangdProxyManager } from './proxyManager';
 import { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
+import { registerUeReflectionLinter } from './ueReflectionLinter';
 import { perfLog } from './perfLog';
 import { PerfStatusBar } from '@ui/perfStatusBar';
 import { IncrementalFileWatcher } from './fileWatcher';
@@ -41,6 +42,7 @@ export {
   type ClangdConfigOptions,
 } from './clangdConfig';
 export { generateCompileCommands, linkToWorkspaceRoot, isClangdAvailable, fillMissingCompileCommands } from './compileCommands';
+export { generateFallbackCompileCommands, type FallbackOptions, type FallbackResult } from './compileCommandsFallback';
 export {
   createCompletionFiles,
   addCompletionHelperToCompileCommands,
@@ -91,6 +93,7 @@ export {
 export { startModifyResponseFiles } from './modifyRspFiles';
 export { startCreateRspMatchers, type RspMatcher } from './createRspMatchers';
 export { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
+export { registerUeReflectionLinter } from './ueReflectionLinter';
 
 export interface ClangdHandles {
   completionMode: CompletionModeController;
@@ -118,7 +121,20 @@ export function activateClangd(
   const proxyManager = new ClangdProxyManager(context, config, logger, {
     workspace,
   });
+
+  // [状态自愈] reload 后可能出现 isActive(clangd.path=launcher)但 enabled=false 的不一致状态
+  // （历史 enable 因 clangd.restart 失败被误 rollback 留下）。clangd.path 已指向 launcher，
+  // 说明代理本就该启用，自动修正 enabled=true，避免状态显示混乱与 reapply 判定异常。
+  if (proxyManager.isActive && !proxyManager.enabled) {
+    logger.warn('[clangd] detected isActive=true but enabled=false, self-healing enabled=true');
+    void config.update('clangdProxy.enabled', true).catch((err) => {
+      logger.warn('[clangd] self-heal enabled=true failed:', err);
+    });
+  }
+
   const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
+  // P2-2: UE 反射诊断 linter（UCLASS 缺 GENERATED_BODY / 前缀违规 / UFUNCTION 多 RPC）
+  const ueReflectionLinter = registerUeReflectionLinter();
 
   // workspace 参数当前未使用（保留以备后续 stage 使用）
   void workspace;
@@ -151,6 +167,7 @@ export function activateClangd(
   );
   context.subscriptions.push({ dispose: () => completionMode.dispose() });
   context.subscriptions.push(ueMacroCompletionProvider);
+  context.subscriptions.push(ueReflectionLinter);
 
   // [Phase 7 PLAN A / per D-06] 性能状态栏（尊重 showPerfInStatusBar setting）
   // - 设置为 false 时完全跳过创建（尊重用户选择）

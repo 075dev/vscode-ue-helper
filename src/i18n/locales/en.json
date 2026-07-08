@@ -78,8 +78,9 @@
   "common.notSet": "(not set)",
 
   "proxy.enable.alreadyEnabled": "Clangd LSP Proxy is already enabled.",
-  "proxy.enable.success": "Clangd LSP Proxy enabled. Consider restarting clangd to apply.",
+  "proxy.enable.success": "Clangd LSP Proxy enabled. Reload the window to apply.",
   "proxy.enable.restartClangd": "Restart clangd",
+  "proxy.enable.reloadWindow": "Reload Window",
   "proxy.enable.failed": "Failed to enable Clangd LSP Proxy.",
 
   "proxy.disable.success": "Clangd LSP Proxy disabled, original settings restored.",
