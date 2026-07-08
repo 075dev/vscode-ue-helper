@@ -357,6 +357,7 @@ const TEMPLATES: SentenceTemplate[] = [
 function extractIdentifiers(text: string): { text: string; identifiers: string[] } {
   const identifiers: string[] = [];
   // 保护已存在的 \x00...\x00 占位符（如 FENCED_BLOCK、INLINE_CODE 等）
+  // eslint-disable-next-line no-control-regex -- 占位符分隔符需要控制字符
   let result = text.replace(/\x00[^\x00]+\x00/g, (match) => {
     identifiers.push(match);
     return `\x00ID${identifiers.length - 1}\x00`;
@@ -378,6 +379,7 @@ function extractIdentifiers(text: string): { text: string; identifiers: string[]
  * 恢复被保护的标识符。
  */
 function restoreIdentifiers(text: string, identifiers: string[]): string {
+  // eslint-disable-next-line no-control-regex -- 占位符分隔符需要控制字符
   return text.replace(/\x00ID(\d+)\x00/g, (_m: string, idx: string): string => {
     const i = parseInt(idx, 10);
     return i < identifiers.length ? (identifiers[i] ?? _m) : _m;

@@ -27,9 +27,6 @@ import {
   applyLocalizationToDiagnostic,
   applyLocalizationToCodeAction,
   applyLocalizationToHover,
-  applyLocalizationToCompletion,
-  applyLocalizationToSignatureHelp,
-  applyLocalizationToInlayHint,
   stripOriginalText,
 } from './localization';
 
@@ -525,7 +522,7 @@ export class LspBridge {
         const translated = applyLocalizationToDiagnostic(message);
         cloned.message = this.applyMode(original, translated);
         if (cloned.message !== original) {
-          this.log?.(`[bridge]   ✓ "${original}" → "${cloned.message}"`);
+          this.log?.(`[bridge]   ✓ "${original}" → "${String(cloned.message)}"`);
         } else {
           this.log?.(`[bridge]   - "${original}" (no translation)`);
         }

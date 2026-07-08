@@ -36,23 +36,23 @@ export function loadLocalizationFromSettings(
   }
 
   try {
-    const raw = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-    const enabled = raw[`${CONFIG_PREFIX}.enabled`];
+    const raw: unknown = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    const enabled = (raw as Record<string, unknown>)[`${CONFIG_PREFIX}.enabled`];
     if (!enabled) {
       logFn?.('[settingsReader] localization not enabled in settings.json');
       return undefined;
     }
 
-    const mode = raw[`${CONFIG_PREFIX}.mode`] ?? 'append';
+    const mode = (raw as Record<string, unknown>)[`${CONFIG_PREFIX}.mode`] ?? 'append';
     if (mode !== 'append' && mode !== 'zh-only') {
-      logFn?.(`[settingsReader] invalid mode "${mode}", falling back to append`);
+      logFn?.(`[settingsReader] invalid mode "${String(mode)}", falling back to append`);
       return {
         enabled: true,
         mode: 'append' as const,
       };
     }
 
-    logFn?.(`[settingsReader] loaded localization: enabled=true, mode=${mode}`);
+    logFn?.(`[settingsReader] loaded localization: enabled=true, mode=${String(mode)}`);
     return {
       enabled: true,
       mode,

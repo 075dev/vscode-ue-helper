@@ -176,7 +176,8 @@ export const BUTTON_GROUPS: ButtonGroup[] = [
 
 export interface SelectOption {
   value: string;
-  label: string;
+  /** 显示文本（与 labelKey 二选一；渲染时 labelKey 优先走 i18n，无则用 label，再无则用 value） */
+  label?: string;
   labelKey?: string;
 }
 
@@ -236,10 +237,10 @@ export type FieldType = 'select' | 'boolean' | 'number' | 'text';
 
 export function getFieldType(field: string, isProxy: boolean): FieldType {
   const booleans = isProxy ? PROXY_BOOLEANS : CONFIG_BOOLEANS;
-  if (booleans.includes(field)) return 'boolean';
+  if (booleans.includes(field)) {return 'boolean';}
   const selects = isProxy ? PROXY_SELECTS : CONFIG_SELECTS;
-  if (field in selects) return 'select';
-  if (field.includes('Max') || field.includes('Ttl') || field.includes('Sec')) return 'number';
+  if (field in selects) {return 'select';}
+  if (field.includes('Max') || field.includes('Ttl') || field.includes('Sec')) {return 'number';}
   return 'text';
 }
 

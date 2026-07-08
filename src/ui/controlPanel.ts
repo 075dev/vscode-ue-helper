@@ -165,7 +165,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'updateConfig':
-        logger.info(`[controlPanel] update config: ${msg.key}=${msg.value}`);
+        logger.info(`[controlPanel] update config: ${msg.key}=${String(msg.value)}`);
         try { await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value); } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] update config failed: ${msg.key}`, errMsg);
@@ -173,7 +173,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'updateProxyConfig':
-        logger.info(`[controlPanel] update proxy config: ${msg.key}=${msg.value}`);
+        logger.info(`[controlPanel] update proxy config: ${msg.key}=${String(msg.value)}`);
         try { await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value); } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] update proxy config failed: ${msg.key}`, errMsg);
@@ -181,11 +181,11 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'saveConfig':
-        this.postMessage({ type: 'saveResult', scope: 'config', result: await this.batchSave(msg.updates, false) });
+        this.postMessage({ type: 'saveResult', scope: 'config', result: await this.batchSave(msg.updates) });
         break;
 
       case 'saveProxyConfig':
-        this.postMessage({ type: 'saveResult', scope: 'proxy', result: await this.batchSave(msg.updates, true) });
+        this.postMessage({ type: 'saveResult', scope: 'proxy', result: await this.batchSave(msg.updates) });
         break;
 
       case 'getStatus':
@@ -201,7 +201,6 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
   private async batchSave(
     updates: import('./controlPanelMessages').ConfigUpdate[],
-    isProxy: boolean,
   ): Promise<import('./controlPanelMessages').SaveResult> {
     const { logger, config } = this.deps;
     let saved = 0, failed = 0, firstError: string | undefined;
@@ -233,13 +232,14 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
   private buildStatusValues(): import('./controlPanelMessages').StatusValues {
     const { config, detection, clangd } = this.deps;
-    let projectPath = '', enginePath = '', workspaceFilePath = '', hasWorkspaceFile = false, mcpHost = '';
+    let projectPath = '', enginePath = '', workspaceFilePath = '', hasWorkspaceFile = false;
+    const mcpHost = '';
 
     try {
       const selectedProject = detection.workspaceContext.getSelectedProject();
-      if (selectedProject) projectPath = selectedProject;
+      if (selectedProject) {projectPath = selectedProject;}
       const selectedEngine = detection.workspaceContext.getSelectedEngine();
-      if (selectedEngine) enginePath = selectedEngine;
+      if (selectedEngine) {enginePath = selectedEngine;}
       const wsFolders = vscode.workspace.workspaceFolders;
       if (wsFolders && wsFolders.length > 0) {
         const wsFile = vscode.workspace.workspaceFile;
@@ -265,7 +265,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       mcpHost,
       logLevel: config.lspLoggingLevel,
       proxyEnabled: ps.enabled,
-      proxyActive: ps.active,
+      proxyActive: clangd.proxyManager.isActive,
       proxyLauncherPath: ps.launcherPath,
       proxyRealClangdPath: ps.realClangdPath ?? '(auto-detect)',
       proxyKeepaliveMax: ps.keepaliveMax,

@@ -97,7 +97,6 @@ describe('executeEnableClangdProxy', () => {
   let logger: Logger;
   let infoMock: ReturnType<typeof vi.fn>;
   let errorMock: ReturnType<typeof vi.fn>;
-  let showInfoMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     config = createConfigMock();
@@ -106,14 +105,12 @@ describe('executeEnableClangdProxy', () => {
     infoMock = logger.info as unknown as ReturnType<typeof vi.fn>;
     // eslint-disable-next-line @typescript-eslint/unbound-method
     errorMock = logger.error as unknown as ReturnType<typeof vi.fn>;
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    showInfoMock = vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>;
     vi.clearAllMocks();
   });
 
   it('已激活时重新应用参数并提示重启', async () => {
     const clangd = createClangdHandlesMock({ isActive: true });
-    clangd.proxyManager.reapply = vi.fn().mockResolvedValue(undefined);
+    clangd.proxyManager.reapply = vi.fn().mockResolvedValue(undefined) as never;
     await executeEnableClangdProxy(config, logger, clangd as never);
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('reapply'));
     expect(clangd.proxyManager.reapply).toHaveBeenCalledOnce();

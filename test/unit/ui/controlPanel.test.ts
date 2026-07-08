@@ -11,10 +11,16 @@ import {
   CONFIG_FIELDS, PROXY_FIELDS,
   getFieldType, CONFIG_KEY_MAP,
 } from '@ui/controlPanelMessages';
-import type { WebViewMessage } from '@ui/controlPanelMessages';
 import { initI18n } from '@i18n';
 
-function createMockWebviewView(): vscode.WebviewView {
+type MockWebviewView = vscode.WebviewView & {
+  webview: vscode.Webview & {
+    onDidReceiveMessage: ReturnType<typeof vi.fn>;
+    postMessage: ReturnType<typeof vi.fn>;
+  };
+};
+
+function createMockWebviewView(): MockWebviewView {
   return {
     webview: {
       html: '', cspSource: 'vscode-webview://test',
@@ -26,7 +32,7 @@ function createMockWebviewView(): vscode.WebviewView {
     visible: true, viewType: 'vscodeUEHelper.controlPanel',
     title: '', description: '', badge: undefined,
     show: vi.fn(), dispose: vi.fn(),
-  } as unknown as vscode.WebviewView;
+  } as unknown as MockWebviewView;
 }
 
 function createMockLogger() {
@@ -47,7 +53,7 @@ function createMockConfig() {
     clangdProxyLocalizationTargets: ['diagnostics', 'codeActions', 'hover'],
   };
   const updateCalls: Array<[string, unknown]> = [];
-  const update = async (key: string, value: unknown) => { updateCalls.push([key, value]); cfg[key] = value; };
+  const update = (key: string, value: unknown): Promise<void> => { updateCalls.push([key, value]); cfg[key] = value; return Promise.resolve(); };
   return {
     get configuration() { return cfg.configuration; },
     get target() { return cfg.target; },
@@ -115,7 +121,7 @@ async function drain(): Promise<void> {
 describe('BUTTON_GROUPS', () => {
   it('defines 6 groups', () => { expect(BUTTON_GROUPS).toHaveLength(6); });
   it('each group has buttons mapped in COMMAND_MAP', () => {
-    for (const g of BUTTON_GROUPS) for (const b of g.buttons) expect(COMMAND_MAP[b.id]).toBeTruthy();
+    for (const g of BUTTON_GROUPS) {for (const b of g.buttons) {expect(COMMAND_MAP[b.id]).toBeTruthy();}}
   });
   it('tools has 3 buttons (regenerateWorkspace removed), proxy has 2 (showClangdProxyStatus removed)', () => {
     const tools = BUTTON_GROUPS.find((g) => g.id === 'tools');
@@ -201,7 +207,7 @@ describe('getControlPanelHtml', () => {
 });
 
 describe('ControlPanelProvider', () => {
-  let mockView: vscode.WebviewView;
+  let mockView: MockWebviewView;
 
   beforeEach(() => {
     initI18n();
@@ -209,7 +215,7 @@ describe('ControlPanelProvider', () => {
     mockView = createMockWebviewView();
     (vscode.window.registerWebviewViewProvider as ReturnType<typeof vi.fn>).mockImplementation(() => ({ dispose: vi.fn() }));
     (vscode.commands.executeCommand as ReturnType<typeof vi.fn>).mockImplementation((cmd: string) => {
-      if (cmd === 'vscodeUEHelper.unknown') return Promise.reject(new Error('unknown command'));
+      if (cmd === 'vscodeUEHelper.unknown') {return Promise.reject(new Error('unknown command'));}
       return Promise.resolve();
     });
   });
@@ -226,7 +232,7 @@ describe('ControlPanelProvider', () => {
   it('resolveWebviewView sets up HTML', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
     expect(mockView.webview.html).toContain('<!DOCTYPE html>');
     expect(mockView.webview.onDidReceiveMessage).toHaveBeenCalled();
   });
@@ -234,8 +240,8 @@ describe('ControlPanelProvider', () => {
   it('handles executeCommand', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'executeCommand', command: 'build' });
     await drain();
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscodeUEHelper.build');
@@ -244,8 +250,8 @@ describe('ControlPanelProvider', () => {
   it('sends commandResult on success', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'executeCommand', command: 'build' });
     await drain();
     expect(mockView.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'commandResult', success: true }));
@@ -254,8 +260,8 @@ describe('ControlPanelProvider', () => {
   it('handles getConfig', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'getConfig' });
     expect(mockView.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'configValues' }));
   });
@@ -263,8 +269,8 @@ describe('ControlPanelProvider', () => {
   it('handles getProxyConfig', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'getProxyConfig' });
     expect(mockView.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'proxyConfigValues' }));
   });
@@ -272,39 +278,39 @@ describe('ControlPanelProvider', () => {
   it('handles saveConfig batch updates', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'saveConfig', updates: [{ key: 'configuration', value: 'Shipping' }, { key: 'target', value: 'Game' }] });
     await drain();
     const calls = mockView.webview.postMessage.mock.calls;
-    const saveCall = calls.find((c: unknown[]) => c[0]?.type === 'saveResult');
+    const saveCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'saveResult');
     expect(saveCall).toBeDefined();
-    expect(saveCall[0]).toMatchObject({ scope: 'config', result: { success: true, saved: 2, failed: 0 } });
+    expect(saveCall![0]).toMatchObject({ scope: 'config', result: { success: true, saved: 2, failed: 0 } });
   });
 
   it('handles saveProxyConfig batch updates', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'saveProxyConfig', updates: [{ key: 'clangdProxyEnabled', value: true }, { key: 'clangdProxyKeepaliveMax', value: 10 }] });
     await drain();
     const calls = mockView.webview.postMessage.mock.calls;
-    const saveCall = calls.find((c: unknown[]) => c[0]?.type === 'saveResult');
+    const saveCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'saveResult');
     expect(saveCall).toBeDefined();
-    expect(saveCall[0]).toMatchObject({ scope: 'proxy', result: { success: true, saved: 2, failed: 0 } });
+    expect(saveCall![0]).toMatchObject({ scope: 'proxy', result: { success: true, saved: 2, failed: 0 } });
   });
 
   it('handles getStatus', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as any, {} as any);
-    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0][0];
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
     listener({ type: 'getStatus' });
     const calls = mockView.webview.postMessage.mock.calls;
-    const statusCall = calls.find((c: unknown[]) => c[0]?.type === 'statusValues');
+    const statusCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'statusValues');
     expect(statusCall).toBeDefined();
-    expect(statusCall[0].values).toMatchObject({ configuration: 'Development', target: 'Editor', proxyEnabled: false });
+    expect((statusCall![0] as { values: unknown }).values).toMatchObject({ configuration: 'Development', target: 'Editor', proxyEnabled: false });
   });
 
   it('CONFIG_KEY_MAP maps proxy field names', () => {

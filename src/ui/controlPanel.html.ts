@@ -495,7 +495,7 @@ function renderGroup(group: ButtonGroup): string {
   const buttonsHtml = group.buttons
     .map((btn) => {
       const cmdId = COMMAND_MAP[btn.id];
-      if (!cmdId) return '';
+      if (!cmdId) {return '';}
       const isPrimary = ['build', 'liveCoding', 'launchEditor'].includes(btn.id);
       return `<button class="panel-btn${isPrimary ? ' primary' : ''}" data-command="${btn.id}" title="${escapeHtml(t(btn.i18nKey))}"><span class="icon">${btn.icon}</span>${escapeHtml(t(btn.i18nKey))}</button>`;
     })
@@ -520,9 +520,9 @@ function renderFormField(prefix: string, field: string, isProxy: boolean): strin
     return `<div class="form-field checkbox-field"><input type="checkbox" id="${prefix}${field}"><label class="form-label" for="${prefix}${field}">${escapeHtml(t(labelKey))}</label></div>`;
   }
   if (field in selects) {
-    const options = selects[field];
+    const options = selects[field] ?? [];
     const optsHtml = options.map((opt) => {
-      const label = opt.labelKey ? t(opt.labelKey) : opt.label;
+      const label = opt.labelKey ? t(opt.labelKey) : (opt.label ?? opt.value);
       return `<option value="${escapeHtml(opt.value)}">${escapeHtml(label)}</option>`;
     }).join('\n        ');
     return `<div class="form-field"><label class="form-label" for="${prefix}${field}">${escapeHtml(t(labelKey))}</label><select id="${prefix}${field}">${optsHtml}</select></div>`;

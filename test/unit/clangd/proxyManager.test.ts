@@ -125,16 +125,16 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
     });
 
     it('创建时不修改 clangd 设置', () => {
-      const configGet = vi.fn();
+      const updateMock = vi.fn();
       vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-        get: configGet,
-        update: vi.fn(),
+        get: vi.fn(),
+        update: updateMock,
       } as unknown as vscode.WorkspaceConfiguration);
 
       new ClangdProxyManager(context, createConfigMock() as never, logger as never);
 
-      // 创建时不应调用 update
-      expect(configGet).not.toHaveBeenCalled();
+      // 创建时不应调用 update（读 get 用于 isActive 检查是允许的）
+      expect(updateMock).not.toHaveBeenCalled();
     });
   });
 
@@ -185,13 +185,14 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
       expect(manager.logPath).toBe('/tmp/clangd-proxy.log');
     });
 
-    it('logPath 未配置时返回 undefined', () => {
+    it('logPath 未配置时返回默认路径（context.logUri 下）', () => {
       const manager = new ClangdProxyManager(
         context,
         createConfigMock() as never,
         logger as never,
       );
-      expect(manager.logPath).toBeUndefined();
+      // 未配置 clangdProxyLogPath 时回落到 defaultLogPath（始终有值，保证 proxy 写文件）
+      expect(manager.logPath).toContain('clangd-proxy.log');
     });
   });
 
@@ -243,7 +244,7 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
       // Then
       expect(enableSpy).toHaveBeenCalledWith(
         expect.arrayContaining(['--real-clangd', configuredClangd]),
-        ['--background-index'],
+        ['--background-index', '--background-index-priority=normal'],
       );
       const [proxyArgs] = enableSpy.mock.calls[0] ?? [];
       expect(proxyArgs).toEqual([
@@ -253,6 +254,8 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
         '20',
         '--keepalive-ttl-sec',
         '900',
+        '--log-path',
+        '/fake/log/clangd-proxy.log',
       ]);
     });
 

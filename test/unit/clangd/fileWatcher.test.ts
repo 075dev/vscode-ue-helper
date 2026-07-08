@@ -136,7 +136,7 @@ describe('IncrementalFileWatcher (Phase 7 PLAN B / per D-15/D-16/D-17)', () => {
     handle.dispose();
   });
 
-  it('ignored 数组生效：调用方传入 ignoredPatterns 后该路径被过滤', async () => {
+  it('ignored 数组生效：调用方传入 ignoredPatterns 后该路径被过滤', () => {
     // 文件 watcher 本身不过滤路径 — chokidar 负责过滤
     // 验证 chokidar.watch 收到的 ignored 数组包含我们传入的额外模式
     const extraIgnored = ['**/MyExcludedDir/**'];
@@ -186,7 +186,7 @@ describe('IncrementalFileWatcher (Phase 7 PLAN B / per D-15/D-16/D-17)', () => {
   it('重复 dispose 不抛错（幂等性）', () => {
     const { handle } = startWatcher();
     handle.dispose();
-    expect(() => handle.dispose()).not.toThrow();
+    expect(() => { handle.dispose(); }).not.toThrow();
   });
 
   it('add/change/unlink 三个事件统一入队（per D-15）', async () => {

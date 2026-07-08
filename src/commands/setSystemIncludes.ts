@@ -167,7 +167,7 @@ export async function executeSetSystemIncludes(
       await clangdOps.writeFull({});
     }
     const result = await clangdOps.mutate(({ config }) => {
-      const oldAdd = Array.isArray(config.CompileFlags?.Add) ? config.CompileFlags!.Add! : [];
+      const oldAdd = Array.isArray(config.CompileFlags?.Add) ? config.CompileFlags.Add : [];
       const SYSTEM_PREFIXES = ['/X', '/imsvc', '-fms-compatibility-version=', '/std:'];
       const kept = oldAdd.filter(
         (f) => !SYSTEM_PREFIXES.some((p) => f.replace(/^["'](.*)["']$/, '$1').startsWith(p)),

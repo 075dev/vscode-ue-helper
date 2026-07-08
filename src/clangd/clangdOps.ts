@@ -67,7 +67,7 @@ export class ClangdOps {
     if (!target) {return null;}
     try {
       const text = await fs.readFile(target, 'utf-8');
-      const parsed = yaml.parse(text);
+      const parsed: unknown = yaml.parse(text);
       if (!parsed || typeof parsed !== 'object') {return null;}
       return parsed as ClangdConfig;
     } catch (err) {

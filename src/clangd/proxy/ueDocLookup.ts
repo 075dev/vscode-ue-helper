@@ -25,7 +25,6 @@ export interface DocEntry {
 // ===== UeDocLookup =====
 
 export class UeDocLookup {
-  private entries: DocEntry[] = [];
   private index: Map<string, DocEntry> = new Map();
   private loaded = false;
 
@@ -36,7 +35,7 @@ export class UeDocLookup {
    */
   load(jsonPath: string): void {
     const raw = fs.readFileSync(jsonPath, 'utf-8');
-    const data: DocEntry[] = JSON.parse(raw);
+    const data = JSON.parse(raw) as DocEntry[];
     this.loadFromData(data);
   }
 
@@ -46,7 +45,6 @@ export class UeDocLookup {
    * @param data - 词典条目数组
    */
   loadFromData(data: DocEntry[]): void {
-    this.entries = data;
     this.index = new Map();
     for (const entry of data) {
       if (entry.translation) {
@@ -93,13 +91,13 @@ export class UeDocLookup {
 
     // 从第一行提取名称
     const firstLine = hoverContent.split('\n')[0]?.trim();
-    if (!firstLine) return null;
+    if (!firstLine) {return null;}
 
     const name = this.extractName(firstLine);
-    if (!name) return null;
+    if (!name) {return null;}
 
     const entry = this.index.get(name);
-    if (!entry) return null;
+    if (!entry) {return null;}
 
     // 替换整个 hover 内容中的文档部分
     return this.replaceDocInHover(hoverContent, entry);
@@ -143,7 +141,7 @@ export class UeDocLookup {
 
     // 取第一个单词
     const name = clean.split(/\s+/)[0];
-    if (!name || name.length < 2) return null;
+    if (!name || name.length < 2) {return null;}
 
     return name;
   }

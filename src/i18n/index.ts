@@ -37,7 +37,9 @@ export function getLocale(): Locale {
  * Translate a key. Falls back to English if missing in active locale.
  * Substitutes `{name}` placeholders with values from `params`.
  */
-export function t(key: TranslationKey, params?: Record<string, string>): string {
+export function t(key: TranslationKey, params?: Record<string, string>): string;
+export function t(key: string, params?: Record<string, string>): string;
+export function t(key: string, params?: Record<string, string>): string {
   const lookup = (locale: Locale): string | undefined => {
     const dict = locales[locale] as Record<string, string>;
     return dict[key];

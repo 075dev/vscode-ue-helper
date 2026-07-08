@@ -13,7 +13,9 @@ vi.mock('vscode', () => ({
     workspaceFolders: [],
     workspaceFile: undefined,
     onDidChangeConfiguration: vi.fn(),
-    onDidSaveTextDocument: vi.fn(),
+    onDidChangeTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidSaveTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidCloseTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
     createFileSystemWatcher: vi.fn(() => ({
       onDidChange: vi.fn(),
       onDidCreate: vi.fn(),
@@ -134,6 +136,10 @@ vi.mock('vscode', () => ({
   },
   Uri: {
     file: vi.fn((p: string) => ({ fsPath: p, path: p, scheme: 'file' })),
+    joinPath: vi.fn((base: { fsPath?: string; path?: string } | undefined, ...segments: string[]) => {
+      const joined = [base?.fsPath ?? base?.path ?? '', ...segments].join('/');
+      return { fsPath: joined, path: joined, scheme: 'file' };
+    }),
   },
   EventEmitter: class {
     private listeners: Array<(e: unknown) => void> = [];
@@ -158,6 +164,15 @@ vi.mock('vscode', () => ({
     }
     dispose(): void {
       this.callOnce();
+    }
+    static from(...disposables: Array<{ dispose?: () => void }>): { dispose: () => void } {
+      return {
+        dispose: () => {
+          for (const d of disposables) {
+            d?.dispose?.();
+          }
+        },
+      };
     }
   },
   ViewColumn: { One: 1, Two: 2, Three: 3, Four: 4, Five: 5, Six: 6, Seven: 7, Eight: 8, Nine: 9 },
