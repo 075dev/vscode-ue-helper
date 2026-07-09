@@ -84,3 +84,7 @@ target/
 vendor/
 .cache/
 tmp/
+
+# Claude Code 配置 + clangd-proxy 运行日志
+.claude/
+log.txt
