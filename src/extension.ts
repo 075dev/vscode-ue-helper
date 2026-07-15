@@ -14,6 +14,7 @@ import { ClangdOps } from '@clangd/clangdOps';
 import { activateDetection } from '@detection';
 import { activateBuild } from '@build';
 import { activateClangd } from '@clangd';
+import { perfLog } from '@clangd/perfLog';
 import { activateUI } from '@ui';
 import { activateCommands } from '@commands';
 import { showProjectInfo } from '@commands/showProjectInfo';
@@ -57,6 +58,16 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 
     const elapsed = Date.now() - activationStart;
     logger.info(`VSCodeUEHelper activated in ${elapsed}ms`);
+    // 轻量 perfLog 埋点：记录激活时长（同步，开销 < 1ms）
+    try {
+      perfLog.record({
+        event: 'activation.elapsed',
+        elapsedMs: elapsed,
+        meta: { phase: 'full' },
+      });
+    } catch {
+      // 埋点失败不影响主流程
+    }
 
     void build;
     void ui;
