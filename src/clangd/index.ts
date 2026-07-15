@@ -43,6 +43,7 @@ export {
 } from './clangdConfig';
 export { generateCompileCommands, linkToWorkspaceRoot, isClangdAvailable, fillMissingCompileCommands } from './compileCommands';
 export { generateFallbackCompileCommands, type FallbackOptions, type FallbackResult } from './compileCommandsFallback';
+export { collectIntermediateUhtDirs, type IntermediateUhtCollectorOptions } from './intermediateUhtCollector';
 export {
   createCompletionFiles,
   addCompletionHelperToCompileCommands,
