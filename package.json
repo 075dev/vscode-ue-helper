@@ -361,7 +361,7 @@
         },
         "vscodeUEHelper.showPerfInStatusBar": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Show performance metrics (compile_commands gen time, preparse cache hit rate, incremental scan latency) in status bar.",
           "description@zh": "在状态栏显示性能指标（compile_commands 生成耗时、preparse 缓存命中率、增量扫描延迟）。"
         },
