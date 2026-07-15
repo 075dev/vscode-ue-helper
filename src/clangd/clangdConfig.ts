@@ -56,6 +56,12 @@ export interface ClangdConfigOptions {
   compilerPath?: string;
   /** 项目路径（用于生成 If.PathMatch 规则） */
   projectPath?: string;
+  /**
+   * Intermediate/Build/<PlatformCfg>/<Target>/Inc/<Module>/UHT/ 目录绝对路径列表。
+   * 在 CompileFlags.Add 末尾注入 `-I<dir>`，让 clangd 兜底路径能找到 .generated.h。
+   * Windows 用 `/I`，其他平台用 `-I`。
+   */
+  intermediateUhtDirs?: string[];
 }
 
 /** 默认配置（对齐 unreal-clangd v3 模板风格） */
@@ -162,6 +168,16 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
     '-Wno-unused-value',
     '-Wno-bitfield-enum-conversion',
   );
+
+  // [P0-C-4] 注入 UHT 生成的 .generated.h 路径（修复 plugin .cpp 找不到 .generated.h）
+  //          必须在 MSVC flag 之后追加（与现有风格一致）；用 -I / /I 注入。
+  //          空数组或 undefined 时跳过，避免写入无效 flag。
+  if (opts.intermediateUhtDirs?.length) {
+    const prefix = process.platform === 'win32' ? '/I' : '-I';
+    for (const dir of opts.intermediateUhtDirs) {
+      addFlags.push(`${prefix}${dir}`);
+    }
+  }
 
   // 5. 构建 If.PathMatch 规则（模板风格）
   const pathMatch: string[] = [];

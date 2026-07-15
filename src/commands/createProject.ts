@@ -33,6 +33,7 @@ import {
   startCreateRspMatchers,
   fillMissingCompileCommands,
   getPrepareIncludesList,
+  collectIntermediateUhtDirs,
 } from '@clangd';
 import type { FillResult } from '@clangd/compileCommands';
 import { detectSystemIncludesWithEngineRecommendation } from '@clangd/windowsSdk';
@@ -162,6 +163,20 @@ export async function executeCreateProject(
           }
         }
 
+        // [P0-C-4] 收集 Intermediate/UHT 路径（修复 plugin .cpp 找不到 .generated.h）
+        let intermediateUhtDirs: string[] | undefined;
+        try {
+          intermediateUhtDirs = await collectIntermediateUhtDirs({ projectDir });
+          if (intermediateUhtDirs.length > 0) {
+            logger.info(
+              `[createProject] collected ${intermediateUhtDirs.length} Intermediate/UHT dirs`,
+            );
+          }
+        } catch (uhtErr) {
+          // 收集失败不影响主流程（per T-7-04 防御原则）
+          logger.warn('[createProject] collectIntermediateUhtDirs skipped:', uhtErr);
+        }
+
         const clangdConfigPath = await writeClangdConfig(project.path, {
           completionMode: config.completionMode,
           macroHelperPath:
@@ -172,6 +187,7 @@ export async function executeCreateProject(
           projectPath: project.path,
           compatHeaderPath: getUeClangdCompatPath(project.path),
           engineRoot: engine.path,
+          intermediateUhtDirs,
         });
         results.push({
           step: 'Write .clangd',

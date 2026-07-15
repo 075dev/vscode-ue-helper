@@ -285,6 +285,58 @@ describe('YAML quoting', () => {
   });
 });
 
+// ===== P0-C-4: Intermediate/UHT -I 注入 =====
+
+describe('defaultClangdConfig (intermediateUhtDirs)', () => {
+  it('intermediateUhtDirs 提供时 Add 包含对应 -I 路径', () => {
+    const uhtDir = process.platform === 'win32'
+      ? 'D:/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT'
+      : '/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT';
+    const cfg = defaultClangdConfig({ intermediateUhtDirs: [uhtDir] });
+    const add = cfg.CompileFlags?.Add ?? [];
+    const prefix = process.platform === 'win32' ? '/I' : '-I';
+    expect(add).toContain(`${prefix}${uhtDir}`);
+  });
+
+  it('intermediateUhtDirs 为空数组时不写入任何 UHT flag', () => {
+    const cfg = defaultClangdConfig({ intermediateUhtDirs: [] });
+    const add = cfg.CompileFlags?.Add ?? [];
+    const uhtFlags = add.filter((f) => f.includes('UHT'));
+    expect(uhtFlags).toHaveLength(0);
+  });
+
+  it('intermediateUhtDirs 未提供时不写入 UHT flag', () => {
+    const cfg = defaultClangdConfig();
+    const add = cfg.CompileFlags?.Add ?? [];
+    const uhtFlags = add.filter((f) => f.includes('UHT'));
+    expect(uhtFlags).toHaveLength(0);
+  });
+
+  it('intermediateUhtDirs 多目录时全部注入', () => {
+    const dirs = [
+      '/proj/Intermediate/Build/Win64/Editor/Inc/ModA/UHT',
+      '/proj/Intermediate/Build/Win64/Editor/Inc/ModB/UHT',
+    ];
+    const cfg = defaultClangdConfig({ intermediateUhtDirs: dirs });
+    const add = cfg.CompileFlags?.Add ?? [];
+    const prefix = process.platform === 'win32' ? '/I' : '-I';
+    expect(add).toContain(`${prefix}${dirs[0]}`);
+    expect(add).toContain(`${prefix}${dirs[1]}`);
+  });
+
+  it('UHT -I 注入位置在 MSVC flag 之后', () => {
+    const uhtDir = '/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT';
+    const cfg = defaultClangdConfig({ intermediateUhtDirs: [uhtDir] });
+    const add = cfg.CompileFlags?.Add ?? [];
+
+    const prefix = process.platform === 'win32' ? '/I' : '-I';
+    const uhtIdx = add.findIndex((f) => f === `${prefix}${uhtDir}`);
+    // -mwaitpkg 是 MSVC 段起始 marker
+    const msvcIdx = add.findIndex((f) => f === '-mwaitpkg');
+    expect(uhtIdx).toBeGreaterThan(msvcIdx);
+  });
+});
+
 // ===== T2 对抗测试: misleading_success_output, dirty_worktree, hung_commands =====
 
 describe('defaultClangdConfig (adversarial)', () => {
