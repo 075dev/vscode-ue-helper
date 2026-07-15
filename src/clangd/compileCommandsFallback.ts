@@ -24,6 +24,7 @@ import * as path from 'node:path';
 import { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { getUeClangdCompatPath, getUeClangdCompatContent } from './ueClangdCompat';
+import { collectIntermediateUhtDirs } from './intermediateUhtCollector';
 
 /** fallback DB 写入位置（与 linkToWorkspaceRoot 目标一致：.vscode/vscodeuehelper/） */
 const FALLBACK_CC_DIR_REL = path.join('.vscode', 'vscodeuehelper');
@@ -280,6 +281,12 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
   // 1e. uhtmanifest IncludePaths
   for (const p of await extractUhtManifestIncludes(projectDir)) {
     includeCandidates.add(p);
+  }
+
+  // 1f. UHT 生成的 .generated.h 路径（修复 plugin .cpp 找不到 .generated.h）
+  //      Intermediate/Build/<PlatformCfg>/<Target>/Inc/<Module>/UHT/
+  for (const uhtDir of await collectIntermediateUhtDirs({ projectDir })) {
+    includeCandidates.add(uhtDir);
   }
 
   // 过滤出实际存在的目录
