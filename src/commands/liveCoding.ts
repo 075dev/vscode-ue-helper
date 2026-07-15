@@ -22,21 +22,25 @@ export async function executeLiveCoding(
     return;
   }
 
-  const project =
-    (await pickProject(await detection.scanner.scan())) ?? (await detection.scanner.findSingle());
+  const projects = await detection.scanner.scan();
+  let project = projects.find((p) => p.path === detection.workspaceContext.getSelectedProject());
+  if (!project && projects.length === 1) { project = projects[0]; }
+  if (!project) { project = await pickProject(projects); }
   if (!project) {
     void vscode.window.showWarningMessage('No .uproject to live-code.');
     return;
   }
+  await detection.workspaceContext.setProject(project);
 
   const engines = await detection.discovery.discover();
-  const engine =
-    (await pickEngine(engines)) ??
-    engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine());
+  let engine = engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine());
+  if (!engine && engines.length === 1) { engine = engines[0]; }
+  if (!engine) { engine = await pickEngine(engines); }
   if (!engine) {
     void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
     return;
   }
+  await detection.workspaceContext.setEngine(engine);
 
   logger.info(`[liveCoding] triggering for ${project.name} on ${engine.version}`);
   try {
