@@ -634,6 +634,25 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
         const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
         log.warn(`[perf] failed to write fallback cache: ${msg}`);
       }
+
+      // [P0-B] fallback 后挂 fillMissingCompileCommands：
+      //        修复 plugin .cpp 不在主 target 时漏补。fallback DB 写入后再扫一遍源文件补条目。
+      try {
+        const fillResult = await fillMissingCompileCommands(
+          fbResult.ccPath, opts.project, log, opts.workspace,
+        );
+        if (fillResult) {
+          perfLog.record({
+            event: 'compileCommands.fillMissing',
+            elapsedMs: performance.now() - entryStart,
+            meta: { outcome: fillResult.skippedReason ? 'skipped' : 'added', added: fillResult.added.length },
+          });
+        }
+      } catch (fillErr) {
+        const msg = fillErr instanceof Error ? fillErr.message : String(fillErr);
+        log.warn(`[fallback+fill] fillMissingCompileCommands threw: ${msg}`);
+      }
+
       try {
         perfLog.record({
           event: 'compileCommands.totalElapsed',
