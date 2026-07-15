@@ -52,12 +52,21 @@ describe('getUeClangdCompatContent (内容生成器)', () => {
     expect(content).toContain('UE_CLANGD_COMPAT_BODY');
   });
 
+  it('包含 stub struct 定义', () => {
+    expect(content).toContain('struct UEClangdCompatStub');
+  });
+
   it('包含 friend struct UEClangdCompatStub', () => {
     expect(content).toContain('friend struct UEClangdCompatStub');
   });
 
   it('包含 static UClass* StaticClass()', () => {
     expect(content).toContain('static UClass* StaticClass()');
+  });
+
+  it('StaticClass() 是带返回体的函数定义', () => {
+    // 必须形如 static UClass* StaticClass() { return nullptr; }
+    expect(content).toMatch(/static UClass\*\s+StaticClass\(\)\s*\{\s*return\s+nullptr;\s*\}/);
   });
 
   it('不含 BOM (\\uFEFF)', () => {

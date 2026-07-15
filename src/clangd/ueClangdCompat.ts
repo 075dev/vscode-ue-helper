@@ -93,9 +93,12 @@ export function getUeClangdCompatContent(): string {
 
   const compatBody = [
     '// clangd 兼容 stub body：仅提供 clangd 索引所需的最小结构',
+    '// 空 stub struct：friend struct 需要前置声明的类型',
+    'struct UEClangdCompatStub {};',
+    '',
     '#define UE_CLANGD_COMPAT_BODY \\',
     '  friend struct UEClangdCompatStub; \\',
-    '  static UClass* StaticClass()',
+    '  static UClass* StaticClass() { return nullptr; }',
     '',
   ].join(EOL);
 
