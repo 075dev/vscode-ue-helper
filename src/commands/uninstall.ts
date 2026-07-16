@@ -18,6 +18,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
+import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 
 interface CleanupTarget {
@@ -31,7 +32,7 @@ export async function executeUninstall(logger: Logger, detection: DetectionHandl
     ? path.dirname(project.path)
     : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root) {
-    void vscode.window.showWarningMessage('No workspace root found.');
+    void vscode.window.showWarningMessage(t('cmd.noWorkspaceRoot'));
     return;
   }
 
@@ -66,7 +67,9 @@ export async function executeUninstall(logger: Logger, detection: DetectionHandl
   }
 
   void vscode.window.showInformationMessage(
-    removed.length > 0 ? `Cleaned: ${removed.join(', ')}` : 'No generated files found to clean.',
+    removed.length > 0
+      ? t('uninstall.cleaned', { 0: removed.join(', ') })
+      : t('uninstall.cleanedEmpty'),
   );
   logger.info(`[uninstall] removed ${removed.length} target(s)`);
 }

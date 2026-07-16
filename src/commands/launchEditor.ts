@@ -10,6 +10,7 @@ import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import { launchEditor as launch } from '@build';
 import { pickProject, pickEngine } from '@ui/quickPicks';
+import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 
 export async function executeLaunchEditor(
@@ -23,7 +24,7 @@ export async function executeLaunchEditor(
   if (!project && projects.length === 1) { project = projects[0]; }
   if (!project) { project = await pickProject(projects); }
   if (!project) {
-    void vscode.window.showWarningMessage('No .uproject to launch.');
+    void vscode.window.showWarningMessage(t('launchEditor.noProject'));
     return;
   }
   await detection.workspaceContext.setProject(project);
@@ -33,7 +34,7 @@ export async function executeLaunchEditor(
   if (!engine && engines.length === 1) { engine = engines[0]; }
   if (!engine) { engine = await pickEngine(engines); }
   if (!engine) {
-    void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
+    void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;
   }
   await detection.workspaceContext.setEngine(engine);
@@ -45,10 +46,9 @@ export async function executeLaunchEditor(
       platform: config.platform,
       projectPath: project.path,
     });
-    void vscode.window.showInformationMessage(`Launched Unreal Editor for ${project.name}`);
+    void vscode.window.showInformationMessage(t('launchEditor.launched', { 0: project.name }));
   } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Failed to launch editor: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    void vscode.window.showErrorMessage(t('launchEditor.failed', { 0: msg }));
   }
 }

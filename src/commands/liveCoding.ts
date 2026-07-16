@@ -10,6 +10,7 @@ import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import { triggerLiveCoding, isLiveCodingSupported } from '@build';
 import { pickProject, pickEngine } from '@ui/quickPicks';
+import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 
 export async function executeLiveCoding(
@@ -18,7 +19,7 @@ export async function executeLiveCoding(
   detection: DetectionHandles,
 ): Promise<void> {
   if (!isLiveCodingSupported(config.platform)) {
-    void vscode.window.showWarningMessage('Live Coding is currently Windows-only. Use Rebuild instead.');
+    void vscode.window.showWarningMessage(t('liveCoding.windowsOnly'));
     return;
   }
 
@@ -27,7 +28,7 @@ export async function executeLiveCoding(
   if (!project && projects.length === 1) { project = projects[0]; }
   if (!project) { project = await pickProject(projects); }
   if (!project) {
-    void vscode.window.showWarningMessage('No .uproject to live-code.');
+    void vscode.window.showWarningMessage(t('liveCoding.noProject'));
     return;
   }
   await detection.workspaceContext.setProject(project);
@@ -37,7 +38,7 @@ export async function executeLiveCoding(
   if (!engine && engines.length === 1) { engine = engines[0]; }
   if (!engine) { engine = await pickEngine(engines); }
   if (!engine) {
-    void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
+    void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;
   }
   await detection.workspaceContext.setEngine(engine);
@@ -49,10 +50,9 @@ export async function executeLiveCoding(
       platform: config.platform,
       projectPath: project.path,
     });
-    void vscode.window.showInformationMessage(`Live Coding triggered for ${project.name}`);
+    void vscode.window.showInformationMessage(t('liveCoding.triggered', { 0: project.name }));
   } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Live Coding failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: msg }));
   }
 }

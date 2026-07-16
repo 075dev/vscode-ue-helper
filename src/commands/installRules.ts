@@ -9,6 +9,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
+import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 
 const RULES_CONTENT = `# UE Helper — AI Agent Rules
@@ -46,7 +47,7 @@ export async function executeInstallRules(
     ? path.dirname(project.path)
     : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root) {
-    void vscode.window.showWarningMessage('No workspace root found.');
+    void vscode.window.showWarningMessage(t('cmd.noWorkspaceRoot'));
     return;
   }
 
@@ -62,6 +63,8 @@ export async function executeInstallRules(
   const copilotFile = path.join(ghDir, 'copilot-instructions.md');
   await fs.writeFile(copilotFile, RULES_CONTENT, 'utf-8');
 
-  void vscode.window.showInformationMessage(`Installed AI agent rules:\n${cursorFile}\n${copilotFile}`);
+  void vscode.window.showInformationMessage(
+    t('installRules.installed', { 0: cursorFile, 1: copilotFile }),
+  );
   logger.info(`[installRules] wrote ${cursorFile} + ${copilotFile}`);
 }

@@ -214,5 +214,22 @@
   "picker.configChanged": "构建配置：{0} / Build configuration: {0}",
 
   "openWorkspaceFile.noWorkspace": "未打开任何工作区。 / No workspace open.",
-  "openWorkspaceFile.notFound": "在工作区根目录中未找到 .code-workspace 文件。 / No .code-workspace file found in workspace roots."
+  "openWorkspaceFile.notFound": "在工作区根目录中未找到 .code-workspace 文件。 / No .code-workspace file found in workspace roots.",
+
+  "cmd.noEngineSelected": "未选择 Unreal Engine 安装。 / No Unreal Engine installation selected.",
+  "cmd.noWorkspaceRoot": "未找到工作区根目录。 / No workspace root found.",
+
+  "liveCoding.windowsOnly": "Live Coding 当前仅支持 Windows。请改用 Rebuild。 / Live Coding is currently Windows-only. Use Rebuild instead.",
+  "liveCoding.noProject": "没有可用于 Live Coding 的 .uproject。 / No .uproject to live-code.",
+  "liveCoding.triggered": "已为 {0} 触发 Live Coding。 / Live Coding triggered for {0}",
+  "liveCoding.failed": "Live Coding 失败：{0} / Live Coding failed: {0}",
+
+  "launchEditor.noProject": "没有可启动的 .uproject。 / No .uproject to launch.",
+  "launchEditor.launched": "已为 {0} 启动 Unreal Editor。 / Launched Unreal Editor for {0}",
+  "launchEditor.failed": "启动编辑器失败：{0} / Failed to launch editor: {0}",
+
+  "installRules.installed": "已安装 AI agent 规则：\n{0}\n{1} / Installed AI agent rules:\n{0}\n{1}",
+
+  "uninstall.cleaned": "已清理：{0} / Cleaned: {0}",
+  "uninstall.cleanedEmpty": "未找到可清理的生成文件。 / No generated files found to clean."
 }

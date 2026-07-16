@@ -214,5 +214,22 @@
   "picker.configChanged": "Build configuration: {0}",
 
   "openWorkspaceFile.noWorkspace": "No workspace open.",
-  "openWorkspaceFile.notFound": "No .code-workspace file found in workspace roots."
+  "openWorkspaceFile.notFound": "No .code-workspace file found in workspace roots.",
+
+  "cmd.noEngineSelected": "No Unreal Engine installation selected.",
+  "cmd.noWorkspaceRoot": "No workspace root found.",
+
+  "liveCoding.windowsOnly": "Live Coding is currently Windows-only. Use Rebuild instead.",
+  "liveCoding.noProject": "No .uproject to live-code.",
+  "liveCoding.triggered": "Live Coding triggered for {0}",
+  "liveCoding.failed": "Live Coding failed: {0}",
+
+  "launchEditor.noProject": "No .uproject to launch.",
+  "launchEditor.launched": "Launched Unreal Editor for {0}",
+  "launchEditor.failed": "Failed to launch editor: {0}",
+
+  "installRules.installed": "Installed AI agent rules:\n{0}\n{1}",
+
+  "uninstall.cleaned": "Cleaned: {0}",
+  "uninstall.cleanedEmpty": "No generated files found to clean."
 }
