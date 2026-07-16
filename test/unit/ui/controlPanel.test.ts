@@ -133,7 +133,7 @@ describe('BUTTON_GROUPS', () => {
 });
 
 describe('COMMAND_MAP', () => {
-  it('contains 15 commands (toggleCompletionMode removed per Plan B)', () => {
+  it('contains 14 panel commands (5 others: showProjectInfo/showClangdProxyStatus/showControlPanel/selectConfig/selectTarget are out of panel; toggleCompletionMode removed per Plan B)', () => {
     expect(Object.keys(COMMAND_MAP)).toEqual([
       'build', 'rebuild', 'clean', 'launchEditor', 'liveCoding',
       'createProject', 'generateCompileCommands', 'diagnoseProject',
