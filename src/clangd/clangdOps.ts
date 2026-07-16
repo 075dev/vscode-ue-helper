@@ -24,6 +24,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
+import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { WorkspaceState } from '@core/workspace';
 import { ClangdConfig } from './types';
@@ -44,8 +45,11 @@ export type ClangdMutateResult =
   | { ok: true }
   | { ok: false; reason: 'no-config-path' | 'parse-failed' | 'write-failed'; error?: unknown };
 
-export class ClangdOps {
+export class ClangdOps implements vscode.Disposable {
   constructor(private readonly opts: ClangdOpsOptions) {}
+
+  /** 是否已 dispose（幂等标记，ClangdOps 自身无内部资源） */
+  private _disposed = false;
 
   /** 暴露 WorkspaceState 给调用方用于派生路径访问 */
   get workspace(): WorkspaceState {
@@ -210,5 +214,24 @@ export class ClangdOps {
       };
       config.CompileFlags = next as typeof config.CompileFlags;
     });
+  }
+
+  // ========== Disposable ==========
+
+  /**
+   * 释放资源：ClangdOps 本身不持有 emitter / watcher / file handle 等内部资源，
+   * 仅持有 workspace + logger 引用（这两者由 extension.ts 单独 dispose）。
+   *
+   * 这里只做幂等标记 + 日志，方便后续排查重复 dispose。
+   */
+  dispose(): void {
+    if (this._disposed) {return;}
+    this._disposed = true;
+    this.logger.info('[clangdOps] disposed');
+  }
+
+  /** 测试辅助：是否已 dispose */
+  get isDisposed(): boolean {
+    return this._disposed;
   }
 }

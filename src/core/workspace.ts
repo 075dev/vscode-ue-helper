@@ -90,7 +90,7 @@ export interface WorkspaceStateOptions {
  *   2. 同步访问各 getter
  *   3. 根源信息缺失时 get 自动弹错（去重）
  */
-export class WorkspaceState {
+export class WorkspaceState implements vscode.Disposable {
   // ===== 根源信息（来自 detection 注入） =====
   private _workspaceFile: string | null = null;
   private _workspaceFolders: WorkspaceFolderInfo[] = [];
@@ -104,6 +104,9 @@ export class WorkspaceState {
 
   /** 是否已注入（用于测试） */
   private _injected = false;
+
+  /** 是否已 dispose（防止 dispose 后被访问） */
+  private _disposed = false;
 
   private readonly logger: Logger;
 
@@ -324,5 +327,35 @@ export class WorkspaceState {
     this._workspaceFolders = [];
     this._projectFolder = null;
     this._engineFolder = null;
+  }
+
+  // ===== Disposable =====
+
+  /**
+   * 释放资源：
+   * - 清空去重通知 Set
+   * - 重置内部状态字段（与 _resetForTest 等价，避免外部继续访问到旧数据）
+   * - 设置 disposed 标志（幂等，重复调用安全）
+   *
+   * 不需要释放 EventEmitter——本类未持有任何 emitter。
+   * 调用方负责把本实例 push 到 context.subscriptions，让 deactivate 时自动释放。
+   */
+  dispose(): void {
+    if (this._disposed) {return;}
+    this._disposed = true;
+    this._notifiedFields.clear();
+    this._injected = false;
+    this._project = null;
+    this._engine = null;
+    this._workspaceFile = null;
+    this._workspaceFolders = [];
+    this._projectFolder = null;
+    this._engineFolder = null;
+    this.logger.info('[workspace] disposed');
+  }
+
+  /** 测试辅助：是否已 dispose */
+  get isDisposed(): boolean {
+    return this._disposed;
   }
 }

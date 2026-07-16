@@ -57,9 +57,10 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     void runFirstTimeInit({ context, config, logger, detection, clangd, workspace, clangdOps }, context)
       .catch((err: unknown) => logger.error('[firstRunInit] unexpected error:', err));
 
-    // workspace + clangdOps 暂时挂在 disposables 防止被 GC，后续 PR 接入
-    disposables.push(workspace as unknown as vscode.Disposable);
-    disposables.push(clangdOps as unknown as vscode.Disposable);
+    // [T2.7] workspace + clangdOps 已 implements vscode.Disposable
+    // 接入 context.subscriptions 让 deactivate 时随 extension 一起释放
+    context.subscriptions.push(workspace);
+    context.subscriptions.push(clangdOps);
 
     ControlPanelProvider.register({ context, config, logger, detection, clangd, clangdOps });
 
