@@ -213,7 +213,7 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
           if (key === 'path') {return undefined;}
           return undefined;
         }),
-        update: vi.fn(async () => undefined),
+        update: vi.fn(async () => await Promise.resolve()),
         inspect: vi.fn(),
         has: vi.fn(),
       } as never);
