@@ -1,370 +1,199 @@
-# 01 · 架构总览
+# 01 — 整体架构
 
-> 本文回答三个问题：插件如何启动？模块之间怎么通信？数据从 `.code-workspace` 文件流到状态栏经过哪些步骤？
+> 适用版本：0.1.0+（Phase 8 架构）
 
----
+## 项目定位
 
-## 1. 启动流程
+VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 
-```
-VS Code 激活插件
-       │
-       ▼
-src/extension.ts:activate()
-       │
-       ├─ initI18n()                ← 先初始化 i18n，Logger 也要用翻译
-       │
-       ├─ new Logger('VSCodeUEHelper')
-       │
-       ├─ new Config()             ← 读 vscode.workspace.getConfiguration('vscodeUEHelper')
-       │
-       ├─ activateDetection()      ← ① 检测项目 + 引擎
-       │     │
-       │     ▼
-       │   detection.ready (Promise)  ← 异步预热
-       │
-       ├─ activateBuild()          ← ② 注册 UBT Task Provider
-       │
-       ├─ activateClangd()         ← ③ 启动 clangd 状态栏 + 工作区备份
-       │
-       ├─ activateUI()             ← ④ 创建 10 个状态栏按钮
-       │     │
-       │     ▼
-       │   await detection.ready   ← 等检测完成，更新状态栏
-       │
-       ├─ activateCommands()       ← ⑤ 注册 15 个命令
-       │
-       └─ 显示欢迎信息（首次激活时）
-```
+- UBT 构建 / 重建 / 清理（Task Provider，Ctrl+Shift+B）
+- Live Coding 热重载（仅 Windows）
+- clangd 智能提示（compile_commands.json + `.clangd` + 自定义 Add flags）
+- 可选 MCP AI Agent 集成（Cursor / Claude Code 自动启用）
+- 状态栏 + 控制面板 Webview + QuickPick + Problems 面板
 
-**关键点**：所有模块都接收 `DetectionHandles` 作为参数，状态栏 UI 在 `await detection.ready` 之后才渲染 —— 这避免了"检测还没完成，状态栏就显示空"的竞态。
+代码融合自两个上游项目（避免版本耦合，全部重写）：
 
----
+- `rmoubayed/engine-link`（v3）：UBT 流水线、Live Coding、引擎发现、MCP 集成
+- `boocs/unreal-clangd`（v3）：clangd 配置、compile_commands.json 维护、preparse-includes
 
-## 2. 模块依赖图
+## 双 bundle 设计（关键）
 
-```
-                  ┌─────────────────────────────────────┐
-                  │           extension.ts              │  ← 入口、串联各模块
-                  └──────────────┬──────────────────────┘
-                                 │
-       ┌──────────┬──────────┬────┴────┬──────────┬──────────┐
-       ▼          ▼          ▼         ▼          ▼          ▼
-   ┌────────┐┌────────┐┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-   │  core  ││ i18n   ││detection│ │ build  │ │ clangd │ │   ui   │
-   └───┬────┘└────────┘└───┬────┘ └───┬────┘ └───┬────┘ └────────┘
-       │                   │          │          │
-       │                   │          └──────────┤
-       │                   │                     ▼
-       │                   │              ┌──────────┐
-       │                   │              │ commands │  ← 调用 detection/build/clangd
-       │                   │              └─────┬────┘
-       │                   │                    │
-       └───────────────────┴────────────────────┴────→ 所有模块共用 Logger / Config / i18n
-```
+`esbuild.config.mjs` 同时构建两个产物：
 
-| 模块 | 职责 | 关键导出 |
+| 产物 | 用途 | 依赖 |
 |---|---|---|
-| `core/` | 基础工具 | `Logger`、`Config`、`registerCommand` |
-| `i18n/` | 国际化 | `t(key, params)`、`initI18n()` |
-| `detection/` | 项目 + 引擎发现 | `DetectionHandles`、`detect()`、`UprojectScanner`、`EngineDiscovery` |
-| `build/` | UBT 构建 / Live Coding / 启动 Editor | `runBuild()`、`buildUBTCommand()`、`resolveEditorPath()` |
-| `clangd/` | clangd 配置 + .clangd + Windows SDK/MSVC | `generateCompileCommands()`、`writeClangdConfig()`、`discoverSystemIncludes()` |
-| `ui/` | 状态栏、QuickPick、Output 通道、Problems 面板 | `StatusBarManager`、`pickProject()`、`withProgress()` |
-| `commands/` | 15 个命令的实现 | `executeBuild()`、`executeSetSystemIncludes()` 等 |
-| `mcp/` | Model Context Protocol 服务器 | `startMcpServer()`、`detectHost()` |
-| `parsers/` | 输出解析器 | `MsvcParser`、`UbtParser`、`LinkerParser` |
+| `out/extension.js` | 主扩展，VS Code 加载 | `vscode` 标 external，由运行时提供 |
+| `out/clangdProxy.js` | clangd LSP 代理 CLI，独立子进程 | 不依赖 `vscode`，纯 Node |
 
----
+构建时还会生成两个 launcher 脚本：
 
-## 3. 数据流：从 `.code-workspace` 到状态栏
+- `out/launcher/proxy-launcher.bat`（Windows）
+- `out/launcher/proxy-launcher.sh`（Unix，chmod 755，Windows 上失败被吞掉）
 
-这是最关键的一条数据通路。详细描述每一步：
+启用代理的方式：把 `clangd.path` 指向 launcher 脚本，配合 `clangd.useScriptAsExecutable=true`。
 
-### Step 1: `detection/index.ts:handles.ready` 启动 IIFE
+## 入口与激活顺序（硬约束）
 
-```ts
-handles.ready = (async () => {
-  // ...
-  const workspaceFile = vscode.workspace.workspaceFile;  // ← .code-workspace 的 URI
-  // ...
-})();
+`src/extension.ts` 是唯一入口，模块按以下顺序串联：
+
+```
+1. initI18n()                  ← 必须最先（Logger 内部可能用翻译）
+2. new Logger('VSCodeUEHelper')
+3. new Config()                ← 强类型封装 vscodeUEHelper.* 命名空间
+4. activateDetection(...)      ← 返回 DetectionHandles + ready Promise
+5. new WorkspaceState(...)     ← [Phase 8] 项目/引擎/路径单一真相源
+6. new ClangdOps(...)          ← [Phase 8] .clangd 统一 API
+7. activateBuild(...)          ← UBT Task Provider
+8. activateClangd(...)         ← 状态栏 / 备份 / completion mode / 代理
+9. activateUI(...)             ← 11 个状态栏按钮，await detection.ready
+10. activateCommands(...)      ← 20 个命令（依赖全部 handles）
+11. ControlPanelProvider.register(...)
+12. runFirstTimeInit(...)      ← fire-and-forget，首次使用弹 Initialize
 ```
 
-### Step 2: 读取 `.code-workspace`
+**为什么这个顺序是硬约束**：
 
-```ts
-const raw = await fs.readFile(workspaceFile.fsPath, 'utf-8');
-const folders = JSON.parse(raw).folders ?? [];
-// folders[0] = { name: "XianDreamwalking", path: "." }
-// folders[1] = { name: "UE5", path: "D:\\Program Files\\UE_5.8" }
-```
+- `initI18n` 必须早于 `Logger` —— Logger 日志走 `t()` 翻译。
+- `WorkspaceState` 必须早于 `ClangdOps` —— 后者通过前者派生路径。
+- `activateUI` 在 `activateCommands` 之前 —— 命令回调里要 await UI 状态。
+- `runFirstTimeInit` 必须是 fire-and-forget —— 它内部 await detection.ready，不应阻塞激活主流程。
 
-**关键决策**：插件**完全信任** `.code-workspace` 的 `folders[]` 顺序，**不做文件系统扫描**。
-- `folders[0]` = 项目根目录
-- `folders[1]` = 引擎根目录
+## `.code-workspace` 检测模型（核心设计）
 
-### Step 3: 解析项目路径
+**不扫文件系统，完全信任 `.code-workspace` 的 `folders[]`**。
 
-```ts
-const projectAbsPath = path.resolve(workspaceRootDir, projectEntry.path);
-const uprojectPath = path.join(projectAbsPath, `${projectEntry.name}.uproject`);
-// → E:\Dream\XianDreamwalking\XianDreamwalking.uproject
-```
+UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；workspace 配置是用户的显式意图。
 
-### Step 4: 解析 .uproject（**JSON5** 解析！）
+`folders[]` 规则（硬规则，**用户不允许自定义**）：
 
-```ts
-const project = await scanner.parseFromPath(uprojectPath);
-// scanner.parseUProject 内部用 JSON5.parse，不是 JSON.parse
-// 因为 UE 的 .uproject 允许注释、尾部逗号、单引号
-```
+| `path` | `name` | role |
+|---|---|---|
+| `.` | 任意 | `project` |
+| 绝对路径 | `UE5` | `engine` |
+| 其他 | 任意 | `unknown` |
 
-返回的 `ProjectInfo`：
-```ts
-{
-  path: "E:\\Dream\\XianDreamwalking\\XianDreamwalking.uproject",
-  name: "XianDreamwalking",
-  engineAssociation: "{CDB3CAF5-470B-4D1E-D178-8C8EF113079C}",  // 注意：UE 5.x 用 GUID
-  modules: ["XianDreamwalking"],
-  raw: { ... }
-}
-```
+只有单文件夹打开（无 `.code-workspace` 文件）时，detection 返回空结果，UI 显示警告。
 
-### Step 5: 解析引擎版本
+## Phase 8 单一真相源：WorkspaceState
 
-```ts
-const buildVersionPath = path.join(engineAbsPath, 'Engine', 'Build', 'Build.version');
-// → D:\Program Files\UE_5.8\Engine\Build\Build.version
+`src/core/workspace.ts` 是项目/引擎/路径的**单一真相源**，分 4 层：
 
-const version = await readBuildVersion(engineAbsPath);
-// 返回 "5.8.0"
-```
+| 层 | 字段 | 来源 |
+|---|---|---|
+| Level 0 根源 | `workspaceFile` / `workspaceFolders` / `projectFolder` / `engineFolder` / `project` / `engine` | detection 注入 |
+| Level 1 派生路径 | `workspaceRoot` / `projectDir` / `projectFile` / `projectName` / `engineRoot` / `engineVersion` | 从 Level 0 派生 |
+| Level 2 .clangd | `clangdConfigPath` / `clangdHelperDir` / `compileCommandsDir` / `compileCommandsPath` | 从 Level 1 派生 |
+| Level 3 补全文件 | `macroHelperPath` / `ueClangdCompatPath` / `addCompletionsPath` / `addMacroCompletionsPath` / `completionHelperPath` / `defaultCompletionsPath` | 从 Level 2 派生 |
 
-`Build.version` 是 JSON：
-```json
-{ "MajorVersion": 5, "MinorVersion": 8, "PatchVersion": 0 }
-```
+**关键约束**：
 
-### Step 6: 检测失败处理
+1. 调用方**不允许自己拼接路径** —— 必须通过 getter 拿。`src/clangd/clangdOps.ts` 是唯一允许派生路径的层。
+2. 根源信息缺失时 getter 自动弹错（去重，整 session 每字段只弹一次），文案统一为「从 .uproject 重新生成工作区」**无按钮**（按按钮还是要 `.code-workspace`，会死循环）。
+3. 字段集固定 —— **不允许扩展**自定义派生规则（如 `buildVersionPath` 等硬编码路径拼接都不允许）。
 
-| 情况 | 行为 |
+## Phase 8 统一 API：ClangdOps
+
+`src/clangd/clangdOps.ts` 把所有 `.clangd` 读写收束到 4 个核心 API：
+
+| 方法 | 用途 |
 |---|---|
-| `workspaceFile` 是空 | log error，返回 `projects=[], engines=[]` |
-| `folders[0]` 缺失 | log error |
-| `.uproject` 文件不存在 | log error，return `{projects:[], engines:[]}` |
-| `folders[1]` 缺失 | log error，但**仍然**返回 project（只 engines 空） |
-| `Build.version` 不存在 | log error，return `{projects, engines:[]}` |
+| `readConfig()` | 读取 + YAML 解析 |
+| `exists()` | 检查 `.clangd` 存在性 |
+| `writeFull(opts)` | 全量重写（用 `defaultClangdConfig` 重建） |
+| `mutate(closre)` | 事务性 read-modify-write（读 yaml → 应用 mutator → 原子写回） |
 
-### Step 7: UI 消费
+**为什么收束到这个最小集**：之前细粒度 setter（`setAddFlag` / `removeAddFlag` / `replaceAddBlock` 等）只是 `mutate` 闭包的固化，对调用方没价值 —— 只增加 API 表面，难扩展，难组合。
 
-```ts
-// src/ui/index.ts
-const result = await detection.ready;  // ← 阻塞等
-const ctx: StatusBarContext = {
-  project: result.projects[0] ? { name, path } : null,
-  engine: result.engines[0] ? { version, path } : null,
-};
-statusBar.update(ctx, settings);  // ← 渲染 11 个按钮
-```
+**原子写入**：`temp + rename`（per PATTERNS §3 第 280-285 行），防止半写状态被 clangd 读到。
 
----
+**`applyAddFlags(flags)`**：Add 操作的统一入口，把 `.clangd` 的 `CompileFlags.Add` **整体替换**为给定数组（不做过滤/合并的脆弱拼接）。
 
-## 4. 状态栏 UI 渲染规则
+**迁移状态**：Phase 8 仍在迁移中，老模块（`writeClangdConfig` / `findClangdConfig` 等）保留兼容。
 
-`StatusBarManager.update(ctx, settings)` 是核心方法。
+## 双 esbuild 之间的耦合
 
-| 字段 | 渲染规则 |
+主扩展和代理 CLI 共享同一份 `tsconfig.json` 路径别名（`@core/*` / `@clangd/*` 等），但代理 CLI **不依赖 `vscode`**。这意味着：
+
+- 代理侧代码只能用 `node:*` API
+- 代理侧代码不能调 `vscode.window.*` —— 它的「日志」通过 stderr 或 `--log-path` 指定的文件
+- 代理侧代码 stdout 留给 LSP 协议通道
+
+扩展侧通过 `clangd.path = <path-to-proxy-launcher>` + `clangd.useScriptAsExecutable=true` 触发，launcher 接收代理 CLI 参数 + `--` 分隔符后的真实 clangd 参数。
+
+## MCP 生命周期
+
+`src/mcp/lifecycle.ts` 用环境变量判断宿主：
+
+| 环境变量 | 宿主 |
 |---|---|
-| `$(play) Build` | 文本固定 `Build`；prominent 背景；点击触发 `vscodeUEHelper.build` |
-| `$(refresh) Rebuild` | 文本固定 `Rebuild`；默认背景 |
-| `$(trash) Clean` | 文本固定 `Clean` |
-| `$(gear) {config}` | 显示当前 BuildConfiguration（Development / DebugGame / ...）；点击 → `selectConfig` |
-| `$(symbol-class) {target}` | 显示当前 Target（Editor / Game / ...）；点击 → `selectTarget` |
-| `$(device-desktop) {platform}` | 显示当前 Platform（Win64 / Mac / Linux） |
-| `$(library) MSVC/SDK` | Windows-only，点击 → `setSystemIncludes` |
-| `$(file-code) {project}` 或 `$(warning) No Project` | 项目名 / 警告 + 红黄背景 |
-| `$(package) UE {version}` 或 `$(warning) No Engine` | 引擎版本 / 警告 |
-| `$(zap) Live Coding` | prominent；Windows-only |
-| `$(rocket) Launch` | prominent；启动 Unreal Editor |
+| `CURSOR_TRACE_ID` 或 `CURSOR_USER_DATA_DIR` | Cursor |
+| `CLAUDE_CODE_ENTRYPOINT` 或 `CLAUDE_CODE_SSE_PORT` | Claude Code |
+| 其他 | 普通 VS Code（MCP no-op） |
 
-**没有项目时**：Build / Rebuild / Clean / Live Coding / Launch / Engine 按钮隐藏，其余仍显示。
+`useMCP` 设置 `auto` / `always` / `never` 决定是否启动：
+- `auto`：仅在 Cursor / Claude Code 中启动
+- `always`：总是启动
+- `never`：不启动
 
----
+普通 VS Code 用户**永远不会**看到 MCP 工具 —— 这是设计选择，不是 bug。
 
-## 5. 命令 → 实现的映射
-
-15 个命令分布在 `src/commands/` 下：
-
-| 命令 ID | 文件 | 用途 |
-|---|---|---|
-| `vscodeUEHelper.build` | `build.ts:executeBuild('build')` | 调 UBT 编译 |
-| `vscodeUEHelper.rebuild` | `build.ts:executeBuild('rebuild')` | Clean + Build |
-| `vscodeUEHelper.clean` | `build.ts:executeBuild('clean')` | 调 UBT 清理 |
-| `vscodeUEHelper.launchEditor` | `launchEditor.ts` | 启动 Unreal Editor |
-| `vscodeUEHelper.liveCoding` | `liveCoding.ts` | 触发 Live Coding |
-| `vscodeUEHelper.generateCompileCommands` | `generateCompileCommands.ts` | 跑 UBT 生成 compile_commands.json |
-| `vscodeUEHelper.createProject` | `createProject.ts` | 写 .clangd + addCompletions.h 模板 |
-| `vscodeUEHelper.toggleCompletionMode` | `toggleCompletionMode.ts` | 快速/慢速 clangd 补全模式 |
-| `vscodeUEHelper.showProjectInfo` | `showProjectInfo.ts` | 弹输出面板显示项目状态 |
-| `vscodeUEHelper.setSystemIncludes` | `setSystemIncludes.ts` | 选 Windows SDK + MSVC + C++ 标准 |
-| `vscodeUEHelper.installRules` | `installRules.ts` | 复制 AI agent rules 到项目 |
-| `vscodeUEHelper.uninstall` | `uninstall.ts` | 清理生成文件 |
-| `vscodeUEHelper.openWorkspaceFile` | `openWorkspaceFile.ts` | 打开 .code-workspace |
-| `vscodeUEHelper.regenerateWorkspace` | `regenerateWorkspace.ts` | 从 .uproject 重新生成工作区 |
-| `vscodeUEHelper.selectConfig` | `selectConfig.ts` | 弹 quickPick 选 Build Configuration |
-| `vscodeUEHelper.selectTarget` | `selectTarget.ts` | 弹 quickPick 选 Target 类型 |
-
-> `selectConfig` 和 `selectTarget` 没出现在 `package.json` 的 commands 数组**初始列表**里，而是后来加的。命令面板默认显示全部。
-
----
-
-## 6. 配置系统（`Config` 类）
-
-所有配置走 `vscode.workspace.getConfiguration('vscodeUEHelper')`：
-
-| 配置键 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `vscodeUEHelper.configuration` | enum | `Development` | BuildConfiguration |
-| `vscodeUEHelper.target` | enum | `Editor` | BuildTarget |
-| `vscodeUEHelper.platform` | enum | `Win64` | BuildPlatform |
-| `vscodeUEHelper.clangdPath` | string | `""` | clangd.exe 完整路径 |
-| `vscodeUEHelper.completionMode` | enum | `fast` | 快速 / 慢速 |
-| `vscodeUEHelper.autoBackupWorkspace` | bool | `true` | 是否自动备份 .code-workspace |
-| `vscodeUEHelper.useMCP` | enum | `auto` | MCP 服务器模式 |
-| `vscodeUEHelper.lspLoggingLevel` | enum | `info` | 日志详细级别 |
-
-`Config.update(key, value, target)` 持久化到 workspace 级别（不污染全局设置）。
-
----
-
-## 7. 进程模型
-
-插件里有两种 spawn 模式：
-
-| 模式 | 场景 | 实现 |
-|---|---|---|
-| **Fire-and-forget** | `launchEditor.ts` —— 启动 Unreal Editor | `spawn('cmd', ['/c', 'start', '""', editor.exe, projectPath], { detached: true, stdio: 'ignore' })` |
-| **Long-running with cancellation** | `buildRunner.ts` —— 跑 UBT | `spawn('cmd.exe', ['/c', 'Build.bat', ...args], { detached: !win32 })`，加 `AbortSignal` 支持 |
-
-**关键 Windows 行为**：
-- `.bat` 文件**不能**直接 spawn，必须通过 `cmd.exe /c Build.bat ...`
-- 杀进程时**不能**只 `child.kill()` —— 整个 cmd.exe → Build.bat → dotnet → UnrealBuildTool 进程链要用 `taskkill /F /T /PID <pid>`
-
-详见 [05-code-reference.md](./05-code-reference.md#windows-进程管理)。
-
----
-
-## 8. 错误处理策略
-
-| 层级 | 策略 |
-|---|---|
-| `Logger` | info / warn / error 三档，写入 Output 通道 |
-| 用户可见错误 | `vscode.window.showErrorMessage(message, ...buttons)` —— modal 让用户必须响应 |
-| 命令失败 | 命令返回的 Promise reject，由 VS Code 自动弹错误 |
-| 异步失败 | 检测 / 状态栏渲染包在 try/catch 里，失败时降级到空 ctx 显示 `(no project) / (no engine)` |
-| 文件读写 | 用 `fs.promises`，失败抛 Error 上层 catch |
-
----
-
-## 9. 项目溯源
-
-> VSCodeUEHelper 是从两个开源参考项目融合而来的全新实现。代码从零编写以避免版本耦合，但核心设计模式、模块职责拆分、状态栏交互范式均继承自以下两个项目。
-
-### 9.1 参考源概览
-
-| 项目 | 作者 | 平台定位 | 许可 | 核心贡献领域 |
-|---|---|---|---|---|
-| **[engine-link](https://github.com/rmoubayed/engine-link)** | Rami Moubayed | Cursor IDE 扩展 | MIT | UBT 构建管线、Live Coding、MCP AI 集成、状态栏 UI |
-| **[unreal-clangd](https://github.com/boocs/unreal-clangd)** | boocs | VS Code 扩展 | MIT | clangd IntelliSense、`compile_commands.json`、Windows SDK/MSVC 发现、工作区备份 |
-
-### 9.2 engine-link 贡献分析
-
-engine-link 的核心设计理念是 **"让 Cursor 成为 UE 开发的主编辑器"** —— 状态栏驱动、AI 优先。
-
-**VSCodeUEHelper 继承的模式：**
-
-| 模式 | engine-link 中的形态 | VSCodeUEHelper 中的落地 |
-|---|---|---|
-| **状态栏驱动交互** | 10 个状态栏按钮（Build / Rebuild / Clean / Config / Target / Platform / Live Coding / Launch / Project / Engine），所有操作从状态栏发起 | `src/ui/StatusBarManager.ts` —— 11 个按钮，与 engine-link 对齐的布局和优先级 |
-| **MCP AI 集成** | 内置 MCP 服务器，在 Cursor 中自动启动，暴露 6 个工具给 AI agent | `src/mcp/` —— 同样 6 个工具（`ue_build`、`ue_launch_editor`、`ue_live_coding`、`ue_generate_compile_commands`、`ue_show_project_info`、`ue_toggle_completion_mode`），增加 `auto`/`always`/`never` 模式控制 |
-| **Task Provider** | 注册 VS Code Task Provider，让 `Ctrl+Shift+B` 触发 UBT 构建 | `src/build/` —— `UbtTaskProvider` 实现 `vscode.TaskProvider` 接口 |
-| **Fire-and-forget 进程** | `spawn('cmd', ['/c', 'start', ...], { detached: true })` 启动 Editor | `src/build/editorLauncher.ts` —— 相同模式，增加跨平台支持（Mac: `open`，Linux: 直接 spawn） |
-| **引擎检测** | Windows 注册表 `HKLM\SOFTWARE\EpicGames\Unreal Engine\<version>` | `src/detection/engineDiscovery.ts` —— 扩展为跨平台（Mac: `~/Library/Application Support/Epic`，Linux: 多路径扫描 + `$UE_ROOT`） |
-| **AI agent rules 生成** | 自动写 `.cursor/rules/*.mdc` | `src/rules/` —— 扩展到 Cursor + Copilot 双平台 |
-
-**未被继承的设计决策：**
-- engine-link 用 **C/C++ for Cursor** 作为语言服务器 → VSCodeUEHelper 直接依赖 **clangd 官方扩展**（`llvm-vs-code-extensions.vscode-clangd`），获得更好的 UE 宏支持和跨平台一致性
-- engine-link 仅支持 Windows → VSCodeUEHelper 支持 Windows / Mac / Linux
-- engine-link 状态栏按钮文本固定英文 → VSCodeUEHelper 内置 i18n（中/英）
-
-### 9.3 unreal-clangd 贡献分析
-
-unreal-clangd 的核心设计理念是 **"让 clangd 在 UE 项目中开箱即用"** —— 自动化所有配置、处理 UE 特有的编译器边缘情况。
-
-**VSCodeUEHelper 继承的模式：**
-
-| 模式 | unreal-clangd 中的形态 | VSCodeUEHelper 中的落地 |
-|---|---|---|
-| **compile_commands.json 生成** | 通过 UBT `-ProjectFiles` 模式生成 compile_commands.json，然后复制或符号链接到项目根目录 | `src/clangd/compileCommandsGenerator.ts` —— 相同流程，生成后通过 clangd 的 `--compile-commands-dir` 指向 |
-| **preparse-includes 宏补全** | `addCompletions.h` + `addMacroCompletions.h`，用 `-include` 注入 clangd preamble，让 `UCLASS`/`UPROPERTY` 等宏被正确解析 | `src/clangd/preparseIncludes.ts` —— 两档模式：**Fast**（18 个精选 header，快速索引）/**Slow**（49 个全面 header），对应 unreal-clangd 中的快速/慢速补全 |
-| **.clangd 配置管理** | 写 `.clangd` 文件抑制 MSVC 误报（`builtin-macro-redefinition`、`unknown-warning-option` 等），使用 managed block 标记 | `src/clangd/clangdConfigWriter.ts` —— 继承 managed block 模式（`# <<< vscodeuehelper-managed >>>` 标记），扩展到更多 suppress 项 |
-| **工作区备份** | 备份 `.code-workspace` 到 `.vscode/unreal-clangd/.code-workspace.backup`，在 UBT refresh 后自动恢复 | `src/clangd/workspaceBackup.ts` —— 相同机制，备份路径改为 `.vscode/vscodeuehelper/` |
-| **Windows SDK / MSVC 发现** | `vswhere.exe` 定位 VS 安装，从注册表读 Windows SDK 版本，写 `-imsvc` 标志 | `src/detection/vsDetector.ts` —— 继承 vswhere + Registry 双路径，增加 `unreal-clangd.setSystemIncludes` 等效命令 |
-| **命令行快速切换** | 快速/慢速补全模式一键 toggle | `src/commands/toggleCompletionMode.ts` —— 完全对齐 |
-
-**未被继承的设计决策：**
-- unreal-clangd 的模块代码大量使用回调嵌套 → VSCodeUEHelper 全面使用 `async/await` + `Promise`
-- unreal-clangd 的检测逻辑有不稳定的竞态（检测未完成就渲染 UI）→ VSCodeUEHelper 用 `DetectionHandles.ready` Promise 消除竞态（见 [§1 启动流程](#1-启动流程)）
-- unreal-clangd 支持从 UE 5.2 起的多个引擎版本 → VSCodeUEHelper 目前聚焦 5.3+
-
-### 9.4 融合架构决策
-
-两个参考源在 VSCodeUEHelper 中的融合并非简单拼接，而是经过以下关键决策：
+## 数据流总览
 
 ```
-engine-link 的构建/UI/MCP 管线  +  unreal-clangd 的 clangd/补全/配置管线
-               │                                    │
-               └──────────────┬─────────────────────┘
-                              ▼
-              ┌───────────────────────────────┐
-              │     VSCodeUEHelper 融合层      │
-              │                               │
-              │  · 统一的 DetectionHandles    │
-              │  · 统一的 Config 配置系统      │
-              │  · 统一的 Logger + i18n       │
-              │  · 消除竞态的启动 Promise 链   │
-              │  · 跨平台的进程管理抽象        │
-              └───────────────────────────────┘
+.code-workspace ──┐
+                  ▼
+        DetectionHandles ──ready Promise──► WorkspaceState ──► ClangdOps ──► .clangd
+                  │                              │
+                  │                              ▼
+                  │                       ClangdProxyManager ──► clangdProxy.js
+                  │
+                  ▼
+            UI (StatusBar / ControlPanel)
+                  │
+                  ▼
+            Commands (20 个) ──► BuildRunner / ClangdGenerator / ClangdProxyManager / ...
 ```
 
-| 融合点 | 说明 |
-|---|---|
-| **检测系统统一** | engine-link 的引擎检测 + unreal-clangd 的 vswhere/SDK 检测 → 统一 `DetectionHandles`，单次检测、多处消费 |
-| **配置系统统一** | engine-link 用 `enginelink.*` 命名空间，unreal-clangd 用 `unreal-clangd.*` → 统一为 `vscodeUEHelper.*` |
-| **状态栏 + clangd 共存** | 状态栏同时显示构建按钮（来自 engine-link）和 MSVC/SDK 选择器（来自 unreal-clangd），两个领域在同一个 `StatusBarContext` 中消费 |
-| **MCP + clangd 无冲突** | MCP 服务器不依赖 clangd 状态，反之亦然。两者通过 Config 读取共享的项目/引擎信息，但运行时完全解耦 |
+并行：
 
-### 9.5 参考信息表
+```
+MCP Server ──► tools.ts (6 个工具) ──► executeXxx 函数（同 commands）
+```
 
-| 维度 | engine-link | unreal-clangd | VSCodeUEHelper |
-|---|---|---|---|
-| **首次发布** | 2025 Q4 | 2023 (UE 5.2) | 2026 Q2 |
-| **目标 IDE** | Cursor | VS Code | VS Code（兼容 Cursor） |
-| **语言** | TypeScript | TypeScript | TypeScript (strict) |
-| **打包** | esbuild | webpack | esbuild |
-| **测试** | 无公开测试 | Mocha | Vitest (26 tests) |
-| **平台** | Windows only | Win / Mac / Linux | Win / Mac / Linux |
-| **UE 版本** | 5.4 – 5.7 | 5.2 – 5.8 | 5.3+ |
-| **状态栏按钮** | 10 | 0 | 11 |
-| **MCP** | ✅ 6 tools | ❌ | ✅ 6 tools |
-| **clangd 集成** | Extension Pack (间接) | 直接 (核心功能) | 直接 (Extension Pack) |
-| **i18n** | ❌ | ❌ | ✅ zh / en |
+## 模块依赖（编译期 import 方向）
 
-> **版权声明**：VSCodeUEHelper 的代码是全新编写的，不包含 engine-link 或 unreal-clangd 的任何源代码。上述设计模式（如状态栏布局、managed block 格式、preparse-includes 策略）属于架构层面的"思想借鉴"，在 MIT 许可下合法合规。
+```
+extension.ts
+  ├── core         (无依赖)
+  ├── detection    → core
+  ├── build        → core, detection, parsers
+  ├── clangd       → core, detection
+  │   └── proxy    → core（但外部不依赖 vscode）
+  ├── ui           → core, detection
+  ├── commands     → core, detection, build, clangd, ui, parsers, i18n
+  ├── mcp          → core, build, clangd, commands
+  ├── rules        (无依赖)
+  └── i18n         (无依赖)
+```
 
----
+`commands` 和 `mcp` 是汇聚点 —— 它们**可以**依赖所有下层模块（这是它们的设计职责：编排），但**任何其他模块不得依赖 `commands` 或 `mcp`**（防止循环）。
 
-## 下一步
+## 持久化
 
-继续看 [02-modules.md](./02-modules.md) 了解每个模块的细节。
+| 数据 | 存储位置 | API |
+|---|---|---|
+| `vscodeUEHelper.*` 配置 | VS Code settings.json（workspace scope） | `Config` getter/setter |
+| 用户选择的 engine / project | `.code-workspace` 的 `settings.vscodeUEHelper.*` | `WorkspaceContext` |
+| 首次初始化标记 | `.code-workspace` 的 `settings.vscodeUEHelper.initialized` | `firstRunInit.ts` 原子写 |
+| 备份 `.code-workspace` | `.vscode/.code-workspace.backup`（gitignore） | `WorkspaceBackup` |
+| UBT 解析缓存 / 编译数据库 | `.vscode/vscodeuehelper/`（gitignore） | `compileCommands*` |
+
+## 关键不变式（破坏会导致 bug）
+
+1. **激活顺序**不可乱（见上）
+2. **路径获取**必须走 `WorkspaceState` getter（不允许调用方 `path.join`）
+3. **`Config.update` 写完必须 refresh** —— `src/core/config.ts` 内部已处理，但调用方常见误用：`await config.update(); 立刻读 config.xxx` 会拿到旧值
+4. **MSVC 错误正则**在 `package.json#contributes.problemMatchers` 和 `src/parsers/msvcParser.ts` **两处定义**，必须同步
+5. **所有 VS Code 资源**（命令、状态栏、Watcher、DiagnosticCollection）必须 push 到 `context.subscriptions`
+6. **新增命令 4 步**：`package.json` 定义 → `commands/xxx.ts` 实现 → `commands/index.ts` 注册 → i18n 双语 key

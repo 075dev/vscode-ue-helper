@@ -18,6 +18,7 @@
 | `notifications.ts` | 通知弹窗封装 |
 | `problemsPanel.ts` | Problems 面板诊断管理 |
 | `outputChannel.ts` | Output Channel 日志输出封装 |
+| `controlPanel.ts` | ControlPanelProvider —— Webview 控制面板（侧边栏） |
 | `index.ts` | UI 激活入口 |
 
 ## 状态栏设计

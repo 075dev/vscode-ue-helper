@@ -14,13 +14,32 @@
 | 文件 | 职责 |
 |---|---|
 | `clangdConfig.ts` | 读/写 `.clangd` 配置，系统包含路径管理 |
+| `clangdOps.ts` | [Phase 8] 统一 .clangd 操作 API（mutate / setAddFlag / replaceAddBlock）—— 22 callers |
 | `compileCommands.ts` | 跑 UBT 生成 compile_commands.json |
-| `completionMode.ts` | fast/slow 模式控制器 + 状态栏 |
-| `completionFiles.ts` | UE 宏补全文件系统 (addCompletions.h 等) |
+| `compileCommandsFallback.ts` | UBT 失败时的 fallback DB |
+| `compileCommandsCache.ts` | 缓存层 |
+| `completionMode.ts` | fast/slow 模式控制器 + 状态栏（**[Pitfall]** 模式已合并，仅 slow） |
+| `completionFiles.ts` | UE 宏补全文件系统 (addCompletions.h 等)；含撒谎兼容层 |
 | `preparseIncludes.ts` | 打包的头文件列表 (curated vs comprehensive) |
 | `workspaceBackup.ts` | 备份/恢复 .code-workspace 防 UBT 覆盖 |
 | `windowsSdk.ts` | MSVC + Windows SDK 路径发现 |
 | `ueClangdCompat.ts` | UE + clangd 兼容层（重写 BODY_MACRO_COMBINE） |
+| `ueMacroCompletionProvider.ts` | VS Code LSP CompletionItemProvider（UE 宏补全） |
+| `ueMacroCompletions.ts` | UE 宏补全数据结构 |
+| `ueReflectionLinter.ts` | UE 反射 linter |
+| `proxyManager.ts` | 接管检测状态后构建 proxy CLI 参数 |
+| `fileWatcher.ts` | IncrementalFileWatcher (chokidar) |
+| `intermediateUhtCollector.ts` | Intermediate/Build/.../UHT 收集 |
+| `headerCache.ts` | `.h` 指纹缓存 |
+| `fingerprint.ts` | 配置指纹（缓存键） |
+| `flagGlossary.ts` | clangd flag 词典（hover 提示） |
+| `perfLog.ts` | 轻量 perf 埋点单例（activation.elapsed 等事件） |
+| `perfProxy.ts` | LSP proxy 开销测量（P50/P95/P99 + RSS） |
+
+## 子目录
+
+- **`proxy/`** —— 独立 LSP 代理 CLI 进程（17 文件）。详见 `src/clangd/proxy/AGENTS.md`。
+- **`diagnostics/`** —— "Diagnose Clangd Project" 命令的内部检查器（checks / format / io / types）。**无 index.ts**，从 `diagnoseProject.ts` 内部相对导入。
 
 ## 关键数据流
 

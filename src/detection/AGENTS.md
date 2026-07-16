@@ -13,13 +13,16 @@
 
 | 文件 | 职责 |
 |---|---|
-| `uprojectScanner.ts` | 解析 `.uproject` JSON，提取模块名、引擎版本 |
-| `engineDiscovery.ts` | 引擎路径枚举、版本读取 |
-| `vsBuildTools.ts` | Windows 上 MSVC 工具链发现 |
-| `workspaceContext.ts` | 工作区状态持久化 (workspaceState) |
-| `workspaceFolders.ts` | 解析 .code-workspace 的 folders 配置 |
-| `workspaceEngines.ts` | 从 workspace folders 提取引擎信息 |
-| `types.ts` | ProjectInfo, EngineInstall 等类型定义 |
+| `index.ts` | activateDetection 入口 |
+| `uprojectScanner.ts` | 解析 `.uproject` JSON（json5，支持 trailing commas） |
+| `engineDiscovery.ts` | 引擎路径枚举、版本读取（Build.version） |
+| `engineLocator.ts` | 跨平台引擎发现（Windows 注册表 / Mac / Linux 路径） |
+| `workspaceContext.ts` | 工作区状态持久化（context.workspaceState） |
+| `workspaceFolders.ts` | 解析 .code-workspace folders[]，分配 role（project / engine / unknown） |
+| `workspaceEngines.ts` | 从 workspace folders 派生引擎候选（启发式） |
+| `uprojectAssociation.ts` | .uproject ↔ .code-workspace 关联校验 |
+| `vsBuildTools.ts` | Windows 上 MSVC 工具链发现（vswhere.exe） |
+| `types.ts` | ProjectInfo / EngineInstall / WorkspaceFolderInfo / VSInstallation |
 
 ## 关键架构：信任 .code-workspace
 

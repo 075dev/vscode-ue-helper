@@ -1,178 +1,161 @@
-# VSCodeUEHelper 知识库
+# VSCodeUEHelper —— 仓库知识库
 
-**生成时间:** 2025-01
-**项目:** VSCode UE Helper - Unreal Engine C++ 开发插件
+VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding 热重载、clangd 智能提示、可选 MCP AI Agent 集成。所有代码注释强制中文。
 
-## 项目总览
+## 状态速览
 
-这是一个为 Unreal Engine 5.2+ 开发者设计的 VS Code 扩展，提供：
-- UBT 构建集成 (Build/Rebuild/Clean)
-- Live Coding 热重载 (Windows)
-- clangd 智能提示 + compile_commands.json 生成
-- MCP AI Agent 集成 (Cursor/Claude Code 自动启用)
-- 16 个命令 + 完整的状态栏 UI
+- 0.1.0 已发布；0.6.x 合并 fast/slow 为 slow；**Phase 8 已落地** `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构；老 `activate*(detection)` API 向后兼容。
+- 20 个命令（`package.json#contributes.commands`），11 个状态栏按钮（`src/ui/statusBar.ts`）。
+- 单元测试 56 个文件 + 1 个 .bak 手备份（共约 10.4k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 80/80/75/80。
 
-## 项目起源
+## 模块文档
 
-本项目融合了两个优秀开源项目的设计模式，代码完全重写以避免版本耦合：
+进入具体模块前先读对应的 AGENTS.md：
 
-| 上游项目 | 版本 | 借鉴内容 |
+| 模块 | 路径 | 内容 |
 |---|---|---|
-| **[rmoubayed/engine-link](https://github.com/rmoubayed/engine-link)** | v3 | UBT 构建流水线、Live Coding 热重载、引擎自动发现、MCP AI Agent 集成 |
-| **[boocs/unreal-clangd](https://github.com/boocs/unreal-clangd/tree/v3)** | v3 | clangd 智能提示、compile_commands.json 维护、workspace 备份机制、preparse-includes 宏补全 |
-
-**设计融合点**：
-- engine-link 的 MCP 集成架构 + unreal-clangd 的 clangd 配置方案
-- 统一的模块化激活顺序，避免两个上游项目的竞态问题
-- 保留了两个项目各自的优势特性，去除了冗余代码
-
-## 目录结构
-
-```
-VSCodeUEHelper/
-├── src/                    # 源代码
-│   ├── core/               # 基础设施 (Logger, Config, 命令注册)
-│   ├── detection/          # 项目/引擎检测
-│   ├── build/              # UBT 构建、Live Coding、Task Provider
-│   ├── clangd/             # clangd 配置、编译数据库、补全模式
-│   ├── commands/           # 16 个 VS Code 命令实现
-│   ├── ui/                 # 状态栏、QuickPick、通知、问题面板
-│   ├── parsers/            # MSVC/UBT/链接器 错误解析
-│   ├── mcp/                # Model Context Protocol 服务器
-│   ├── rules/              # AI Agent 规则生成 (Cursor/Copilot)
-│   └── i18n/               # 国际化 (zh/en)
-├── test/                   # Vitest 单元测试
-├── resources/              # 图标、头文件列表等
-├── doc/                    # 架构文档
-├── out/                    # esbuild 输出 (Git 忽略)
-├── package.json            # 插件 manifest + 脚本
-├── tsconfig.json           # TypeScript 配置 (严格模式)
-└── .eslintrc.json          # ESLint 规则
-```
-
-## 架构速查
-
-### 激活顺序 (关键！不能乱序)
-```
-1. initI18n()               ← 必须最先，Logger 之前
-2. Logger + Config          ← 基础设施，所有模块依赖
-3. activateDetection()      ← 项目/引擎发现，返回 ready Promise
-4. activateBuild()          ← UBT Task Provider
-5. activateClangd()         ← clangd 状态栏 + 工作区备份
-6. activateUI()             ← 11 个状态栏按钮，await detection.ready
-7. activateCommands()       ← 注册 16 个命令到 VS Code
-```
-
-### 核心设计模式
-- **Promise-based 而非回调**：`detection.ready` 是 Promise，UI await 后才渲染，避免竞态
-- **模块化激活**：每个模块有 `activateXxx()` 函数，接收依赖，返回 handles
-- **强类型配置**：所有 `vscodeUEHelper.*` 设置都有 TypeScript 包装
-- **中文注释优先**：所有代码注释使用中文，便于国内开发者理解
-
-## 去哪里找代码
-
-| 任务 | 位置 | 关键文件 |
-|---|---|---|
-| 添加新命令 | `src/commands/` | `index.ts` 注册，`xxx.ts` 实现 |
-| 修改构建逻辑 | `src/build/` | `ubt.ts`, `buildRunner.ts`, `taskProvider.ts` |
-| clangd 配置 | `src/clangd/` | `clangdConfig.ts`, `compileCommands.ts`, `completionMode.ts` |
-| 引擎/项目检测 | `src/detection/` | `engineDiscovery.ts`, `uprojectScanner.ts`, `vsBuildTools.ts` |
-| 状态栏 UI | `src/ui/` | `statusBar.ts`, `quickPicks.ts`, `notifications.ts` |
-| 错误解析 | `src/parsers/` | `msvcParser.ts`, `ubtParser.ts`, `linkerParser.ts` |
-| MCP 工具 | `src/mcp/` | `server.ts`, `tools.ts`, `lifecycle.ts` |
-| 添加日志 | `src/core/` | `logger.ts` |
-| 配置项 | `src/core/` | `config.ts` |
-| 国际化 | `src/i18n/` | `locales/zh.ts`, `locales/en.ts` |
-
-## 约定与规范
-
-### TypeScript 严格模式
-所有代码必须通过 `tsc --noEmit`，关键规则：
-```json
-"strict": true,
-"noUncheckedIndexedAccess": true,
-"noImplicitAny": true,
-"strictNullChecks": true
-```
-
-### 导入路径别名
-tsconfig 配置了路径别名，**必须使用**：
-```typescript
-import { Logger } from '@core/logger';      // ✅ 正确
-import { Config } from '@core/config';      // ✅ 正确
-import { Logger } from '../core/logger';    // ❌ 禁止
-```
-
-### 中文注释
-所有文件、函数、类的头部注释必须使用中文，说明：
-- 该模块/函数的职责
-- 关键设计决策
-- 依赖关系
-- 注意事项
-
-### 命令注册模式
-```typescript
-// src/commands/index.ts 中注册
-registerCommand(context, 'vscodeUEHelper.xxx', () =>
-  executeXxx(config, logger, deps),
-);
-
-// 独立文件实现: src/commands/xxx.ts
-export async function executeXxx(
-  config: Config,
-  logger: Logger,
-  detection: DetectionHandles,
-): Promise<void> { /* 实现 */ }
-```
-
-## 反模式 (此项目中禁止)
-
-1. **不要用回调** - 所有异步操作用 Promise/async-await
-2. **不要忽略 floating promises** - `void foo()` 明确标记故意不 await
-3. **不要用 `any`** - 除非万不得已，且必须加 `// eslint-disable-line` 说明原因
-4. **不要跳过空检查** - `noUncheckedIndexedAccess` 开启，数组访问必须判空
-5. **不要在错误路径漏掉日志** - 所有 `catch` 必须调用 `logger.error()`
-
-## 独特风格
-
-- **i18n 优先设计**：所有用户可见字符串都通过 `t('key')` 翻译
-- **Output Channel 结构化日志**：每个模块有自己的日志前缀 `[module] message`
-- **globalState 持久化**：用户选择的配置跨会话保留
-- **Disposable 模式**：所有 VS Code 资源都推入 `context.subscriptions`，自动清理
+| build | `src/build/AGENTS.md` | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、DDD 三层结构 |
+| clangd | `src/clangd/AGENTS.md` | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引 |
+| clangd/proxy | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO |
+| commands | `src/commands/AGENTS.md` | 20 个命令注册表、新增命令 4 步流程 |
+| detection | `src/detection/AGENTS.md` | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强 |
+| ui | `src/ui/AGENTS.md` | 11 个状态栏按钮布局、QuickPick 模式、ControlPanel Webview |
+| core | `src/core/AGENTS.md` | Logger/Config/WorkspaceState 横切基础设施、Config.update 陷阱 |
+| mcp | `src/mcp/AGENTS.md` | MCP 服务器（仅 Cursor/Claude Code 环境激活）、6 个工具 |
+| i18n / parsers / rules | （合并到根） | i18n 见下方"风格与约定"、parsers 是纯函数、rules 是 AI 规则生成器 |
 
 ## 常用命令
 
 ```bash
-npm run build              # esbuild → out/extension.js (58kb 左右)
-npm run watch              # 监听模式开发
-npm run typecheck          # TypeScript 类型检查
-npm run lint               # ESLint 检查
-npm run format:check       # Prettier 格式检查
-npm run test:unit          # Vitest 单元测试 (18 个测试)
-npm run package            # vsce 打包成 .vsix
+npm run build         # clean + esbuild → out/extension.js + out/clangdProxy.js + launcher 脚本
+npm run watch         # esbuild 监听模式
+npm run typecheck     # tsc --noEmit（必须零错误）
+npm run lint          # ESLint src test
+npm run format:check  # Prettier
+npm run test:unit     # Vitest（测试入口 test/unit/**/*.test.ts）
+npm run package       # vsce package → .vsix
+npm run perf:baseline # LSP 代理开销采样 → .vscode/clangd-perf-cache/proxy-baseline.json
+npm run perf:after    # 同上，输出 proxy-after.json
+npm run perf:diff     # 对比两个 JSON，< 1% 偏差算通过
 ```
 
-## 开发要点
+调试：VS Code 里按 `F5` 启动 Extension Development Host（`launch.json` 配置 `Run Extension`）。
 
-### 调试
-- F5 启动 Extension Development Host
-- 断点直接打在 TypeScript 源文件
-- Output 面板选 "VSCodeUEHelper" 看日志
+## 关键架构（agent 容易踩坑的地方）
 
-### 测试
-- Vitest 单元测试覆盖核心逻辑
-- 集成测试需要 UE 引擎环境，手动运行
+### 入口与激活顺序
 
-### 发布前检查清单
-1. ✅ `npm run typecheck` 通过
-2. ✅ `npm run lint` 通过
-3. ✅ `npm run test:unit` 通过
-4. ✅ `npm run package` 成功
-5. ✅ F5 启动后所有状态栏按钮正常显示
+`src/extension.ts` 是唯一入口，**顺序是硬约束**：
 
-## 注意事项
+```
+initI18n()        ← 必须最先，Logger 内部可能用翻译
+→ Logger + Config
+→ activateDetection(context, config, logger)         // 返回 DetectionHandles + ready Promise
+→ new WorkspaceState({ detection, logger })          // [Phase 8] 单一真相源
+→ new ClangdOps({ workspace, logger })               // [Phase 8] .clangd 统一 API
+→ activateBuild / activateClangd / activateUI
+→ activateCommands（最后一个，依赖全部 handles）
+→ ControlPanelProvider.register(...)
+→ runFirstTimeInit(...) // fire-and-forget
+```
 
-- **模块激活顺序非常重要**：detection 必须在 UI 之前，因为 UI await detection.ready
-- **Windows 特有功能**：Live Coding、VS Build Tools 检测只在 Windows 运行
-- **MCP 自动检测**：通过 `CURSOR`/`CLAUDE` 环境变量判断，只在支持的编辑器启动
-- **工作区依赖**：必须打开 `.code-workspace`，独立文件夹不支持检测
+`detection.ready` 是 Promise，UI 必须 await 它再渲染，避免竞态。
+
+### 双 esbuild 输出
+
+`esbuild.config.mjs` 同时构建两个 bundle：
+
+1. `out/extension.js` —— 主扩展，`vscode` 标 external（运行时由 VS Code 提供）。
+2. `out/clangdProxy.js` —— clangd LSP 代理 CLI，**不依赖 vscode**，作为独立子进程跑。
+   - 配套生成 `out/launcher/proxy-launcher.bat`（Windows）和 `.sh`（Unix，自动 chmod 755，Windows 上失败被吞掉）。
+   - 启动方式：把 `clangd.path` 指向 launcher，配合 `clangd.useScriptAsExecutable=true`。
+
+### 路径别名（必须用）
+
+`tsconfig.json`、`esbuild.config.mjs`、`vitest.config.ts` 三处声明。**禁止相对导入**：
+
+```typescript
+import { Logger } from '@core/logger';           // ✅
+import { Logger } from '../../core/logger';      // ❌ 违反风格
+```
+
+可用别名：`@core`、`@detection`、`@build`、`@clangd`、`@commands`、`@ui`、`@parsers`、`@mcp`、`@rules`、`@i18n`、`@platform`（**注意 `@platform` 是死的**——`src/platform/` 目录不存在，是历史残留）。
+
+### `.code-workspace` 检测模型
+
+不扫文件系统，**完全信任** `.code-workspace` 的 `folders[]`：
+
+- `path === '.'` → 项目根（找 `<name>.uproject`）
+- `name === 'UE5'` → 引擎根（读 `Engine/Build/Build.version`）
+- 其他 → unknown
+
+如果用户只打开单文件夹（无 workspace 文件），detection 直接返回空结果，UI 显示警告。
+
+## 仓库陷阱（容易误导的点）
+
+1. **`npm run test:integration` 已坏**——脚本指向 `test/integration/runTests.js`，该目录不存在。`npm test` 跑 unit + integration，integration 步会失败。**只跑 unit**：`npm run test:unit`。
+2. **`completionMode` 设置已废弃**——`package.json` 里 `deprecationMessage` 标明，值 `'fast'` 在 `Config.completionMode` getter 归一化为 `'slow'`。`resources/preparse-includes/ue5-fast.json` 已被删除，只剩 `ue5-slow.json`。**不要新增 fast/slow 分支代码**。
+3. **`resources/README.md` 描述过时**——还提到 `ue5-fast.json` 和缺失的 `banner.png`，与现状不符。
+4. **`.bak` 测试文件未忽略**——`test/unit/commands/clangdProxyCommands.test.ts.bak` 是手备份，`.gitignore` 没排除；提交前别把它带上。
+5. **MCP 只在 Cursor / Claude Code 启动**——检测 `CURSOR_TRACE_ID` / `CURSOR_USER_DATA_DIR` / `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_SSE_PORT` 环境变量，普通 VS Code 里 MCP 是 no-op。改 MCP 时不要假设 always-on。
+6. **chokidar 必须在 vitest mock**——`test/unit/setup.ts` 已 mock，否则 `fileWatcher` 测试会启动真实 fs watcher 卡住进程。
+7. **MSVC 错误正则**：`^(.*)\((\d+)(?:,(\d+))?\):\s+(error|warning|note|fatal error)\s+([A-Z]+\d+):\s+(.*)$`，定义在 `package.json#contributes.problemMatchers`，`src/parsers/msvcParser.ts` 用同一正则。改一处要同步另一处。
+8. **`headerWatcher` 已删**——Phase 8 改为 proxy 端 `UeDiagnosticWatcher` 被动触发 UBT 重生成，不要重新加回主动 watcher。
+9. **`out/` 必须清理**——`npm run clean` 只删 `out/src/` 和 `out/test/`（防打包残留），不会删 `out/extension.js`。`npm run build` 内部会先 clean 再 bundle。
+10. **`Config.update` 写完必须 refresh**——`src/core/config.ts` 内部已处理，但调用方常见误用：`await config.update(); 立刻读 config.xxx` 会拿到旧值（VS Code 同进程内不主动通知 WorkspaceConfiguration 失效）。改动该类代码要测试写入后读回。
+11. **`completionMode` 设置已死但 API 还在**——`Config.completionMode` getter 强制归一化为 `'slow'`，`package.json` 标 `deprecationMessage`，但旧代码路径仍存在。新代码不要再读 `config.completionMode` 判断分支（详情见 `src/core/AGENTS.md`）。
+12. **`populateAddCompletions` 是撒谎型兼容层**——`src/clangd/completionFiles.ts:591` 返回 `{added:0, skipped:0, found:0}`，**但文件实际已在磁盘生成**。读返回值做决策的代码全错。新代码直接调 `createCompletionFiles()`。
+13. **6 个汉化 TODO 是僵尸承诺**——`src/clangd/proxy/localization.ts:79/91/103` + `src/clangd/proxy/bridge.ts:676/685/694` 都写 "后续实现"，未排进任何 phase。规划时不要假设汉化已上线。
+
+## 风格与约定
+
+- **TypeScript strict 全开**：`strict`、`noUncheckedIndexedAccess`、`noUnusedLocals/Parameters`、`noImplicitReturns`、`noFallthroughCasesInSwitch`。
+- **ESLint 强制**：`@typescript-eslint/no-floating-promises`、`no-misused-promises`、`await-thenable` 都是 `error`。故意不 await 用 `void foo()`。
+- **i18n 优先**：所有用户可见字符串走 `t('key', params)`，对应 `src/i18n/locales/{en,zh}.json`。改文案要同步两份。
+- **日志前缀**：每个模块日志加 `[moduleName]`，例如 `[detection] workspaceFile = ...`。
+- **资源清理**：所有 VS Code 资源（StatusBarItem、命令、Watcher）必须 push 到 `context.subscriptions`。
+- **新增命令 4 步**：① `package.json#contributes.commands` 加定义；② `src/commands/xxx.ts` 写 `executeXxx`；③ `src/commands/index.ts` `registerCommand`；④ i18n 双语 key。
+- **绝对路径用于诊断**——Problems 面板需要绝对路径；MSVC 输出 1-based，VS Code 0-based，解析时要减 1。
+
+## 打包 / 发布注意
+
+- `package.json` 的 `repository.url` 还是 `YOUR_USERNAME/vscode-ue-helper` 占位符，发布前要改。
+- `.vscodeignore` 已排除 `src/`、`test/`、`tsconfig.json`、`*.mjs`、`AGENTS.md`、`CLAUDE.md`、`.planning/`、`.codegraph/`、`scripts/`、`*.log`、`*.map`、`doc/`、`docs/`。打包后只有 `out/extension.js`、`out/clangdProxy.js`、`out/launcher/*`、`resources/icon.png`、`package.json` 进入 `.vsix`。
+- `npm run package` 内部 `prepackage` 钩子会自动 `npm run build`。
+- 无 CI / pre-commit / Husky 配置（`.github/`、`hooks/` 都不存在）。所有门禁靠开发者本地命令。
+
+## 目录速查
+
+```
+src/
+├── extension.ts        # 唯一入口
+├── core/               # Logger, Config, command-registry, WorkspaceState
+├── detection/          # uprojectScanner, engineDiscovery, vsBuildTools, workspaceContext
+├── build/              # ubt, buildRunner, taskProvider, liveCoding, launchEditor
+│   ├── domain/         # DDD 风格: entities, value-objects, events, repositories
+│   ├── application/
+│   └── infrastructure/
+├── clangd/             # clangdConfig, compileCommands, completionMode, completionFiles
+│   ├── diagnostics/    # Diagnose Clangd Project 命令用的检查器
+│   └── proxy/          # 独立 LSP 代理 CLI: cli, bridge, processBridge, framing
+├── parsers/            # msvcParser, ubtParser, linkerParser, uprojectParser
+├── commands/           # 20 个命令处理器
+├── ui/                 # statusBar, quickPicks, notifications, problemsPanel, outputChannel
+├── mcp/                # Model Context Protocol 服务器（Cursor/Claude Code）
+├── rules/              # AI Agent 规则生成（Cursor + Copilot）
+└── i18n/               # en.json, zh.json
+resources/
+├── icon.png
+└── preparse-includes/ue5-slow.json  # fast.json 已删除
+scripts/
+├── clean-out.mjs       # 清 out/src out/test（防 .vsix 残留）
+├── extract-ue-docs.ts  # UE 源码头注释抽取（用 npx tsx 跑）
+└── measure-proxy-overhead.mjs  # LSP 代理 perf:baseline/after/diff
+test/
+└── unit/               # Vitest 入口，测试文件与 src/ 镜像目录布局
+.vscode/
+├── launch.json         # F5 启动配置
+├── tasks.json          # npm scripts 包装成 VS Code 任务
+├── settings.json       # Prettier + ESLint + clangd 推荐
+└── extensions.json     # 推荐扩展（Prettier/ESLint/clangd/TS Next）
+```
