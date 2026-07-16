@@ -200,5 +200,19 @@
   "perf.cacheMiss": "Cache miss, running UBT",
   "perf.showInStatusBar": "Show performance metrics in status bar",
   "perf.showInStatusBar.desc": "Show performance metrics (compile_commands gen time, preparse cache hit rate, incremental scan latency) in status bar.",
-  "config.showPerfInStatusBar.desc": "Show performance metrics in status bar."
+  "config.showPerfInStatusBar.desc": "Show performance metrics in status bar.",
+
+  "quickPicks.noProjects": "No .uproject files found in workspace.",
+  "quickPicks.noEngines": "No Unreal Engine installations detected. Set vscodeUEHelper.engineRoot manually.",
+  "quickPicks.selectProject": "Select a .uproject",
+  "quickPicks.selectEngine": "Select Unreal Engine version",
+  "quickPicks.selectConfig": "Select build configuration",
+  "quickPicks.selectTarget": "Select build target",
+  "quickPicks.selectPlatform": "Select target platform",
+
+  "picker.targetChanged": "Build target: {0}",
+  "picker.configChanged": "Build configuration: {0}",
+
+  "openWorkspaceFile.noWorkspace": "No workspace open.",
+  "openWorkspaceFile.notFound": "No .code-workspace file found in workspace roots."
 }

@@ -83,6 +83,61 @@ const DEFAULT_MIN_UBT_INTERVAL_MS = 10000;
 /** 最大重试次数，超过后不再自动触发 */
 const DEFAULT_MAX_RETRIES = 3;
 
+/**
+ * UBT 参数白名单：buildTargetName / projectFile 的合法字符集。
+ *
+ * 只允许：
+ * - `\w`（字母数字下划线）—— UE target 名合法字符
+ * - `/` `\`（路径分隔符）
+ * - `:`（Windows 盘符）
+ * - `.`（文件扩展名）
+ *
+ * 拒绝所有 shell metacharacter（& | ; $ ` " ' \n \r \t 等），
+ * 防止 UBT ParseCommandLine 在按空格分割 `-Target=...` argv 时被恶意值诱导。
+ */
+const UBT_ARG_WHITELIST = /^[\w./\\:-]+$/;
+
+/** UBT 参数校验失败异常。 */
+export class UBTArgsValidationError extends Error {
+  constructor(
+    public readonly field: 'buildTargetName' | 'projectFile',
+    public readonly value: string,
+    reason: string,
+  ) {
+    super(`Invalid ${field} for UBT invocation: ${reason} (got ${JSON.stringify(value)})`);
+    this.name = 'UBTArgsValidationError';
+  }
+}
+
+/**
+ * 校验 UBT 参数在白名单内，否则抛 `UBTArgsValidationError`。
+ *
+ * 在 `runUbt()` 构造 `-Target=...` argv 之前调用，防止恶意 buildTargetName
+ * 或 projectFile 通过 UBT 解析器误读参数或污染命令行。
+ */
+export function validateUbtArgs(buildTargetName: string, projectFile: string): void {
+  if (!buildTargetName) {
+    throw new UBTArgsValidationError('buildTargetName', buildTargetName, 'empty value');
+  }
+  if (!UBT_ARG_WHITELIST.test(buildTargetName)) {
+    throw new UBTArgsValidationError(
+      'buildTargetName',
+      buildTargetName,
+      'contains characters outside the whitelist [\\w./\\\\:-]',
+    );
+  }
+  if (!projectFile) {
+    throw new UBTArgsValidationError('projectFile', projectFile, 'empty value');
+  }
+  if (!UBT_ARG_WHITELIST.test(projectFile)) {
+    throw new UBTArgsValidationError(
+      'projectFile',
+      projectFile,
+      'contains characters outside the whitelist [\\w./\\\\:-]',
+    );
+  }
+}
+
 export interface UeDiagnosticWatcherOptions {
   /** 项目根目录 */
   projectDir: string;
@@ -271,6 +326,9 @@ export class UeDiagnosticWatcher {
 
     // 扫描 projectDir 找 .uproject（不假设文件名 = 目录名）
     const projectFile = await this.findUprojectFile();
+
+    // [T5.2] 拼接前白名单校验,防止 UBT ParseCommandLine 被恶意值诱导
+    validateUbtArgs(buildTargetName, projectFile);
 
     // 直接 spawn dotnet UnrealBuildTool.dll，绕过 Build.bat 的 `dotnet %UBTPath% %*` 透传。
     // UHT 模式 -Target="Name Platform Config" 必须作为单个含空格 argv

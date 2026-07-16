@@ -8,11 +8,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { t } from '@i18n';
 
 export async function executeOpenWorkspaceFile(): Promise<void> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (folders.length === 0) {
-    void vscode.window.showWarningMessage('No workspace open.');
+    void vscode.window.showWarningMessage(t('openWorkspaceFile.noWorkspace'));
     return;
   }
   // Look for a .code-workspace in any of the workspace roots.
@@ -29,5 +30,5 @@ export async function executeOpenWorkspaceFile(): Promise<void> {
       // skip
     }
   }
-  void vscode.window.showInformationMessage('No .code-workspace file found in workspace roots.');
+  void vscode.window.showInformationMessage(t('openWorkspaceFile.notFound'));
 }

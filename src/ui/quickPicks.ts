@@ -13,10 +13,11 @@
 
 import * as vscode from 'vscode';
 import { ProjectInfo, EngineInstall } from '@detection';
+import { t } from '@i18n';
 
 export async function pickProject(projects: ProjectInfo[]): Promise<ProjectInfo | undefined> {
   if (projects.length === 0) {
-    void vscode.window.showInformationMessage('No .uproject files found in workspace.');
+    void vscode.window.showInformationMessage(t('quickPicks.noProjects'));
     return undefined;
   }
   const items = projects.map((p) => ({
@@ -26,7 +27,7 @@ export async function pickProject(projects: ProjectInfo[]): Promise<ProjectInfo 
     project: p,
   }));
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Select a .uproject',
+    placeHolder: t('quickPicks.selectProject'),
     matchOnDescription: true,
   });
   return picked?.project;
@@ -34,9 +35,7 @@ export async function pickProject(projects: ProjectInfo[]): Promise<ProjectInfo 
 
 export async function pickEngine(engines: EngineInstall[]): Promise<EngineInstall | undefined> {
   if (engines.length === 0) {
-    void vscode.window.showInformationMessage(
-      'No Unreal Engine installations detected. Set vscodeUEHelper.engineRoot manually.',
-    );
+    void vscode.window.showInformationMessage(t('quickPicks.noEngines'));
     return undefined;
   }
   const items = engines.map((e) => ({
@@ -46,7 +45,7 @@ export async function pickEngine(engines: EngineInstall[]): Promise<EngineInstal
     engine: e,
   }));
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Select Unreal Engine version',
+    placeHolder: t('quickPicks.selectEngine'),
     matchOnDescription: true,
   });
   return picked?.engine;
@@ -54,13 +53,13 @@ export async function pickEngine(engines: EngineInstall[]): Promise<EngineInstal
 
 export async function pickConfiguration(): Promise<string | undefined> {
   return vscode.window.showQuickPick(['Debug', 'DebugGame', 'Development', 'Shipping', 'Test'], {
-    placeHolder: 'Select build configuration',
+    placeHolder: t('quickPicks.selectConfig'),
   });
 }
 
 export async function pickTarget(): Promise<string | undefined> {
   return vscode.window.showQuickPick(['Editor', 'Game', 'Server', 'Client'], {
-    placeHolder: 'Select build target',
+    placeHolder: t('quickPicks.selectTarget'),
   });
 }
 
@@ -71,7 +70,7 @@ export async function pickPlatform(): Promise<string | undefined> {
     { label: 'Linux', description: 'Linux' },
   ];
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Select target platform',
+    placeHolder: t('quickPicks.selectPlatform'),
   });
   return picked?.label;
 }

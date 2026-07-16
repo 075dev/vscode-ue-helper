@@ -8,11 +8,12 @@ import * as vscode from 'vscode';
 import { Config } from '@core/config';
 import { Logger } from '@core/logger';
 import { pickConfiguration } from '@ui/quickPicks';
+import { t } from '@i18n';
 
 export async function executeSelectConfig(config: Config, logger: Logger): Promise<void> {
   const picked = await pickConfiguration();
   if (!picked) {return;}
   await config.update('configuration', picked);
   logger.info(`[selectConfig] configuration = ${picked}`);
-  void vscode.window.showInformationMessage(`Build configuration: ${picked}`);
+  void vscode.window.showInformationMessage(t('picker.configChanged', { 0: picked }));
 }

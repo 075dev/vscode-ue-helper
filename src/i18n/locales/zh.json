@@ -200,5 +200,19 @@
   "perf.cacheMiss": "缓存未命中，运行 UBT / Cache miss, running UBT",
   "perf.showInStatusBar": "在状态栏显示性能指标 / Show performance metrics in status bar",
   "perf.showInStatusBar.desc": "在状态栏显示性能指标（compile_commands 生成耗时、preparse 缓存命中率、增量扫描延迟）。",
-  "config.showPerfInStatusBar.desc": "在状态栏显示性能指标。"
+  "config.showPerfInStatusBar.desc": "在状态栏显示性能指标。",
+
+  "quickPicks.noProjects": "未在 workspace 中找到 .uproject 文件。 / No .uproject files found in workspace.",
+  "quickPicks.noEngines": "未检测到 Unreal Engine 安装。请手动设置 vscodeUEHelper.engineRoot。 / No Unreal Engine installations detected. Set vscodeUEHelper.engineRoot manually.",
+  "quickPicks.selectProject": "选择 .uproject / Select a .uproject",
+  "quickPicks.selectEngine": "选择 Unreal Engine 版本 / Select Unreal Engine version",
+  "quickPicks.selectConfig": "选择构建配置 / Select build configuration",
+  "quickPicks.selectTarget": "选择构建目标 / Select build target",
+  "quickPicks.selectPlatform": "选择目标平台 / Select target platform",
+
+  "picker.targetChanged": "构建目标：{0} / Build target: {0}",
+  "picker.configChanged": "构建配置：{0} / Build configuration: {0}",
+
+  "openWorkspaceFile.noWorkspace": "未打开任何工作区。 / No workspace open.",
+  "openWorkspaceFile.notFound": "在工作区根目录中未找到 .code-workspace 文件。 / No .code-workspace file found in workspace roots."
 }
