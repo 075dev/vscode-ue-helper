@@ -259,7 +259,7 @@ export function getControlPanelHtml(
     </div>
     <div class="form-section">
       <div class="section-title">${escapeHtml(t('panel.section.clangd'))}</div>
-      ${renderConfigFields(['completionMode'])}
+      <div class="form-help">${escapeHtml(t('panel.help.completionModeUnified'))}</div>
     </div>
     <div class="form-section">
       <div class="section-title">${escapeHtml(t('panel.section.general'))}</div>

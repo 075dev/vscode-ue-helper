@@ -5,12 +5,13 @@
  * clangd 默认看不到。preparse 功能告诉 clangd 把特定头文件当作已包含,
  * 这样这些宏的补全能正常工作。
  *
- * 两种模式:
- *   - fast: 5 个 SharedPCH 头文件,轻量快速
- *   - slow: 同 fast（SharedPCH 已覆盖全部核心模块）,addMacroCompletions.h 提供额外宏补全
- *
- * 列表从 resources/preparse-includes/ue5-{fast,slow}.json 加载,
+ * T2.1 / H4-B 重构后：fast/slow 模式已合并，仅保留 slow 模式。
+ * 列表从 resources/preparse-includes/ue5-slow.json 加载（ue5-fast.json 已删除）,
  * 用户自定义从 Project/.vscode/vscodeuehelper/addCompletions.h 合并。
+ *
+ * 兼容性：
+ *   - 旧 API 签名 `mode: CompletionMode` 参数保留，但参数值被忽略（统一走 slow）。
+ *   - CompletionMode 类型已收敛为 `'slow'` 字面量。
  */
 
 import * as fs from 'node:fs/promises';
@@ -18,7 +19,7 @@ import * as path from 'node:path';
 import type { WorkspaceState } from '@core/workspace';
 import type { PerfSession } from './perfLog';
 import { perfLog } from './perfLog';
-import { CompletionMode, PrepareIncludesList } from './types';
+import type { CompletionMode, PrepareIncludesList } from './types';
 
 /**
  * Get the bundled preparse list. Reads from

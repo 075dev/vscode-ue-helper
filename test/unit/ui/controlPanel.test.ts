@@ -46,7 +46,8 @@ function createMockLogger() {
 function createMockConfig() {
   const cfg: Record<string, unknown> = {
     configuration: 'Development', target: 'Editor', platform: 'Win64',
-    completionMode: 'fast', useMCP: 'auto', autoBackupWorkspace: true, lspLoggingLevel: 'info',
+    // T2.1 后 completionMode 永远是 'slow'；mock config 也改为 'slow' 保持状态栏状态一致。
+    completionMode: 'slow', useMCP: 'auto', autoBackupWorkspace: true, lspLoggingLevel: 'info',
     clangdProxyEnabled: false, clangdProxyKeepaliveMax: 20, clangdProxyKeepaliveTtlSec: 900,
     clangdProxyRealClangdPath: undefined, clangdProxyLogPath: undefined,
     clangdProxyLocalizationEnabled: false, clangdProxyLocalizationMode: 'append',
@@ -145,7 +146,8 @@ describe('COMMAND_MAP', () => {
 
 describe('Config/Proxy field definitions', () => {
   it('CONFIG_FIELDS has expected fields', () => {
-    expect(CONFIG_FIELDS).toEqual(['configuration', 'target', 'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace']);
+    // T2.1：completionMode 不再作为用户可配置项出现在 CONFIG_FIELDS 中。
+    expect(CONFIG_FIELDS).toEqual(['configuration', 'target', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace']);
   });
   it('PROXY_FIELDS has expected fields', () => {
     expect(PROXY_FIELDS).toEqual(['clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec', 'clangdProxyRealClangdPath', 'clangdProxyLogPath', 'localizationEnabled', 'localizationMode']);
@@ -190,9 +192,12 @@ describe('getControlPanelHtml', () => {
     const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     expect(html).toContain('id="cfg-configuration"');
     expect(html).toContain('id="cfg-target"');
-    expect(html).toContain('id="cfg-completionMode"');
     expect(html).toContain('id="cfg-autoBackupWorkspace"');
     expect(html).toContain('id="config-save-btn"');
+    // T2.1：completionMode 不再是表单字段，由面板内嵌提示文案解释已合并。
+    // 测试走默认 'en' locale，匹配面板里的提示正文片段。
+    expect(html).toContain('Fast/Slow modes have been merged');
+    expect(html).not.toContain('id="cfg-completionMode"');
     // platform 切换选项已删除（只读 status 保留）
     expect(html).not.toContain('id="cfg-platform"');
   });

@@ -145,7 +145,6 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
             configuration: config.configuration,
             target: config.target,
             platform: config.platform,
-            completionMode: config.completionMode,
             useMCP: config.useMCP,
             autoBackupWorkspace: config.autoBackupWorkspace,
             lspLoggingLevel: config.lspLoggingLevel,

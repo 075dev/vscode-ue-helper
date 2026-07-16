@@ -7,7 +7,6 @@ export interface ConfigValues {
   configuration: string;
   target: string;
   platform: string;
-  completionMode: string;
   useMCP: string;
   autoBackupWorkspace: boolean;
   lspLoggingLevel: string;
@@ -36,6 +35,7 @@ export interface StatusValues {
   target: string;
   platform: string;
   clangdPath: string;
+  /** T2.1 之后 completionMode 写死为 'slow'，状态栏仍显式告知用户当前模式。 */
   completionMode: string;
   mcpMode: string;
   mcpHost: string;
@@ -216,10 +216,8 @@ export const CONFIG_SELECTS: Record<string, SelectOption[]> = {
     { value: 'Server', label: 'Server' },
     { value: 'Client', label: 'Client' },
   ],
-  completionMode: [
-    { value: 'fast', labelKey: 'config.completionMode.enum.fast' },
-    { value: 'slow', labelKey: 'config.completionMode.enum.slow' },
-  ],
+  // T2.1：completionMode 不再是用户可选设置（fast/slow 已合并为唯一 slow），
+  //      从 CONFIG_SELECTS 移除（CONFIG_FIELDS / CONFIG_KEY_MAP 同步清理）。
   useMCP: [
     { value: 'auto', labelKey: 'config.useMCP.enum.auto' },
     { value: 'always', labelKey: 'config.useMCP.enum.always' },
@@ -245,7 +243,7 @@ export const PROXY_BOOLEANS: string[] = ['clangdProxyEnabled', 'localizationEnab
 
 export const CONFIG_FIELDS: string[] = [
   'configuration', 'target',
-  'completionMode', 'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace',
+  'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace',
 ];
 
 export const PROXY_FIELDS: string[] = [
@@ -268,7 +266,6 @@ export function getFieldType(field: string, isProxy: boolean): FieldType {
 export const CONFIG_KEY_MAP: Record<string, string> = {
   configuration: 'configuration',
   target: 'target',
-  completionMode: 'completionMode',
   useMCP: 'useMCP',
   autoBackupWorkspace: 'autoBackupWorkspace',
   lspLoggingLevel: 'lspLoggingLevel',

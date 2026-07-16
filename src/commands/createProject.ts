@@ -106,7 +106,7 @@ export async function executeCreateProject(
       // 用户后续在控制面板「自定义 Add Flags」勾选 flag，或运行 setSystemIncludes 让 SDK flag
       // 自动写入。createProject 自身不主动注入任何 flag —— 满足"完全不让 add 默认注入"。
       progress.report({
-        message: `Step 1/5: writing .clangd (mode: ${config.completionMode})...`,
+        message: 'Step 1/5: writing .clangd...',
         increment: 0,
       });
       try {
@@ -137,7 +137,6 @@ export async function executeCreateProject(
         }
 
         const writeResult = await clangdOps.writeFull({
-          completionMode: config.completionMode,
           compilerPath,
           projectPath: project.path,
         });
@@ -156,8 +155,8 @@ export async function executeCreateProject(
           detail: clangdConfigPath,
         });
         logger.info(
-          `[createProject] wrote ${clangdConfigPath} (mode: ${config.completionMode}, ` +
-            `CompileFlags.Add = []，由用户在控制面板勾选或 setSystemIncludes 触发)`,
+          `[createProject] wrote ${clangdConfigPath} ` +
+            `(CompileFlags.Add = []，由用户在控制面板勾选或 setSystemIncludes 触发)`,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

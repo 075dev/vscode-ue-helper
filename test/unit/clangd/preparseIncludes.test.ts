@@ -159,8 +159,9 @@ describe('resolvePreparseHeaders (adversarial)', () => {
 describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
   it('不传 perfSession 仍可正常工作（向后兼容）', async () => {
     // Plan B 重构后 mode 参数内部被忽略，统一读取 ue5-slow.json。
+    // T2.1：CompletionMode 类型仅剩 'slow' 字面量，调用方传入 'slow'。
     // 不传第三个参数 → 不抛错，返回数组
-    const result = await getPrepareIncludesList('fast', '/nonexistent/path');
+    const result = await getPrepareIncludesList('slow', '/nonexistent/path');
     // 加载 bundled 列表（即使 projectPath 无效，base 列表仍存在）
     expect(Array.isArray(result)).toBe(true);
   });
@@ -182,13 +183,13 @@ describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
       flushToDisk: async () => {},
     };
 
-    await getPrepareIncludesList('fast', '/nonexistent/path', {
+    await getPrepareIncludesList('slow', '/nonexistent/path', {
       perfSession: mockSession,
     });
 
     expect(recordedBox.value).not.toBeNull();
     // 非空断言：上面 expect.toBeNull 失败会终止测试，到这里 recordedBox.value 必非 null
-    expect(recordedBox.value!.mode).toBe('fast');
+    expect(recordedBox.value!.mode).toBe('slow');
     expect(recordedBox.value!.baseCount).toBeGreaterThan(0);
   });
 
@@ -206,7 +207,7 @@ describe('getPrepareIncludesList 集成 (tmpdir)', () => {
   it('空 projectPath 返回 bundled 列表', async () => {
     const tmpDir = await fs.mkdtemp(path.join(tmpdir(), 'preparse-test-'));
     try {
-      const result = await getPrepareIncludesList('fast', tmpDir);
+      const result = await getPrepareIncludesList('slow', tmpDir);
       expect(result.length).toBeGreaterThan(0);
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });

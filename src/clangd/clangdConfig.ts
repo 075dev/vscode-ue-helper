@@ -31,8 +31,6 @@ import { ClangdConfig, IfBlock } from './types';
 
 /** 选项（精简版） */
 export interface ClangdConfigOptions {
-  /** 完成模式（保留兼容）；不再影响 Add 内容 */
-  completionMode?: 'fast' | 'slow';
   /** 编译器路径（模板风格，如 D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe） */
   compilerPath?: string;
   /** 项目路径（用于生成 If.PathMatch 规则） */

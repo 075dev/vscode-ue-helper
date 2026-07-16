@@ -88,7 +88,9 @@ export {
   getUeClangdCompatPath,
   getUeClangdCompatContent,
 } from './ueClangdCompat';
-export type { CompletionMode, CompileCommandsEntry, ClangdConfig } from './types';
+// T2.1：CompletionMode 已收敛为字面 'slow'，不再对外暴露类型别名。
+//       历史调用者改用字面量 'slow' 或 `string` 即可。
+export type { CompileCommandsEntry, ClangdConfig } from './types';
 export {
   diagnoseProject,
   formatDiagnosticReport,

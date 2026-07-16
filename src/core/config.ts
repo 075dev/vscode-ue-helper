@@ -47,8 +47,10 @@ export type BuildConfiguration = 'Debug' | 'DebugGame' | 'Development' | 'Shippi
 export type BuildTarget = 'Editor' | 'Game' | 'Server' | 'Client';
 /** 目标平台 */
 export type BuildPlatform = 'Win64' | 'Mac' | 'Linux';
-/** clangd 补全模式：fast = 精选头文件，slow = 几乎所有宏 */
-export type CompletionMode = 'fast' | 'slow';
+// 注：CompletionMode 类型 alias 已删除（T2.1/H4-B）。
+//   - package.json 不再暴露 vscodeUEHelper.completionMode 设置。
+//   - getter 永远返回字面量 'slow'（见下）。
+//   - 历史值 'fast' 不再被接受（设置键不存在），所有 'fast' 引用已收束。
 /** MCP 服务器模式：auto = 仅在 Cursor/Claude Code 启用，always = 总是，never = 不启用 */
 export type MCPMode = 'auto' | 'always' | 'never';
 
@@ -126,16 +128,16 @@ export class Config {
   }
 
   /**
-   * 补全模式，默认 slow。
+   * 仅保留 slow 一种模式（fast 已废弃合并）。
    *
-   * Plan B 重构后 fast/slow 模式已合并：slow 已包含 fast 的全部内容（5 个 SharedPCH +
-   * addMacroCompletions.h），内部统一走 slow 路径。getter 归一化保证老用户工作区
-   * 配置 `'fast'` 不报错。
+   * T2.1 / H4-B：package.json 不再暴露 vscodeUEHelper.completionMode 设置。
+   * 历史值 'fast' 由归一化层吸收，getter 现在硬返回 'slow' 字面量。
+   * 保留 getter 是为了不破坏 UI / 状态栏 / 日志中所有 `config.completionMode`
+   * 读取点（详见 src/ui/controlPanel.ts、src/commands/createProject.ts、
+   * src/commands/showProjectInfo.ts 等）。
    */
-  get completionMode(): CompletionMode {
-    const raw = this.root.get<CompletionMode>('completionMode');
-    // 历史值 'fast' 归一化为 'slow'，向老用户工作区配置兼容；其他也 fallback 到 'slow'
-    return raw === 'fast' || raw === 'slow' ? 'slow' : 'slow';
+  public get completionMode(): 'slow' {
+    return 'slow';
   }
 
   /** 是否自动备份 .code-workspace 防止 UBT 刷新覆盖，默认 true */

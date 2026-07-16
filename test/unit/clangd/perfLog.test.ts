@@ -44,9 +44,10 @@ describe('perfLog preparse 命中率统计', () => {
     const before = perfLog.getPreparseHitRate();
 
     // 触发 3 次 hit + 1 次 miss
-    perfLog.recordPreparseResult('fast', 18, 0);
-    perfLog.recordPreparseResult('fast', 49, 0);
-    perfLog.recordPreparseResult('fast', 0, 0); // miss
+    // T2.1 后所有调用走 slow 模式；'fast' 字面量不再有效，用 'slow' 替代
+    perfLog.recordPreparseResult('slow', 18, 0);
+    perfLog.recordPreparseResult('slow', 49, 0);
+    perfLog.recordPreparseResult('slow', 0, 0); // miss
     perfLog.recordPreparseResult('slow', 5, 0);
 
     const after = perfLog.getPreparseHitRate();

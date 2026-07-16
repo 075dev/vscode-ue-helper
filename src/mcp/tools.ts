@@ -95,7 +95,8 @@ export function callTool(name: string, args: Record<string, unknown>): string {
     case 'ue_show_project_info':
       return JSON.stringify({ ok: true, note: 'Phase 5 stub' });
     case 'ue_toggle_completion_mode':
-      return JSON.stringify({ ok: true, mode: 'fast', note: 'Phase 5 stub' });
+      // T2.1 / H4-B：fast/slow 已合并，返回当前唯一模式 slow。Phase 5 stub 保留。
+      return JSON.stringify({ ok: true, mode: 'slow', note: 'Phase 5 stub — fast/slow 已合并为 slow' });
     default:
       return JSON.stringify({ ok: false, error: `Unknown tool: ${name}` });
   }

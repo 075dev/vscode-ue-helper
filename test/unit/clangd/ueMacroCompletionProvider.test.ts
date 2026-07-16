@@ -124,7 +124,9 @@ function createDetectionHandles(): DetectionHandles {
 
 function mockConfig(): Config {
   vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-    get: vi.fn((key: string, fallback?: unknown) => (key === 'completionMode' ? 'fast' : fallback)),
+    // T2.1 后 vscodeUEHelper.completionMode 设置已删除。Mock 走 fallback 路径
+    // —— 该测试不依赖于具体模式值（用 macroHelper 路径替代）。
+    get: vi.fn((key: string, fallback?: unknown) => (key === 'completionMode' ? 'slow' : fallback)),
     has: vi.fn(() => true),
     inspect: vi.fn(),
     update: vi.fn(),

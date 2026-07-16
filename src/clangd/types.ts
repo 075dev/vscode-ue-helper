@@ -3,9 +3,13 @@
  *
  * 设计原则：仅暴露 clangd 22.1.0 已确认支持的配置。
  * 移除 Preamble/Hover/Completion 等 clangd 22.x 不识别或会报警告的配置。
+ *
+ * T2.1 / H4-B 决策：fast/slow 模式已合并，CompletionMode 仅剩 slow 字面量。
+ * 保留类型别名供内部 API（preparseIncludes、completionMode 等）继续使用，
+ * 避免一次性大面积改动函数签名。
  */
 
-export type CompletionMode = 'fast' | 'slow';
+export type CompletionMode = 'slow';
 
 export interface CompileCommandsEntry {
   directory: string;
