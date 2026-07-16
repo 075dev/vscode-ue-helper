@@ -29,7 +29,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from './logger';
-import type { ProjectInfo, EngineInstall } from '../detection/types';
+import type { ProjectInfo, EngineInstall } from '@detection/types';
 
 /** 从 .code-workspace folders[] 派生的 folder 元信息（detection 层标记 role） */
 export interface WorkspaceFolderInfo {
