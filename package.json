@@ -399,7 +399,7 @@
         "owner": "ue-helper-msvc",
         "fileLocation": "absolute",
         "pattern": {
-          "regexp": "^(.*)\\((\\d+)(?:,(\\d+))?\\):\\s+(error|warning|note|fatal error)\\s+([A-Z]+\\d+):\\s+(.*)$",
+          "regexp": "^(.*?)\\((\\d+)(?:,(\\d+))?\\)\\s*:\\s*(error|warning|note|fatal error)\\s+([A-Z]+\\d+)\\s*:\\s*(.*)$",
           "file": 1,
           "line": 2,
           "column": 3,
