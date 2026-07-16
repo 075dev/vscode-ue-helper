@@ -564,38 +564,3 @@ export async function addCompletionHelperToCompileCommands(
   await fs.writeFile(ccPath, JSON.stringify(entries, null, 2), 'utf-8');
   return true;
 }
-
-// ---- 向后兼容 ----
-
-/**
- * @deprecated 请使用 createCompletionFiles() 代替。
- */
-export interface PopulateOptions {
-  projectPath: string;
-  overwrite?: boolean;
-}
-
-/**
- * @deprecated 请使用 createCompletionFiles() 代替。
- */
-export interface PopulateResult {
-  filePath: string;
-  added: number;
-  skipped: number;
-  found: number;
-}
-
-/**
- * @deprecated 请使用 createCompletionFiles() 代替。
- */
-export async function populateAddCompletions(opts: PopulateOptions): Promise<PopulateResult> {
-  await createCompletionFiles(opts.projectPath);
-
-  const dir = getUnrealClangdDir(opts.projectPath);
-  return {
-    filePath: path.join(dir, FILENAME_ADD_COMPLETIONS),
-    added: 0,
-    skipped: 0,
-    found: 0,
-  };
-}

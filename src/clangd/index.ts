@@ -63,9 +63,6 @@ export {
   FILENAME_ADD_COMPLETIONS,
   FILENAME_MACRO_COMP_HELPER,
   FILENAME_ADD_MACRO_COMPLETIONS,
-  populateAddCompletions,
-  type PopulateOptions,
-  type PopulateResult,
 } from './completionFiles';
 export {
   loadBundledList,
