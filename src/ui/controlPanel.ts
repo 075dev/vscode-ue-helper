@@ -7,6 +7,8 @@ import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import type { ClangdHandles } from '@clangd';
+import type { ClangdOps } from '@clangd/clangdOps';
+import { resolveFlags, getGlossaryForWebview } from '@clangd/flagGlossary';
 import { getControlPanelHtml } from './controlPanel.html';
 import { COMMAND_MAP, CONFIG_KEY_MAP } from './controlPanelMessages';
 import type { WebViewMessage, PanelMessage } from './controlPanelMessages';
@@ -17,6 +19,8 @@ export interface ControlPanelDeps {
   logger: Logger;
   detection: DetectionHandles;
   clangd: ClangdHandles;
+  /** [Plan Add 收束] 注入用于在 .clangd 上整体重写 Add 字段 */
+  clangdOps?: ClangdOps;
 }
 
 export class ControlPanelProvider implements vscode.WebviewViewProvider {
@@ -192,6 +196,60 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         this.postMessage({ type: 'statusValues', values: this.buildStatusValues() });
         break;
 
+      case 'getAddFlags': {
+        // [Plan Add 收束] 把 glossary 元数据 + 当前 selectedIds 一起推到 webview
+        const entries = getGlossaryForWebview();
+        this.postMessage({
+          type: 'addFlagValues',
+          values: { entries, selectedIds: config.userAddFlags },
+        });
+        break;
+      }
+
+      case 'saveAddFlags': {
+        // 整体 force-write：把 selectedIds 通过 flagGlossary 渲染后写入 .clangd
+        const clangdOps = this.deps.clangdOps;
+        if (!clangdOps) {
+          this.postMessage({
+            type: 'addFlagSaveResult',
+            result: { success: false, saved: 0, failed: 1, firstError: 'ClangdOps 未注入' },
+          });
+          return;
+        }
+        try {
+          // [Plan 循环保护] 注意：这里走"写 userAddFlags → onDidChange 监听器会再触发 applyAddFlags"的双阶段写入。
+          // 为避免 race 与重复 IO，我们**先**算 addFlags，再 await config.update，然后 applyAddFlags 仍然执行一次。
+          // onDidChange 监听器幂等（写入相同内容不会修改文件），所以无重复风险。
+          const addFlags = resolveFlags(msg.selectedIds, {});
+          await config.update('clangd.userAddFlags', msg.selectedIds);
+          const applyRes = await clangdOps.applyAddFlags(addFlags);
+          if (applyRes.ok) {
+            this.postMessage({
+              type: 'addFlagSaveResult',
+              result: { success: true, saved: msg.selectedIds.length, failed: 0 },
+            });
+          } else {
+            this.postMessage({
+              type: 'addFlagSaveResult',
+              result: {
+                success: false,
+                saved: 0,
+                failed: 1,
+                firstError: `applyAddFlags ${applyRes.reason}`,
+              },
+            });
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error('[controlPanel] saveAddFlags failed:', errMsg);
+          this.postMessage({
+            type: 'addFlagSaveResult',
+            result: { success: false, saved: 0, failed: 1, firstError: errMsg },
+          });
+        }
+        break;
+      }
+
       default:
         ((_exhaustive: never) => {
           logger.warn(`[controlPanel] unhandled message type: ${(_exhaustive as { type: string }).type}`);
@@ -227,7 +285,12 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
-    return getControlPanelHtml(webview.cspSource, this.projectName, this.engineVersion);
+    return getControlPanelHtml(
+      webview.cspSource,
+      this.projectName,
+      this.engineVersion,
+      getGlossaryForWebview(),
+    );
   }
 
   private buildStatusValues(): import('./controlPanelMessages').StatusValues {

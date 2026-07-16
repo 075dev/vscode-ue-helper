@@ -27,6 +27,7 @@ import type { Logger } from '@core/logger';
 import type { Config } from '@core/config';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdHandles } from '@clangd';
+import type { ClangdOps } from '@clangd/clangdOps';
 import type { DetectionHandles } from '@detection';
 import { executeCreateProject } from '@commands/createProject';
 import { executeEnableClangdProxy } from '@commands/enableClangdProxy';
@@ -50,8 +51,8 @@ export interface FirstRunInitDeps {
   clangd: ClangdHandles;
   /** workspace 状态（含 project / workspaceFile 等单一真相源） */
   workspace: WorkspaceState;
-  /** ClangdOps（保留以便后续扩展；本编排器当前不直接调用） */
-  clangdOps?: unknown;
+  /** ClangdOps（注入 executeCreateProject 等需写 .clangd 的命令） */
+  clangdOps?: ClangdOps;
 }
 
 /**
@@ -222,7 +223,7 @@ export async function runFirstTimeInit(
 
   // 第一步：Create Unreal Clangd Project（AC-4）
   try {
-    await executeCreateProject(config, logger, detection);
+    await executeCreateProject(config, logger, detection, deps.clangdOps);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error('[firstRunInit] createProject failed:', msg);

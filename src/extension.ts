@@ -49,7 +49,8 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     const clangd = activateClangd(context, config, logger, detection, workspace, clangdOps);
     // [Phase 8] headerWatcher removed — UBT triggered by proxy-side UeDiagnosticWatcher only
     const ui = activateUI(context, config, logger, detection);
-    activateCommands(context, config, logger, detection, clangd, workspace);
+    // [Plan Add 收束] 把 clangdOps 沿 commands 链透传给 createProject / setSystemIncludes
+    activateCommands(context, config, logger, detection, clangd, workspace, clangdOps);
 
     // [first-time-init] 首次打开插件时检测 + 弹窗 + 初始化编排
     // fire-and-forget：内部会 await，但激活主流程不应被阻塞
@@ -60,7 +61,7 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     disposables.push(workspace as unknown as vscode.Disposable);
     disposables.push(clangdOps as unknown as vscode.Disposable);
 
-    ControlPanelProvider.register({ context, config, logger, detection, clangd });
+    ControlPanelProvider.register({ context, config, logger, detection, clangd, clangdOps });
 
     const elapsed = Date.now() - activationStart;
     logger.info(`VSCodeUEHelper activated in ${elapsed}ms`);

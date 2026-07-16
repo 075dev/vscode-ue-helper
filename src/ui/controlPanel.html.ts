@@ -7,6 +7,7 @@ import {
   BUTTON_GROUPS, COMMAND_MAP,
   CONFIG_FIELDS, CONFIG_SELECTS, CONFIG_BOOLEANS,
   PROXY_FIELDS, PROXY_SELECTS, PROXY_BOOLEANS,
+  type AddFlagWire,
 } from './controlPanelMessages';
 import type { ButtonGroup } from './controlPanelMessages';
 
@@ -14,6 +15,8 @@ export function getControlPanelHtml(
   cspSource: string,
   projectName: string,
   engineVersion: string,
+  /** [Plan Add 收束] 注入到 webview 的 glossary 元数据。空数组 → fallback 客户端无渲染。 */
+  addFlagEntries: readonly AddFlagWire[],
 ): string {
   const title = projectName
     ? `${t('panel.title')} — ${projectName}${engineVersion ? ` (UE ${engineVersion})` : ''}`
@@ -242,6 +245,7 @@ export function getControlPanelHtml(
   <div class="tab-bar">
     <button class="tab active" data-tab="actions" id="tab-actions">${escapeHtml(t('panel.tab.actions'))}</button>
     <button class="tab" data-tab="config" id="tab-config">${escapeHtml(t('panel.tab.config'))}</button>
+    <button class="tab" data-tab="add-flags" id="tab-add-flags">${escapeHtml(t('panel.tab.addFlags'))}</button>
     <button class="tab" data-tab="proxy" id="tab-proxy-settings">${escapeHtml(t('panel.tab.proxySettings'))}</button>
     <button class="tab" data-tab="status" id="tab-status">${escapeHtml(t('panel.tab.status'))}</button>
   </div>
@@ -273,6 +277,15 @@ export function getControlPanelHtml(
       ${renderProxyFields(['localizationEnabled', 'localizationMode'])}
     </div>
     <button class="save-btn" id="proxy-save-btn" disabled>💾 ${escapeHtml(t('panel.save'))}</button>
+  </div>
+  <div class="tab-content" id="content-add-flags">
+    <div class="form-section">
+      <div class="section-title">📦 ${escapeHtml(t('panel.section.addFlags.glossary'))}</div>
+      <div id="add-flag-list"></div>
+      <p style="opacity:0.5;font-size:11px;margin-top:8px">${escapeHtml(t('panel.help.addFlags'))}</p>
+    </div>
+    <button class="save-btn" id="add-flags-save-btn" disabled>💾 ${escapeHtml(t('panel.save'))}</button>
+    <span id="add-flags-status" style="margin-left:10px;font-size:11px;opacity:0.6"></span>
   </div>
   <div class="tab-content" id="content-status">
     <div class="status-section">
@@ -324,6 +337,9 @@ export function getControlPanelHtml(
       const vscode = acquireVsCodeApi();
       const toast = document.getElementById('result-toast');
       let toastTimer = null;
+      // [Plan Add 收束] 注入 glossary 元数据 + 当前 selectedIds 由后续 addFlagValues 消息覆盖
+      const ADD_FLAG_ENTRIES = ${JSON.stringify(addFlagEntries)};
+      let addFlagSelectedIds = [];
       document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -334,6 +350,7 @@ export function getControlPanelHtml(
           if (tab.dataset.tab === 'config') vscode.postMessage({ type: 'getConfig' });
           else if (tab.dataset.tab === 'proxy') vscode.postMessage({ type: 'getProxyConfig' });
           else if (tab.dataset.tab === 'status') vscode.postMessage({ type: 'getStatus' });
+          else if (tab.dataset.tab === 'add-flags') vscode.postMessage({ type: 'getAddFlags' });
         });
       });
       document.querySelectorAll('.panel-btn').forEach(btn => {
@@ -382,6 +399,61 @@ export function getControlPanelHtml(
         showToast('⟳ ${escapeHtml(t('panel.saving'))}...', '');
         vscode.postMessage({ type: 'saveProxyConfig', updates });
       });
+      // [Plan Add 收束] 渲染 glossary 与勾选状态
+      function renderAddFlags(entries, selectedIds) {
+        const list = document.getElementById('add-flag-list');
+        if (!list) return;
+        const sel = new Set(selectedIds);
+        const byCategory = {};
+        for (const e of entries) {
+          (byCategory[e.category] = byCategory[e.category] || []).push(e);
+        }
+        const order = ['forced-include', 'standard', 'preparse', 'uht-include'];
+        const labels = {
+          'forced-include': '${escapeHtml(t('panel.section.addFlags.forcedInclude'))}',
+          'standard': '${escapeHtml(t('panel.section.addFlags.standard'))}',
+          'preparse': '${escapeHtml(t('panel.section.addFlags.preparse'))}',
+          'uht-include': '${escapeHtml(t('panel.section.addFlags.uhtInclude'))}',
+        };
+        const severityLabels = {
+          'required': '${escapeHtml(t('panel.severity.required'))}',
+          'recommended': '${escapeHtml(t('panel.severity.recommended'))}',
+          'optional': '${escapeHtml(t('panel.severity.optional'))}',
+        };
+        let html = '';
+        for (const cat of order) {
+          const items = byCategory[cat];
+          if (!items || items.length === 0) continue;
+          html += '<div style="margin-bottom:12px"><div style="font-size:10px;opacity:0.6;margin-bottom:4px">' + labels[cat] + '</div>';
+          for (const e of items) {
+            const checked = sel.has(e.id);
+            const sev = severityLabels[e.severity] || e.severity;
+            html += '<label class="form-field checkbox-field" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--c-border-light);border-radius:6px;margin-bottom:4px">'
+              + '<input type="checkbox" data-flag-id="' + e.id + '" ' + (checked ? 'checked' : '') + ' style="margin-top:3px">'
+              + '<div style="flex:1"><div style="font-weight:500">' + e.title
+              + ' <span style="font-size:10px;opacity:0.5;margin-left:6px">[' + sev + ']</span></div>'
+              + '<div style="font-size:11px;opacity:0.65;margin-top:2px;line-height:1.4">' + e.description + '</div>'
+              + '</div></label>';
+          }
+          html += '</div>';
+        }
+        list.innerHTML = html || '<p style="opacity:0.5">${escapeHtml(t('panel.empty'))}</p>';
+        list.querySelectorAll('input[type=checkbox][data-flag-id]').forEach((cb) => {
+          cb.addEventListener('change', () => {
+            document.getElementById('add-flags-save-btn').disabled = false;
+          });
+        });
+      }
+      document.getElementById('add-flags-save-btn').addEventListener('click', function() {
+        const ids = [];
+        document.querySelectorAll('input[type=checkbox][data-flag-id]').forEach((cb) => {
+          if (cb.checked) ids.push(cb.getAttribute('data-flag-id'));
+        });
+        this.disabled = true;
+        const status = document.getElementById('add-flags-status');
+        if (status) status.textContent = '${escapeHtml(t('panel.saving'))}...';
+        vscode.postMessage({ type: 'saveAddFlags', selectedIds: ids });
+      });
       window.addEventListener('message', event => {
         const msg = event.data;
         switch (msg.type) {
@@ -407,6 +479,23 @@ export function getControlPanelHtml(
             }
             if (msg.result.localizationModeChanged) {
               document.getElementById('proxy-restart-notice').style.display = 'flex';
+            }
+            break;
+          case 'addFlagValues':
+            addFlagSelectedIds = msg.values.selectedIds || [];
+            renderAddFlags(msg.values.entries || [], addFlagSelectedIds);
+            document.getElementById('add-flags-save-btn').disabled = true;
+            break;
+          case 'addFlagSaveResult':
+            const af = document.getElementById('add-flags-save-btn');
+            const ast = document.getElementById('add-flags-status');
+            if (msg.result.success) {
+              if (ast) ast.textContent = '${escapeHtml(t('panel.saveSuccess'))}';
+              showToast('✓ ${escapeHtml(t('panel.saveSuccess'))}', 'success');
+            } else {
+              if (af) af.disabled = false;
+              if (ast) ast.textContent = '${escapeHtml(t('panel.saveFailed'))}';
+              showToast('✗ ${escapeHtml(t('panel.saveFailed'))}' + (msg.result.firstError ? ': ' + msg.result.firstError : ''), 'failure');
             }
             break;
         }

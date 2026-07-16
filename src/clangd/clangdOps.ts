@@ -187,4 +187,28 @@ export class ClangdOps {
       throw err;
     }
   }
+
+  // ========== 收束后的语义化 Add 操作 ==========
+
+  /**
+   * 用给定的 flag 字面串**整体替换** .clangd 的 CompileFlags.Add。
+   *
+   * 这是 Add 操作的统一入口（per Plan B.1）：
+   *   - 不做"过滤前缀 + 保留 + 合并"的脆弱拼接；
+   *   - 不调用方传 projectPath（路径已通过 WorkspaceState 派生）；
+   *   - 由 activation / setSystemIncludes / completionMode / createProject / 控制面板共享。
+   *
+   * 内部走 `mutate` 事务：read file → replace Add → atomic write。
+   *
+   * @param flags - 完整 Add 字面串数组。空数组 = 清空 Add 字段。
+   */
+  async applyAddFlags(flags: readonly string[]): Promise<ClangdMutateResult> {
+    return this.mutate(({ config }) => {
+      const next: typeof config.CompileFlags = {
+        ...(config.CompileFlags ?? {}),
+        Add: [...flags],
+      };
+      config.CompileFlags = next as typeof config.CompileFlags;
+    });
+  }
 }

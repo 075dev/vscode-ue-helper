@@ -36,11 +36,20 @@ export {
   writeClangdConfig,
   defaultClangdConfig,
   renderClangdConfig,
-  replaceSystemIncludeBlock,
   findClangdConfig,
-  SYSTEM_INCLUDE_FILTER_PREFIXES,
   type ClangdConfigOptions,
 } from './clangdConfig';
+export {
+  resolveFlags,
+  getGlossaryForWebview,
+  DEFAULT_FLAG_GLOSSARY,
+  findFlagEntry,
+  type FlagCategory,
+  type FlagSeverity,
+  type FlagEntry,
+  type WireFlagEntry,
+  type ResolveContext,
+} from './flagGlossary';
 export { generateCompileCommands, linkToWorkspaceRoot, isClangdAvailable, fillMissingCompileCommands } from './compileCommands';
 export { generateFallbackCompileCommands, type FallbackOptions, type FallbackResult } from './compileCommandsFallback';
 export { collectIntermediateUhtDirs, type IntermediateUhtCollectorOptions } from './intermediateUhtCollector';

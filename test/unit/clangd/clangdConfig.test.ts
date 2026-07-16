@@ -1,101 +1,130 @@
 import { describe, it, expect } from 'vitest';
 import * as yaml from 'yaml';
-import { renderClangdConfig, defaultClangdConfig, replaceSystemIncludeBlock } from '@clangd/clangdConfig';
+import {
+  renderClangdConfig,
+  defaultClangdConfig,
+} from '@clangd/clangdConfig';
 
 describe('renderClangdConfig (yaml 序列化)', () => {
   it('renders an empty config', () => {
-    const yaml = renderClangdConfig({});
-    expect(yaml.trim()).toBe('{}');
+    const yamlText = renderClangdConfig({});
+    expect(yamlText.trim()).toBe('{}');
   });
 
   it('renders CompileFlags.Add as a YAML list', () => {
-    const yaml = renderClangdConfig({
+    const yamlText = renderClangdConfig({
       CompileFlags: { Add: ['-std=c++20', '-Wno-foo'] },
     });
-    expect(yaml).toContain('CompileFlags:');
-    expect(yaml).toContain('  Add:');
-    expect(yaml).toContain('    - -std=c++20');
-    expect(yaml).toContain('    - -Wno-foo');
+    expect(yamlText).toContain('CompileFlags:');
+    expect(yamlText).toContain('  Add:');
+    expect(yamlText).toContain('    - -std=c++20');
+    expect(yamlText).toContain('    - -Wno-foo');
   });
 
   it('renders CompilationDatabase inside CompileFlags (clangd 22.x requirement)', () => {
-    const yaml = renderClangdConfig({
+    const yamlText = renderClangdConfig({
       CompileFlags: { CompilationDatabase: '.vscode/vscodeuehelper' },
     });
     // 必须在 CompileFlags 内部缩进 2 空格，不在根级别
-    expect(yaml).toContain('  CompilationDatabase: .vscode/vscodeuehelper');
-    const lines = yaml.split('\n');
+    expect(yamlText).toContain('  CompilationDatabase: .vscode/vscodeuehelper');
+    const lines = yamlText.split('\n');
     const cfLine = lines.findIndex((l) => l.trim() === 'CompileFlags:');
     const cdLine = lines.findIndex((l) => l.trim().startsWith('CompilationDatabase:'));
     expect(cfLine).toBeLessThan(cdLine); // CompilationDatabase 在 CompileFlags 下面
   });
 });
 
-describe('defaultClangdConfig (模板风格)', () => {
+describe('defaultClangdConfig (Plan Add 收束,零默认注入)', () => {
+  it('【强化】默认 CompileFlags.Add 永远为空数组', () => {
+    // Plan Add 收束强化版:用户明确要求"系统完全不让 add 默认注入"。
+    // 包括 MSVC warning baseline 也被移除 —— defaultClangdConfig 一律输出空 Add。
+    const cfg = defaultClangdConfig();
+    expect(cfg.CompileFlags?.Add).toEqual([]);
+  });
+
+  it('【强化】空 options 时 Add 仍为 []', () => {
+    expect(defaultClangdConfig({}).CompileFlags?.Add).toEqual([]);
+  });
+
+  it('【强化】传 projectPath 时 Add 仍为 []', () => {
+    const cfg = defaultClangdConfig({ projectPath: '/p/proj.uproject' });
+    expect(cfg.CompileFlags?.Add).toEqual([]);
+  });
+
+  it('【强化】传 compilerPath 时 Add 仍为 []', () => {
+    const cfg = defaultClangdConfig({ compilerPath: 'D:/clang-cl.exe' });
+    expect(cfg.CompileFlags?.Add).toEqual([]);
+  });
+
+  it('【强化】defaultClangdConfig 不存在 MSVC warning flag（-W/-Wno 等均不在 Add 中）', () => {
+    const add = defaultClangdConfig().CompileFlags?.Add ?? [];
+    const msvcRelated = add.filter(
+      (f) => f.startsWith('-W') || f.startsWith('/W') || f.startsWith('/w'),
+    );
+    expect(msvcRelated).toEqual([]);
+  });
+
+  it('不再注入 compatHeaderPath（即使传入 opts）', () => {
+    // 旧 API 不应继续注入 /FI<compat>。
+    const cfg = defaultClangdConfig({
+      compatHeaderPath: '/path/to/ueClangdCompat.h',
+    } as Parameters<typeof defaultClangdConfig>[0]);
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add.some((f) => f.includes('ueClangdCompat.h'))).toBe(false);
+  });
+
+  it('不再注入 macroHelperPath（即使传入 opts）', () => {
+    const cfg = defaultClangdConfig({
+      macroHelperPath: '/path/to/macroCompletionHelper.h',
+    } as Parameters<typeof defaultClangdConfig>[0]);
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add.some((f) => f.includes('macroCompletionHelper.h'))).toBe(false);
+  });
+
+  it('不再注入 systemIncludeFlags / /X（即使传入 opts）', () => {
+    const cfg = defaultClangdConfig({
+      systemIncludeFlags: ['/X', '/imsvc"path"'],
+    } as Parameters<typeof defaultClangdConfig>[0]);
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add).not.toContain('/X');
+  });
+
+  it('不再注入 preparseHeaders / -include', () => {
+    const cfg = defaultClangdConfig({
+      preparseHeaders: ['E:/UE/Core/Public/CoreSharedPCH.h'],
+      engineRoot: 'E:/UE_5.8',
+    } as Parameters<typeof defaultClangdConfig>[0]);
+    const add = cfg.CompileFlags?.Add ?? [];
+    const includeFlags = add.filter((f) => f.startsWith('-include') || f.startsWith('/FI'));
+    // 仅 MSVC baseline 中不出现 -include / /FI
+    expect(includeFlags).toEqual([]);
+  });
+
+  it('不再注入 intermediateUhtDirs', () => {
+    const cfg = defaultClangdConfig({
+      intermediateUhtDirs: ['/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT'],
+    } as Parameters<typeof defaultClangdConfig>[0]);
+    const add = cfg.CompileFlags?.Add ?? [];
+    const uhtFlags = add.filter((f) => f.includes('UHT'));
+    expect(uhtFlags).toHaveLength(0);
+  });
+  it('不再注入 /std:c++20（用户通过 flagGlossary 显式控制）', () => {
+    const cfg = defaultClangdConfig();
+    const add = cfg.CompileFlags?.Add ?? [];
+    expect(add.some((f) => f.includes('std:c++20'))).toBe(false);
+  });
+});
+
+describe('defaultClangdConfig (必需字段)', () => {
   it('contains required fields', () => {
     const cfg = defaultClangdConfig();
     expect(cfg.CompileFlags?.CompilationDatabase).toBe('.vscode/vscodeuehelper');
     expect(cfg.Diagnostics?.UnusedIncludes).toBe('None');
+    expect(cfg.Diagnostics?.MissingIncludes).toBe('None');
     expect(cfg.InlayHints?.Enabled).toBe('Yes');
     expect(cfg.InlayHints?.ParameterNames).toBe('Yes');
     expect(cfg.InlayHints?.DeducedTypes).toBe('Yes');
     expect(cfg.InlayHints?.Designators).toBe('Yes');
-  });
-
-  it('uses /std:c++20 on Windows', () => {
-    const cfg = defaultClangdConfig();
-    const add = cfg.CompileFlags?.Add ?? [];
-    if (process.platform === 'win32') {
-      expect(add).toContain('/std:c++20');
-    } else {
-      expect(add).toContain('-std=c++20');
-    }
-  });
-
-  it('includes MSVC compatibility flags (excluding /TP)', () => {
-    const cfg = defaultClangdConfig();
-    const add = cfg.CompileFlags?.Add ?? [];
-    // 移除 /TP：clang-cl 默认按扩展名区分 C/C++，/TP 与 compile_commands.json 条目中的
-    // 重复 /TP 触发 MSVC D4002 警告「最后一个 /TC 或 /TP 选项优先于之前的实例」。
-    expect(add).not.toContain('/TP');
-    expect(add).toContain('-mwaitpkg');
-    expect(add).toContain('-Werror');
-    expect(add).toContain('-Wshadow');
-    expect(add).toContain('-Wundef');
-  });
-
-  it('includes systemIncludeFlags at the top', () => {
-    const cfg = defaultClangdConfig({
-      systemIncludeFlags: ['/X', '/imsvc"path"'],
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-    expect(add[0]).toBe('/X');
-    expect(add[1]).toBe('/imsvc"path"');
-  });
-
-  it('includes /FI macroHelperPath in slow mode', () => {
-    const cfg = defaultClangdConfig({
-      completionMode: 'slow',
-      macroHelperPath: '/path/to/macroCompletionHelper.h',
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-    expect(add).toContain('/FI/path/to/macroCompletionHelper.h');
-  });
-
-  it('Plan B: 始终包含 /FI macroHelperPath（无论 mode 参数）', () => {
-    // Plan B 重构后：fast/slow 模式已合并，macroHelperPath 总是被注入。
-    const cfgFast = defaultClangdConfig({
-      completionMode: 'fast',
-      macroHelperPath: '/path/to/macroCompletionHelper.h',
-    });
-    const cfgSlow = defaultClangdConfig({
-      completionMode: 'slow',
-      macroHelperPath: '/path/to/macroCompletionHelper.h',
-    });
-    const addFast = cfgFast.CompileFlags?.Add ?? [];
-    const addSlow = cfgSlow.CompileFlags?.Add ?? [];
-    expect(addFast).toContain('/FI/path/to/macroCompletionHelper.h');
-    expect(addSlow).toContain('/FI/path/to/macroCompletionHelper.h');
   });
 
   it('sets Compiler when compilerPath is provided', () => {
@@ -129,7 +158,6 @@ describe('defaultClangdConfig (模板风格)', () => {
     expect(cfg.Completion).toBeUndefined();
   });
 
-  // [Phase 7 D-12] 与 vscodeUEHelper perf-cache 共享 .cache/clangd/ 目录
   it('[Phase 7 D-12] defaultClangdConfig 输出含 Index.Background = Build', () => {
     const cfg = defaultClangdConfig();
     expect(cfg.Index).toBeDefined();
@@ -140,280 +168,25 @@ describe('defaultClangdConfig (模板风格)', () => {
     const cfg = defaultClangdConfig({
       projectPath: '/path/to/MyProject.uproject',
     });
-    // 验证 Index 在根级别
     expect(cfg.Index?.Background).toBe('Build');
-    // 验证 If 块不包含 Index（不在 If 嵌套）
     expect((cfg.If as Record<string, unknown> | undefined)?.Index).toBeUndefined();
-  });
-});
-
-describe('defaultClangdConfig (compatHeaderPath)', () => {
-  it('在 fast 模式下 Add[0] 为 /FI<compatHeaderPath>', () => {
-    const cfg = defaultClangdConfig({
-      completionMode: 'fast',
-      compatHeaderPath: '/path/to/ueClangdCompat.h',
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-    expect(add[0]).toBe('/FI/path/to/ueClangdCompat.h');
-  });
-
-  it('在 slow 模式下 Add[0] 为 /FI<compatHeaderPath>（即使有 macroHelperPath）', () => {
-    const cfg = defaultClangdConfig({
-      completionMode: 'slow',
-      compatHeaderPath: '/path/to/ueClangdCompat.h',
-      macroHelperPath: '/path/to/macroCompletionHelper.h',
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-    expect(add[0]).toBe('/FI/path/to/ueClangdCompat.h');
-  });
-
-  it('未提供 compatHeaderPath 时 Add 不含任何 /FI 开头的值', () => {
-    const cfg = defaultClangdConfig();
-    const add = cfg.CompileFlags?.Add ?? [];
-    const fiFlags = add.filter((f) => f.startsWith('/FI'));
-    expect(fiFlags).toHaveLength(0);
-  });
-});
-
-describe('replaceSystemIncludeBlock (yaml 替换)', () => {
-  it('replaces system include flags in Add', () => {
-    const input = renderClangdConfig({
-      CompileFlags: {
-        Add: [
-          '/X',
-          '/imsvc"old/path"',
-          '-fms-compatibility-version=19.0',
-          '/std:c++20',
-          '-Wno-foo',
-        ],
-      },
-    });
-    const newFlags = ['/X', '/imsvc"new/path"', '-fms-compatibility-version=19.1'];
-    const result = replaceSystemIncludeBlock(input, newFlags);
-
-    expect(result).toContain('/imsvc"new/path"');
-    expect(result).toContain('-fms-compatibility-version=19.1');
-    // 旧系统 flag 被替换
-    expect(result).not.toContain('/imsvc"old/path"');
-    expect(result).not.toContain('-fms-compatibility-version=19.0');
-    // 非系统 flag 保留
-    expect(result).toContain('-Wno-foo');
-    // std flag 也是系统 flag，被替换
-    expect(result).not.toContain('/std:c++20');
-  });
-
-  it('returns input unchanged for non-YAML text', () => {
-    const result = replaceSystemIncludeBlock('not yaml', ['/X']);
-    expect(result).toBe('not yaml');
-  });
-});
-
-// ===== T2: preparseHeaders 与 EngineRoot 解析 =====
-
-describe('defaultClangdConfig (preparseHeaders with EngineRoot resolution)', () => {
-  it('engineRoot 提供时 preparseHeaders 的 $(EngineRoot) 被解析为实际路径', () => {
-    const cfg = defaultClangdConfig({
-      engineRoot: 'E:/UE_5.8',
-      preparseHeaders: [
-        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-        '$(EngineRoot)/Source/Runtime/Engine/Public/EngineSharedPCH.h',
-      ],
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-
-    // 解析后不应含 $(EngineRoot)
-    const unresolved = add.filter((f) => f.includes('$(EngineRoot)'));
-    expect(unresolved).toHaveLength(0);
-
-    // 应包含解析后的强制 include 标志（Windows 用 /FI，非 Windows 用 -include）
-    if (process.platform === 'win32') {
-      expect(add).toContain('/FIE:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
-      expect(add).toContain('/FIE:/UE_5.8/Source/Runtime/Engine/Public/EngineSharedPCH.h');
-    } else {
-      expect(add).toContain('-include');
-      expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
-      expect(add).toContain('E:/UE_5.8/Source/Runtime/Engine/Public/EngineSharedPCH.h');
-    }
-  });
-
-  it('engineRoot 缺失时含 $(EngineRoot) 的 header 被过滤，绝对路径保留', () => {
-    const cfg = defaultClangdConfig({
-      preparseHeaders: [
-        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-        '/absolute/external/header.h',
-      ],
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-
-    // $(EngineRoot) 占位符不应出现在输出中
-    expect(add).not.toContain('$(EngineRoot)');
-
-    // 不含占位符的绝对路径 header 应保留
-    // Windows 下输出 /FI<path> 单 token，非 Windows 下输出 -include <path> 两 token
-    if (process.platform === 'win32') {
-      expect(add).toContain('/FI/absolute/external/header.h');
-    } else {
-      expect(add).toContain('/absolute/external/header.h');
-    }
-  });
-
-  it('Diagnostics.MissingIncludes 设为 None', () => {
-    const cfg = defaultClangdConfig();
-    expect(cfg.Diagnostics?.MissingIncludes).toBe('None');
-  });
-
-  it('forced include 顺序: compatHeaderPath → systemInclude → std → macroHelper → preparseHeaders → MSVC', () => {
-    const cfg = defaultClangdConfig({
-      completionMode: 'slow',
-      engineRoot: 'E:/UE_5.8',
-      compatHeaderPath: '/path/to/ueClangdCompat.h',
-      macroHelperPath: '/path/to/macroCompletionHelper.h',
-      systemIncludeFlags: ['/X', '/imsvc"sys"'],
-      preparseHeaders: [
-        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-      ],
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-
-    const compatIdx = add.findIndex((f) => f === '/FI/path/to/ueClangdCompat.h');
-    const sysIdx = add.findIndex((f) => f === '/X');
-    const stdIdx = add.findIndex((f) => f.includes('std:c++20'));
-    const macroIdx = add.findIndex((f) => f === '/FI/path/to/macroCompletionHelper.h');
-    const preparseIdx = process.platform === 'win32'
-      ? add.findIndex((f) => f === '/FIE:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h')
-      : add.findIndex((f) => f === '-include');
-    // 用 -mwaitpkg 作为 MSVC 兼容性 flag 段的起始 marker（/TP 已移除）
-    const msvcIdx = add.findIndex((f) => f === '-mwaitpkg');
-
-    expect(compatIdx).toBeGreaterThanOrEqual(0);
-    expect(sysIdx).toBeGreaterThan(compatIdx);
-    expect(stdIdx).toBeGreaterThan(sysIdx);
-    expect(macroIdx).toBeGreaterThan(stdIdx);
-    expect(preparseIdx).toBeGreaterThan(macroIdx);
-    expect(msvcIdx).toBeGreaterThan(preparseIdx);
   });
 });
 
 describe('YAML quoting', () => {
   it('handles strings with colons correctly', () => {
-    const yaml = renderClangdConfig({
+    const yamlText = renderClangdConfig({
       CompileFlags: { Add: ['-DFOO=bar:baz'] },
     });
-    // yaml 库自动处理冒号
-    expect(yaml).toContain("-DFOO=bar:baz");
+    expect(yamlText).toContain('-DFOO=bar:baz');
   });
 });
 
-// ===== P0-C-4: Intermediate/UHT -I 注入 =====
-
-describe('defaultClangdConfig (intermediateUhtDirs)', () => {
-  it('intermediateUhtDirs 提供时 Add 包含对应 -I 路径', () => {
-    const uhtDir = process.platform === 'win32'
-      ? 'D:/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT'
-      : '/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT';
-    const cfg = defaultClangdConfig({ intermediateUhtDirs: [uhtDir] });
-    const add = cfg.CompileFlags?.Add ?? [];
-    const prefix = process.platform === 'win32' ? '/I' : '-I';
-    expect(add).toContain(`${prefix}${uhtDir}`);
-  });
-
-  it('intermediateUhtDirs 为空数组时不写入任何 UHT flag', () => {
-    const cfg = defaultClangdConfig({ intermediateUhtDirs: [] });
-    const add = cfg.CompileFlags?.Add ?? [];
-    const uhtFlags = add.filter((f) => f.includes('UHT'));
-    expect(uhtFlags).toHaveLength(0);
-  });
-
-  it('intermediateUhtDirs 未提供时不写入 UHT flag', () => {
+describe('renderClangdConfig + yaml.parse round-trip', () => {
+  it('defaultClangdConfig 输出可被 yaml.parse 还原', () => {
     const cfg = defaultClangdConfig();
-    const add = cfg.CompileFlags?.Add ?? [];
-    const uhtFlags = add.filter((f) => f.includes('UHT'));
-    expect(uhtFlags).toHaveLength(0);
-  });
-
-  it('intermediateUhtDirs 多目录时全部注入', () => {
-    const dirs = [
-      '/proj/Intermediate/Build/Win64/Editor/Inc/ModA/UHT',
-      '/proj/Intermediate/Build/Win64/Editor/Inc/ModB/UHT',
-    ];
-    const cfg = defaultClangdConfig({ intermediateUhtDirs: dirs });
-    const add = cfg.CompileFlags?.Add ?? [];
-    const prefix = process.platform === 'win32' ? '/I' : '-I';
-    expect(add).toContain(`${prefix}${dirs[0]}`);
-    expect(add).toContain(`${prefix}${dirs[1]}`);
-  });
-
-  it('UHT -I 注入位置在 MSVC flag 之后', () => {
-    const uhtDir = '/proj/Intermediate/Build/Win64/Editor/Inc/Foo/UHT';
-    const cfg = defaultClangdConfig({ intermediateUhtDirs: [uhtDir] });
-    const add = cfg.CompileFlags?.Add ?? [];
-
-    const prefix = process.platform === 'win32' ? '/I' : '-I';
-    const uhtIdx = add.findIndex((f) => f === `${prefix}${uhtDir}`);
-    // -mwaitpkg 是 MSVC 段起始 marker
-    const msvcIdx = add.findIndex((f) => f === '-mwaitpkg');
-    expect(uhtIdx).toBeGreaterThan(msvcIdx);
-  });
-});
-
-// ===== T2 对抗测试: misleading_success_output, dirty_worktree, hung_commands =====
-
-describe('defaultClangdConfig (adversarial)', () => {
-  it('misleading_success: engineRoot 为空但 preparseHeaders 全为 $(EngineRoot) 时不写入无效路径', () => {
-    const cfg = defaultClangdConfig({
-      engineRoot: '',
-      preparseHeaders: [
-        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-      ],
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-
-    // 不应含 $(EngineRoot) 或 -include（全部被过滤）
-    const unresolved = add.filter((f) => f.includes('$(EngineRoot)'));
-    expect(unresolved).toHaveLength(0);
-
-    const includeFlags = add.filter((f) => f.startsWith('-include'));
-    expect(includeFlags).toHaveLength(0);
-  });
-
-  it('misleading_success: preparseHeaders 为空数组时不写入任何 -include', () => {
-    const cfg = defaultClangdConfig({
-      engineRoot: 'E:/UE_5.8',
-      preparseHeaders: [],
-    });
-    const add = cfg.CompileFlags?.Add ?? [];
-    const includeFlags = add.filter((f) => f.startsWith('-include'));
-    expect(includeFlags).toHaveLength(0);
-  });
-
-  it('hung_commands: defaultClangdConfig 是纯同步函数，无异步 I/O', () => {
-    // 调用不应抛出或挂起
-    const start = Date.now();
-    const cfg = defaultClangdConfig({
-      engineRoot: 'E:/UE_5.8',
-      preparseHeaders: new Array(100).fill('$(EngineRoot)/Source/X.h'),
-    });
-    const elapsed = Date.now() - start;
-
-    // 100 个 header 应在 10ms 内完成（纯字符串操作）
-    expect(elapsed).toBeLessThan(100);
-    expect(cfg.CompileFlags?.Add?.length).toBeGreaterThan(0);
-  });
-
-  it('dirty_worktree: renderClangdConfig 输出可被 yaml.parse 还原', () => {
-    const cfg = defaultClangdConfig({
-      completionMode: 'slow',
-      engineRoot: 'E:/UE_5.8',
-      compatHeaderPath: '/fake/ueClangdCompat.h',
-      macroHelperPath: '/fake/macroCompletionHelper.h',
-      systemIncludeFlags: ['/X'],
-      preparseHeaders: [
-        '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-      ],
-    });
     const yamlText = renderClangdConfig(cfg);
 
-    // 可被 yaml.parse 还原
     let parsed: unknown;
     expect(() => {
       parsed = yaml.parse(yamlText);
@@ -423,18 +196,16 @@ describe('defaultClangdConfig (adversarial)', () => {
 
     const doc = parsed as Record<string, unknown>;
     const cf = doc.CompileFlags as Record<string, unknown>;
-    const add = cf.Add as string[];
-
-    // 往返后强制 include 标志仍存在（Windows 下为 /FI<path> 单 token）
-    if (process.platform === 'win32') {
-      expect(add).toContain('/FIE:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
-    } else {
-      expect(add).toContain('-include');
-      expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
-    }
-
-    // 往返后 MissingIncludes 仍存在
+    // 【强化】Add 永远是空数组
+    expect(cf.Add).toEqual([]);
     const diag = doc.Diagnostics as Record<string, string>;
     expect(diag.MissingIncludes).toBe('None');
+  });
+
+  it('defaultClangdConfig 输出往返后 Add 严格为 []（无 baseline 残留）', () => {
+    const cfg = defaultClangdConfig({ projectPath: '/p/proj.uproject' });
+    const yamlText = renderClangdConfig(cfg);
+    const parsed = yaml.parse(yamlText) as { CompileFlags: { Add: string[] } };
+    expect(parsed.CompileFlags.Add).toEqual([]);
   });
 });

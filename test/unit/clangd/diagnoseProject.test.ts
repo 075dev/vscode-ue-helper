@@ -43,17 +43,19 @@ async function createFixture(options: FixtureOptions = {}): Promise<ProjectFixtu
   }
 
   if (options.writeClangd ?? true) {
-    const clangdText = options.clangdText ?? renderClangdConfig(
-      defaultClangdConfig({
-        completionMode: 'slow',
-        compatHeaderPath: getUeClangdCompatPath(projectPath),
-        // Plan B: macroCompletionHelper.h 不再生成，亦不再注入 /FI。
-        projectPath,
-        systemIncludeFlags: options.addSystemIncludes === false
-          ? []
-          : ['/X', '/imsvc"C:/VS/VC/Tools/MSVC/include"', '-fms-compatibility-version=19.38'],
-      }),
-    );
+    // Plan Add 收束：directly build YAML text instead of relying on defaultClangdConfig opts.
+    const compat = getUeClangdCompatPath(projectPath);
+    const sysFlags = options.addSystemIncludes === false
+      ? []
+      : ['/X', '/imsvc"C:/VS/VC/Tools/MSVC/include"', '-fms-compatibility-version=19.38'];
+    const addFlags = ['/FI' + compat, ...sysFlags];
+    const clangdText = options.clangdText ?? renderClangdConfig({
+      ...defaultClangdConfig({ projectPath }),
+      CompileFlags: {
+        ...defaultClangdConfig({ projectPath }).CompileFlags,
+        Add: addFlags,
+      },
+    });
     await fs.writeFile(path.join(rootDir, '.clangd'), clangdText, 'utf-8');
   }
 
@@ -107,12 +109,16 @@ describe('diagnoseProject', () => {
   });
 
   it('Given 缺少 /FI forced include When 诊断 Then 报告 forcedIncludes 失败', async () => {
-    const fixture = await createFixture({
-      clangdText: renderClangdConfig(defaultClangdConfig({
-        projectPath: path.join(tmpdir(), 'placeholder.uproject'),
-        systemIncludeFlags: ['/X', '/imsvc"C:/VS/include"'],
-      })),
+    // 故意写一个不带任何 /FI flag 的 .clangd：默认模板注入 MSVC baseline 但没有 /FI<compatHeader>。
+    const placeholderPath = path.join(tmpdir(), 'placeholder.uproject');
+    const clangdText = renderClangdConfig({
+      ...defaultClangdConfig({ projectPath: placeholderPath }),
+      CompileFlags: {
+        ...defaultClangdConfig({ projectPath: placeholderPath }).CompileFlags,
+        Add: ['/X', '/imsvc"C:/VS/include"'],
+      },
     });
+    const fixture = await createFixture({ clangdText });
     try {
       const report = await diagnoseProject(fixture.projectPath);
       expect(failedCheckNames(report)).toContain('forcedIncludes');
@@ -122,18 +128,14 @@ describe('diagnoseProject', () => {
   });
 
   it('Given CompilationDatabase 指向错误目录 When 诊断 Then 报告 compileCommands 失败', async () => {
+    const placeholderPath = path.join(tmpdir(), 'unused', 'placeholder.uproject');
+    const baseDoc = defaultClangdConfig({ projectPath: placeholderPath });
     const fixture = await createFixture({
       clangdText: renderClangdConfig({
-        ...defaultClangdConfig({
-          completionMode: 'slow',
-          compatHeaderPath: path.join(tmpdir(), 'unused', 'ueClangdCompat.h'),
-          macroHelperPath: path.join(tmpdir(), 'unused', 'macroCompletionHelper.h'),
-          systemIncludeFlags: ['/X', '/imsvc"C:/VS/include"'],
-        }),
+        ...baseDoc,
         CompileFlags: {
-          ...defaultClangdConfig().CompileFlags,
+          ...baseDoc.CompileFlags,
           CompilationDatabase: '.bad-db',
-          Add: ['/X', '/imsvc"C:/VS/include"'],
         },
       }),
     });

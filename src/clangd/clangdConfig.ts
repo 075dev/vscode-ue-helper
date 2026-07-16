@@ -1,189 +1,60 @@
 /**
  * clangdConfig —— 在项目根写 .clangd 文件
  *
- * 设计原则（对齐 unreal-clangd v3 模板）：
- * 1. 使用 yaml 库（而非手写字符串）生成/修改 .clangd
- * 2. 构建 JS 对象 → yaml.stringify() 序列化 → 写入文件
- * 3. 重复写入时覆盖整个文件（不做增量 upsert）
- * 4. 模板风格配置：系统头文件 + C++ 标准 + MSVC 兼容性 flag + If.PathMatch 规则
+ * 设计变更（per Plan Add 收束 —— 强化版）：
+ * - `CompileFlags.Add` 字段**永远输出空数组** (`[]`)。所有 Add 由用户在控制面板
+ *   「自定义 Add Flags」tab 显式勾选决定，或由 setSystemIncludes / createProject 命令
+ *   通过 ClangdOps.applyAddFlags 写入。
+ * - 系统零默认注入：defaultClangdConfig 不再内置任何 MSVC warning、/std:、
+ *   -I、/FI、/imsvc 等 baseline flag。
+ * - 旧 API（writeClangdConfig / findClangdConfig）保留以兼容仍直调它们的命令路径。
  *
  * 典型生成的 .clangd:
  *
  * CompileFlags:
  *   CompilationDatabase: .vscode/vscodeuehelper
  *   Compiler: D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe
- *   Add:
- *     - /X
- *     - /imsvc"..."
- *     - /std:c++20
- *     - /FI.../macroCompletionHelper.h
- *     - -mwaitpkg
- *     - ...
+ *   Add: []
  * Diagnostics:
  *   UnusedIncludes: None
  * InlayHints:
  *   Enabled: Yes
- *   ParameterNames: Yes
- *   DeducedTypes: Yes
- *   Designators: Yes
- * If:
- *   - PathMatch:
- *       - .vscode/vscodeuehelper/completionHelper.cpp
- *       - Source/.*\.(cpp|h|hpp|c)
- *       - Plugins/<PluginName>/Source/.*\.(cpp|h|hpp|c)
+ * ...
  */
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
 import { ClangdConfig, IfBlock } from './types';
-import { resolvePreparseHeaders, toIncludeFlags } from './preparseIncludes';
 
 // ===== 默认 .clangd 内容 =====
 
-/** 选项 */
+/** 选项（精简版） */
 export interface ClangdConfigOptions {
+  /** 完成模式（保留兼容）；不再影响 Add 内容 */
   completionMode?: 'fast' | 'slow';
-  macroHelperPath?: string;
-  /** ueClangdCompat.h 的绝对路径，通过 /FI 强制包含在所有其他头文件之前 */
-  compatHeaderPath?: string;
-  preparseHeaders?: string[];
-  /** 引擎根目录，用于解析 preparseHeaders 中的 $(EngineRoot) 占位符 */
-  engineRoot?: string;
-  /** 系统头文件 flag（/X + /imsvc + -fms-compatibility-version），由 setSystemIncludes 命令注入 */
-  systemIncludeFlags?: string[];
   /** 编译器路径（模板风格，如 D:/scoop/apps/llvm/22.1.8/bin/clang-cl.exe） */
   compilerPath?: string;
   /** 项目路径（用于生成 If.PathMatch 规则） */
   projectPath?: string;
-  /**
-   * Intermediate/Build/<PlatformCfg>/<Target>/Inc/<Module>/UHT/ 目录绝对路径列表。
-   * 在 CompileFlags.Add 末尾注入 `-I<dir>`，让 clangd 兜底路径能找到 .generated.h。
-   * Windows 用 `/I`，其他平台用 `-I`。
-   */
-  intermediateUhtDirs?: string[];
 }
 
-/** 默认配置（对齐 unreal-clangd v3 模板风格） */
+/**
+ * 默认配置 —— 输出 CompileFlags.Add 为**空数组**。
+ *
+ * ⚠️ Plan Add 收束(强化版)：之前保留 `MSVC_BASE_FLAGS` 作为隐式 baseline,
+ * 但用户明确"系统完全不让 add 默认注入",因此 Add 现在永远 `[]`。
+ *
+ * 不再注入 compatHeader / systemInclude / /std:c++20 / macroHelper /
+ * preparseHeaders / intermediateUhtDirs / MSVC warning —— 这些全交给 flagGlossary
+ * 与 ClangdOps.applyAddFlags。
+ *
+ * @param opts - 见 `ClangdConfigOptions`
+ */
 export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfig {
   const addFlags: string[] = [];
 
-  // 0. /FI 强制包含 ueClangdCompat.h（必须位于所有 Add flag 之前，确保 clangd 优先解析兼容宏）
-  if (opts.compatHeaderPath) {
-    addFlags.push(`/FI${opts.compatHeaderPath}`);
-  }
-
-  // 1. 系统头文件（/X + /imsvc，由 setSystemIncludes 注入）
-  if (opts.systemIncludeFlags?.length) {
-    addFlags.push(...opts.systemIncludeFlags);
-  }
-
-  // 2. C++ 标准（Windows 用 /std:c++20，其他用 -std=c++20）
-  addFlags.push(process.platform === 'win32' ? '/std:c++20' : '-std=c++20');
-
-  // 3. /FI 强制包含 macroCompletionHelper.h
-  //    Plan B：模式合并后，macroHelperPath 总是被注入（保留向后兼容）。
-  //    实际效果等价：macroCompletionHelper.h 只 #include "addMacroCompletions.h"，
-  //    后者已被 preparse 列表直接包含，所以这一步在功能上是 no-op。
-  //    保留仅为了兼容可能的第三方扩展/手动修改的 .clangd。
-  if (opts.macroHelperPath) {
-    addFlags.push(`/FI${opts.macroHelperPath}`);
-  }
-
-  // 3.5. 解析 preparseHeaders 中的 $(EngineRoot) 并作为 -include 标志插入
-  //      位置：在 macroHelperPath 之后、MSVC 兼容性 flag 之前
-  if (opts.preparseHeaders?.length) {
-    const resolved = resolvePreparseHeaders(
-      opts.preparseHeaders,
-      opts.engineRoot ?? '',
-    );
-    if (resolved.length > 0) {
-      addFlags.push(...toIncludeFlags(resolved));
-    }
-  }
-
-  // 4. MSVC 兼容性 flag（对齐模板的 WIN_COMPILER_FLAGS_TO_ADD）
-  //    注意：移除 /TP。/TP 强制将所有文件视为 C++，但当 compile_commands.json 中某些条目已带 /TP（UBT 对 .cpp 文件），
-  //    重复 /TP 会触发 MSVC D4002 警告「最后一个 /TC 或 /TP 选项优先于之前的实例」。
-  //    clang-cl 默认按文件扩展名区分 C/C++，无需显式 /TP。
-  addFlags.push(
-    '-mwaitpkg',
-    '/we4668',
-    '/wd4244',
-    '/wd4838',
-    '/W4',
-    '/wd5054',
-    '-Werror',
-    '-Wdelete-non-virtual-dtor',
-    '-Wenum-conversion',
-    '-Wbitfield-enum-conversion',
-    '-Wno-enum-enum-conversion',
-    '-Wno-enum-float-conversion',
-    '-Wno-ambiguous-reversed-operator',
-    '-Wno-deprecated-anon-enum-enum-conversion',
-    '-Wno-deprecated-volatile',
-    '-Wno-unused-but-set-variable',
-    '-Wno-unused-but-set-parameter',
-    '-Wno-ordered-compare-function-pointers',
-    '-Wno-bitwise-instead-of-logical',
-    '-Wno-gnu-string-literal-operator-template',
-    '-Wno-inconsistent-missing-override',
-    '-Wno-invalid-offsetof',
-    '-Wno-switch',
-    '-Wno-tautological-compare',
-    '-Wno-unknown-pragmas',
-    '-Wno-unused-function',
-    '-Wno-unused-lambda-capture',
-    '-Wno-unused-local-typedef',
-    '-Wno-unused-private-field',
-    '-Wno-unused-variable',
-    '-Wno-undefined-var-template',
-    '-Wshadow',
-    '-Wundef',
-    '-Wno-float-conversion',
-    '-Wno-implicit-float-conversion',
-    '-Wno-implicit-int-conversion',
-    '-Wno-c++11-narrowing',
-    '-Wno-microsoft',
-    '-Wno-msvc-include',
-    '-Wno-pragma-pack',
-    '-Wno-inline-new-delete',
-    '-Wno-implicit-exception-spec-mismatch',
-    '-Wno-undefined-bool-conversion',
-    '-Wno-deprecated-writable-strings',
-    '-Wno-deprecated-register',
-    '-Wno-switch-enum',
-    '-Wno-logical-op-parentheses',
-    '-Wno-null-arithmetic',
-    '-Wno-deprecated-declarations',
-    '-Wno-return-type-c-linkage',
-    '-Wno-ignored-attributes',
-    '-Wno-uninitialized',
-    '-Wno-return-type',
-    '-Wno-unused-parameter',
-    '-Wno-ignored-qualifiers',
-    '-Wno-expansion-to-defined',
-    '-Wno-sign-compare',
-    '-Wno-missing-field-initializers',
-    '-Wno-nonportable-include-path',
-    '-Wno-invalid-token-paste',
-    '-Wno-null-pointer-arithmetic',
-    '-Wno-constant-logical-operand',
-    '-Wno-unused-value',
-    '-Wno-bitfield-enum-conversion',
-  );
-
-  // [P0-C-4] 注入 UHT 生成的 .generated.h 路径（修复 plugin .cpp 找不到 .generated.h）
-  //          必须在 MSVC flag 之后追加（与现有风格一致）；用 -I / /I 注入。
-  //          空数组或 undefined 时跳过，避免写入无效 flag。
-  if (opts.intermediateUhtDirs?.length) {
-    const prefix = process.platform === 'win32' ? '/I' : '-I';
-    for (const dir of opts.intermediateUhtDirs) {
-      addFlags.push(`${prefix}${dir}`);
-    }
-  }
-
-  // 5. 构建 If.PathMatch 规则（模板风格）
+  // 构建 If.PathMatch 规则（模板风格）
   const pathMatch: string[] = [];
   if (opts.projectPath) {
     pathMatch.push('.vscode/vscodeuehelper/completionHelper.cpp');
@@ -231,11 +102,11 @@ export function renderClangdConfig(config: ClangdConfig): string {
 // ===== 写文件 =====
 
 /**
- * 把 .clangd 写入项目根目录（兼容旧 API，内部走 ClangdOps）
+ * 把 .clangd 写入项目根目录（兼容旧 API，内部走 ClangdOps 风格）
  *
  * 重写整个文件（非增量），保证只有一个 CompileFlags 块。
  *
- * @deprecated 推荐用 ClangdOps.writeFull，避免重复传 projectPath。
+ * @deprecated 推荐用 ClangdOps.writeFull 与 applyAddFlags，避免重复传 projectPath。
  */
 export async function writeClangdConfig(
   projectPath: string,
@@ -264,61 +135,4 @@ export async function findClangdConfig(projectPath: string): Promise<string | nu
   } catch {
     return null;
   }
-}
-
-// ===== 系统头文件替换（setSystemIncludes 使用）=====
-
-/** 系统头文件 flag 的前缀列表 */
-export const SYSTEM_INCLUDE_FILTER_PREFIXES = [
-  '/X',
-  '/imsvc',
-  '-fms-compatibility-version=',
-  '/std:',
-];
-
-/**
- * 在 .clangd 的 CompileFlags.Add 中替换系统头文件 flag。
- *
- * 使用 yaml 库解析 → 修改 → 写回，避免手写字符串破坏格式。
- *
- * 逻辑（对齐 unreal-clangd setCustomSysInc）：
- * 1. yaml.parse() 解析文件
- * 2. 找到 CompileFlags.Add 序列
- * 3. 按前缀过滤旧 system include flag
- * 4. 新 flag 插入到 Add 顶部
- * 5. yaml.stringify() 写回
- */
-export function replaceSystemIncludeBlock(yamlText: string, newFlags: string[]): string {
-  // 用 parse 而不是 parseDocument —— parse 返回普通 JS 对象，无类型问题
-  let root: unknown;
-  try {
-    root = yaml.parse(yamlText);
-    if (!root || typeof root !== 'object') {return yamlText;}
-  } catch {
-    return yamlText;
-  }
-
-  const doc = root as Record<string, unknown>;
-  const cf = doc.CompileFlags;
-  if (!cf || typeof cf !== 'object') {return yamlText;}
-  const compileFlags = cf as Record<string, unknown>;
-
-  const oldAdd = compileFlags.Add;
-  const oldAddItems: string[] = [];
-  if (Array.isArray(oldAdd)) {
-    for (const item of oldAdd) {
-      if (typeof item === 'string') {oldAddItems.push(item);}
-    }
-  }
-
-  // 筛选：保留非系统头文件 flag
-  const kept = oldAddItems.filter((v) => {
-    const unquoted = v.replace(/^["'](.*)["']$/, '$1');
-    return !SYSTEM_INCLUDE_FILTER_PREFIXES.some((p) => unquoted.startsWith(p));
-  });
-
-  // 新 Add = newFlags + kept
-  compileFlags.Add = [...newFlags, ...kept];
-
-  return yaml.stringify(doc);
 }

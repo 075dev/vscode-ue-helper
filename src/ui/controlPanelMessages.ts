@@ -59,6 +59,25 @@ export interface ConfigUpdate {
   value: unknown;
 }
 
+// ===== Plan Add 收束：自定义 Add Flags Tab 协议 =====
+
+/** Add Flag 一条 wire 形态（注入到 webview 的元数据）。 */
+export interface AddFlagWire {
+  readonly id: string;
+  readonly category: string;
+  readonly title: string;
+  readonly description: string;
+  readonly severity: 'required' | 'recommended' | 'optional';
+}
+
+/** Add Flags 面板状态（webview 渲染用） */
+export interface AddFlagValues {
+  /** 全部可暴露 flag（id -> wire） */
+  readonly entries: readonly AddFlagWire[];
+  /** 当前已勾选 id 列表（与 vscodeUEHelper.clangd.userAddFlags 同步） */
+  readonly selectedIds: readonly string[];
+}
+
 /** WebView → Extension 消息 */
 export type WebViewMessage =
   | { type: 'executeCommand'; command: string }
@@ -69,7 +88,9 @@ export type WebViewMessage =
   | { type: 'updateProxyConfig'; key: string; value: unknown }
   | { type: 'saveConfig'; updates: ConfigUpdate[] }
   | { type: 'saveProxyConfig'; updates: ConfigUpdate[] }
-  | { type: 'getStatus' };
+  | { type: 'getStatus' }
+  | { type: 'getAddFlags' }
+  | { type: 'saveAddFlags'; selectedIds: string[] };
 
 /** 批量保存结果 */
 export interface SaveResult {
@@ -88,7 +109,9 @@ export type PanelMessage =
   | { type: 'configValues'; values: ConfigValues }
   | { type: 'proxyConfigValues'; values: ProxyConfigValues }
   | { type: 'statusValues'; values: StatusValues }
-  | { type: 'saveResult'; scope: 'config' | 'proxy'; result: SaveResult };
+  | { type: 'saveResult'; scope: 'config' | 'proxy'; result: SaveResult }
+  | { type: 'addFlagValues'; values: AddFlagValues }
+  | { type: 'addFlagSaveResult'; result: SaveResult };
 
 export const COMMAND_MAP: Record<string, string> = {
   build: 'vscodeUEHelper.build',

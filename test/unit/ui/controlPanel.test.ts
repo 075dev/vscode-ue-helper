@@ -163,18 +163,31 @@ describe('Config/Proxy field definitions', () => {
 describe('getControlPanelHtml', () => {
   beforeEach(() => { initI18n(); });
   it('returns valid HTML', () => {
-    const html = getControlPanelHtml('vscode-webview://test', 'Test', '5.4');
+    const html = getControlPanelHtml('vscode-webview://test', 'Test', '5.4', []);
     expect(html).toContain('<!DOCTYPE html>');
   });
-  it('has all 4 tabs', () => {
-    const html = getControlPanelHtml('vscode-webview://test', '', '');
+  it('has all 5 tabs (含 Plan Add 收束 自定义 Add)', () => {
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     expect(html).toContain('id="tab-actions"');
     expect(html).toContain('id="tab-config"');
+    expect(html).toContain('id="tab-add-flags"');
     expect(html).toContain('id="tab-proxy-settings"');
     expect(html).toContain('id="tab-status"');
   });
+  it('渲染 add-flags 内容容器 + save 按钮', () => {
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
+    expect(html).toContain('id="content-add-flags"');
+    expect(html).toContain('id="add-flags-save-btn"');
+    expect(html).toContain('id="add-flag-list"');
+  });
+  it('注入 glossary 元数据 ADD_FLAG_ENTRIES JSON', () => {
+    const entries = [{ id: 'compat-header', category: 'forced-include', title: 'T', description: 'D', severity: 'recommended' as const }];
+    const html = getControlPanelHtml('vscode-webview://test', '', '', entries);
+    expect(html).toContain('"id":"compat-header"');
+    expect(html).toContain('"category":"forced-include"');
+  });
   it('renders config form fields', () => {
-    const html = getControlPanelHtml('vscode-webview://test', '', '');
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     expect(html).toContain('id="cfg-configuration"');
     expect(html).toContain('id="cfg-target"');
     expect(html).toContain('id="cfg-completionMode"');
@@ -184,15 +197,15 @@ describe('getControlPanelHtml', () => {
     expect(html).not.toContain('id="cfg-platform"');
   });
   it('renders proxy form fields', () => {
-    const html = getControlPanelHtml('vscode-webview://test', '', '');
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     expect(html).toContain('id="proxy-clangdProxyEnabled"');
     expect(html).toContain('id="proxy-clangdProxyKeepaliveMax"');
     expect(html).toContain('id="proxy-clangdProxyRealClangdPath"');
     expect(html).toContain('id="proxy-localizationMode"');
-        expect(html).toContain('id="proxy-save-btn"');
+    expect(html).toContain('id="proxy-save-btn"');
   });
   it('status tab shows all sections', () => {
-    const html = getControlPanelHtml('vscode-webview://test', '', '');
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     expect(html).toContain('id="st-project-name"');
     expect(html).toContain('id="st-configuration"');
     expect(html).toContain('id="st-target"');

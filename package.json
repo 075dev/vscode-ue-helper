@@ -365,6 +365,23 @@
           "default": true,
           "description": "Auto-trigger UBT regeneration when UE reflection headers (.h files containing UCLASS/USTRUCT/UENUM/UINTERFACE/UFUNCTION/UPROPERTY/GENERATED_BODY/UMETA) are saved.",
           "description@zh": "当保存 UE 反射头文件（包含 UCLASS/USTRUCT/UENUM/UINTERFACE/UFUNCTION/UPROPERTY/GENERATED_BODY/UMETA 的 .h 文件）时自动触发 UBT 重新生成。"
+        },
+        "vscodeUEHelper.clangd.userAddFlags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "compat-header",
+              "macro-helper",
+              "std-cxx20",
+              "preparse-headers",
+              "uht-include-dirs",
+              "system-include-windows"
+            ]
+          },
+          "default": [],
+          "markdownDescription": "## Custom Add Flags\n\n勾选要写入 `.clangd` `CompileFlags.Add` 的 flag id。**默认空数组 = Add 完全为空(系统零默认注入)**。需要默认 flag 时,请在面板中显式勾选,或运行 `Set System Includes` 让 SDK flag 自动加入。\n\n**id 含义**\n- `compat-header` —— 强制包含 UE Clangd 兼容头 (/FI<ueClangdCompat.h>)\n- `macro-helper` —— 强制包含宏补全 helper\n- `std-cxx20` —— C++20 标准\n- `preparse-headers` —— 预解析 SharedPCH + addMacroCompletions.h\n- `uht-include-dirs` —— UHT 生成头目录 (/I)\n- `system-include-windows` —— Windows SDK / MSVC (/X /imsvc /fms-compatibility-version),由 `Set System Includes` 命令管理",
+          "markdownDescription@zh": "## 自定义 Add Flags\n\n勾选要写入 `.clangd` `CompileFlags.Add` 的 flag id。**默认空数组 = Add 完全为空 (系统零默认注入)**。需要默认 flag 时,请在面板中显式勾选,或运行 `Set System Includes` 让 SDK flag 自动加入。\n\n**id 含义**\n- `compat-header` —— 强制包含 UE Clangd 兼容头 (/FI<ueClangdCompat.h>)\n- `macro-helper` —— 强制包含宏补全 helper\n- `std-cxx20` —— C++20 标准\n- `preparse-headers` —— 预解析 SharedPCH + addMacroCompletions.h\n- `uht-include-dirs` —— UHT 生成头目录 (/I)\n- `system-include-windows` —— Windows SDK / MSVC (/X /imsvc /fms-compatibility-version),由 `Set System Includes` 命令管理"
         }
       }
     },

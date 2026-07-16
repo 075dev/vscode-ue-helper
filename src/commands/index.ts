@@ -9,6 +9,7 @@ import { registerCommand } from '@core/command-registry';
 import type { WorkspaceState } from '@core/workspace';
 import type { DetectionHandles } from '@detection';
 import type { ClangdHandles } from '@clangd';
+import type { ClangdOps } from '@clangd/clangdOps';
 import { showProjectInfo } from '@commands/showProjectInfo';
 import { executeBuild } from './build';
 import { executeLaunchEditor } from './launchEditor';
@@ -33,9 +34,14 @@ export function activateCommands(
   logger: Logger,
   detection: DetectionHandles,
   clangd: ClangdHandles,
-  // [Phase 8] workspace 当前未直接使用，保留以便后续命令迁移时透传
-  _workspace?: WorkspaceState,
+  // [Phase 8 + Plan Add 收束] workspace 与 clangdOps 一并向下游命令透传
+  workspace?: WorkspaceState,
+  clangdOps?: ClangdOps,
 ): void {
+  // [Plan D] 把 Config 注入 CompletionModeController，让 rewriteClangd 能读 userAddFlags
+  if (clangd?.completionMode && typeof clangd.completionMode.setConfig === 'function') {
+    clangd.completionMode.setConfig(config);
+  }
   registerCommand(context, 'vscodeUEHelper.showProjectInfo', () =>
     showProjectInfo(config, logger, detection),
   );
@@ -61,14 +67,14 @@ export function activateCommands(
     executeDiagnoseProject(logger, detection),
   );
   registerCommand(context, 'vscodeUEHelper.createProject', () =>
-    executeCreateProject(config, logger, detection),
+    executeCreateProject(config, logger, detection, clangdOps),
   );
   registerCommand(context, 'vscodeUEHelper.installRules', () =>
     executeInstallRules(logger, detection),
   );
   registerCommand(context, 'vscodeUEHelper.uninstall', () => executeUninstall(logger, detection));
   registerCommand(context, 'vscodeUEHelper.setSystemIncludes', () =>
-    executeSetSystemIncludes(config, logger, detection),
+    executeSetSystemIncludes(config, logger, detection, workspace, clangdOps),
   );
   registerCommand(context, 'vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile());
   registerCommand(context, 'vscodeUEHelper.selectConfig', () =>

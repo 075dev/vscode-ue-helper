@@ -14,7 +14,6 @@
 
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import * as fs from 'node:fs/promises';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import type { WorkspaceState } from '@core/workspace';
@@ -27,11 +26,7 @@ import {
   readRecommendedSdkVersion,
   selectSdkVersion,
 } from '@clangd/windowsSdk';
-import {
-  replaceSystemIncludeBlock,
-  findClangdConfig,
-  writeClangdConfig,
-} from '@clangd/clangdConfig';
+import { resolveFlags } from '@clangd/flagGlossary';
 import { pickProject } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
 
@@ -41,8 +36,7 @@ export async function executeSetSystemIncludes(
   detection: DetectionHandles,
   _workspace?: WorkspaceState,
   clangdOps?: ClangdOps,
-): Promise<void> {
-  if (process.platform !== 'win32') {
+): Promise<void> {  if (process.platform !== 'win32') {
     void vscode.window.showInformationMessage(
       'Set System Includes only applies on Windows (MSVC + Windows SDK).',
     );
@@ -152,46 +146,51 @@ export async function executeSetSystemIncludes(
   const sdkRoot = path.join(sdkParent, sdkChoice.label);
 
   // Render flags and splice into .clangd.
-  // ⚠️ 注意：不需要再加 /std: 了，默认 .clangd 配置已经有 -std=c++20
-  // 再加会导致重复，甚至可能覆盖 UE 的编译设置
-  const newFlags = await renderClangdFlags({
+  // ⚠️ 注意：不需要再加 /std: 了，renderClangdFlags 已经包含。
+  // Plan Add 收束：不再做"过滤前缀 + 保留"操作。
+  const systemFlags = await renderClangdFlags({
     msvcRoot,
     sdkRoot,
     fmsCompatibilityVersion: detected.fmsCompatibilityVersion,
   });
 
-  // [Phase 8] 优先用 ClangdOps.mutate（原子事务），fallback 到旧 API
+  // [Plan D 激活] 读取 userAddFlags（如果没有则视为空数组），把 systemFlags 作为
+  // `system-include-windows` 整体 push 进 ids。整个 userAddFlags + system-include-windows
+  // 通过 flagGlossary.resolveFlags + applyAddFlags 一次性写入 .clangd（force-write 语义）。
+  // [Plan UX 决策] 用户选择"总是同步"：即运行命令后 userAddFlags 一定会增加 system-include-windows id。
+  const currentUserAdd = config.userAddFlags ?? [];
+  const nextUserAdd = currentUserAdd.includes('system-include-windows')
+    ? currentUserAdd
+    : [...currentUserAdd, 'system-include-windows'];
+
   if (clangdOps) {
-    // .clangd 不存在时先 writeFull 初始化
     if (!(await clangdOps.exists())) {
       await clangdOps.writeFull({});
     }
-    const result = await clangdOps.mutate(({ config }) => {
-      const oldAdd = Array.isArray(config.CompileFlags?.Add) ? config.CompileFlags.Add : [];
-      const SYSTEM_PREFIXES = ['/X', '/imsvc', '-fms-compatibility-version=', '/std:'];
-      const kept = oldAdd.filter(
-        (f) => !SYSTEM_PREFIXES.some((p) => f.replace(/^["'](.*)["']$/, '$1').startsWith(p)),
-      );
-      config.CompileFlags = { ...config.CompileFlags, Add: [...newFlags, ...kept] };
+
+    // 整体 force-write：用 flagGlossary + userAddFlags 决定 Add 内容。
+    // resolveFlags 已知 system-include-windows id 会展开 ctx.systemIncludeFlags。
+    const addFlags = resolveFlags(nextUserAdd, {
+      systemIncludeFlags: systemFlags,
     });
+
+    const result = await clangdOps.applyAddFlags(addFlags);
     if (result.ok) {
-      logger.info(`[setSystemIncludes] wrote ${newFlags.length} flags to .clangd via mutate`);
+      // 同步回设置 —— 用户已决策"总是同步"。
+      await config.update('clangd.userAddFlags', nextUserAdd);
+      logger.info(
+        `[setSystemIncludes] force-wrote ${addFlags.length} flags to .clangd via applyAddFlags, ` +
+          `userAddFlags now has ${nextUserAdd.length} ids`,
+      );
     } else {
-      logger.error(`[setSystemIncludes] mutate failed: ${result.reason}`);
+      logger.error(`[setSystemIncludes] applyAddFlags failed: ${result.reason}`);
     }
   } else {
-    // 旧 fallback 路径
-    const projectDir = path.dirname(project.path);
-    const clangdFile = await findClangdConfig(project.path);
-    if (!clangdFile) {
-      await writeClangdConfig(project.path);
-    }
-    const before = await fs.readFile(clangdFile ?? path.join(projectDir, '.clangd'), 'utf-8');
-    const after = replaceSystemIncludeBlock(before, newFlags);
-    if (after !== before) {
-      await fs.writeFile(clangdFile ?? path.join(projectDir, '.clangd'), after, 'utf-8');
-      logger.info(`[setSystemIncludes] wrote ${newFlags.length} flags to .clangd (legacy)`);
-    }
+    // ClangdOps 未注入 —— Phase 8 路径不完整，配置面板 flagGlossary + applyAddFlags 都依赖它。
+    throw new Error(
+      '[setSystemIncludes] ClangdOps is required but not injected. ' +
+        'Phase 8 architecture mandates ClangdOps for all .clangd mutations.',
+    );
   }
 
   void vscode.window.showInformationMessage(
