@@ -36,8 +36,6 @@ export default defineConfig({
       '@commands': resolve(__dirname, 'src/commands'),
       '@ui': resolve(__dirname, 'src/ui'),
       '@mcp': resolve(__dirname, 'src/mcp'),
-      '@rules': resolve(__dirname, 'src/rules'),
-      '@platform': resolve(__dirname, 'src/platform'),
     },
   },
 });

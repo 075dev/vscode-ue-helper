@@ -48,11 +48,7 @@
       "@ui": ["src/ui/index"],
       "@ui/*": ["src/ui/*"],
       "@mcp": ["src/mcp/index"],
-      "@mcp/*": ["src/mcp/*"],
-      "@rules": ["src/rules/index"],
-      "@rules/*": ["src/rules/*"],
-      "@platform": ["src/platform/index"],
-      "@platform/*": ["src/platform/*"]
+      "@mcp/*": ["src/mcp/*"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
