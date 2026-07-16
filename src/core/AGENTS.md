@@ -25,19 +25,19 @@ logger.info('[detection] workspaceFile = ...');       // 模块内进一步细�
 
 ## Config 双真相陷阱 [Pitfall #10]
 
-`Config.update()` 写后，**同进程内** `WorkspaceConfiguration` 不会主动失效：
+`Config.update(key, value)` 签名返回 `Promise<void>`（详见 `src/core/config.ts:268-297`）。它内部已调 `this.refreshRoot()`，所以**当前实例**能读新值；但**不要**按"返回新 Config 实例"使用：
 
 ```typescript
-// 错误：立刻读还是旧值
-await config.update('completionMode', 'slow');
-console.log(config.completionMode);   // 仍是 'fast'
+// 错误：update 不返回新 Config 实例
+const freshConfig = await config.update();           // TS 报错 + 运行时 freshConfig === undefined
+console.log(freshConfig.completionMode);             // TypeError
 
-// 正确：Config.update 内部已 refresh，消费方拿新 Config 实例
-const freshConfig = await config.update();           // 返回新 Config
-console.log(freshConfig.completionMode);             // 'slow'
+// 正确：update 接收 (key, value)，当前实例读
+await config.update('clangdHeaderWatcher.enabled', true);
+console.log(config.clangdHeaderWatcherEnabled);      // 已是新值
 ```
 
-**`completionMode` 已废弃** —— Config getter 强制归一化为 `'slow'`（详见根 AGENTS.md 陷阱 #11）。
+**`completionMode` 设置已完全删除**（H4-B 决策，见 REMEDIATION-PLAN §十二）。Config getter 永远返回 `'slow'` 字面量，UI 移除 toggle 按钮。
 
 ## WorkspaceState [Phase 8]
 
