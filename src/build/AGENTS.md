@@ -169,9 +169,11 @@ interface BuildResult {
 3. 诊断实时推入 Problems 面板
 4. 完成后显示成功/失败通知
 
-## DDD 三层子目录 [Phase 8]
+## DDD 分层（规划中）
 
-`src/build/` 内部采用 DDD 分层（重构迁移中，老代码仍直接位于 `src/build/`）：
+`src/build/` 当前**未启用 DDD 分层**。`application/`、`infrastructure/` 空壳已删除（H3 决策 A，见 REMEDIATION-PLAN §十二）。`domain/` 仅作参考目录存在。
+
+**当前目录结构**：
 
 ```
 src/build/
@@ -182,17 +184,10 @@ src/build/
 ├── taskProvider.ts                Ctrl+Shift+B
 ├── ubt.ts                         UBT 命令构造
 ├── types.ts                       公共类型 (UBTArgs/ParsedDiagnostic/BuildResult)
-├── domain/                        [Phase 8 迁移中] 领域层
-│   ├── entities/ubt-task.entity.ts       任务实体（含状态机）
-│   ├── events/                          领域事件 (created/completed)
-│   ├── repositories/                    仓储接口
-│   ├── services/                        领域服务（目前空壳）
-│   └── value-objects/                   值对象 (BuildConfiguration/Platform/Target/UBTTaskId)
-├── application/                    [占位] 应用层，目前仅 2 行注释
-└── infrastructure/                [占位] 基础设施层，目前仅 2 行注释
+└── domain/                        参考用领域层（含 entities/value-objects/events）
 ```
 
 **已知状态**：
-- `domain/entities/ubt-task.entity.ts` 有完整测试（`test/unit/build/domain/entities/ubt-task.entity.test.ts`，143 行）。
-- `domain/services/`、`application/`、`infrastructure/` 三处是占位 index.ts，待业务代码逐步迁移。
-- 外部代码**继续从 `src/build/` 顶层 import**（`import { runBuild } from '@build'`），不走 `domain/` 路径。
+- `domain/entities/ubt-task.entity.ts` 有完整测试（`test/unit/build/domain/entities/ubt-task.entity.test.ts`），可作为后续 DDD 迁移参考。
+- 业务代码**继续从 `src/build/` 顶层 import**（`import { runBuild } from '@build'`），不走 `domain/` 路径。
+- 何时重新引入 DDD 三层待业务复杂度增长时再评估。
