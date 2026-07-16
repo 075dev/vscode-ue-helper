@@ -47,7 +47,7 @@ async function createFixture(options: FixtureOptions = {}): Promise<ProjectFixtu
       defaultClangdConfig({
         completionMode: 'slow',
         compatHeaderPath: getUeClangdCompatPath(projectPath),
-        macroHelperPath: path.join(rootDir, '.vscode', 'vscodeuehelper', 'macroCompletionHelper.h'),
+        // Plan B: macroCompletionHelper.h 不再生成，亦不再注入 /FI。
         projectPath,
         systemIncludeFlags: options.addSystemIncludes === false
           ? []

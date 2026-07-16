@@ -7,7 +7,6 @@
   "cmd.generateCompileCommands": "Generate compile_commands.json",
   "cmd.diagnoseProject": "Diagnose Clangd Project",
   "cmd.createProject": "Create Unreal Clangd Project",
-  "cmd.toggleCompletionMode": "Toggle Clangd Completion Mode (Fast/Slow)",
   "cmd.showProjectInfo": "Show Project Info",
   "cmd.setSystemIncludes": "Set System Includes (Windows SDK / C++ Standard)",
   "cmd.installRules": "Install AI Agent Rules",
@@ -63,9 +62,6 @@
   "showInfo.btn.openWs": "Open .code-workspace",
   "showInfo.btn.downloadUE": "Download UE",
 
-  "completion.fast": "UE Clangd: fast completion (curated macros) — click to switch to slow",
-  "completion.slow": "UE Clangd: slow completion (all macros) — click to switch to fast",
-
   "systemIncludes.placeholder": "Set System Includes — coming in Phase 6 (Windows-only feature).",
 
   "diagnoseProject.noProject": "No Unreal project selected for clangd diagnostics.",
@@ -100,6 +96,13 @@
   "proxy.status.logPath": "Log Path:        {value}",
   "proxy.status.backupExists": "Backup Exists:   {value}",
   "proxy.status.summary": "Clangd LSP Proxy: enabled={enabled}, active={active}",
+
+  "init.prompt": "This UE project hasn't been initialized yet. Run one-time init (write .clangd and enable Clangd Proxy)?",
+  "init.btn.initialize": "Initialize",
+  "init.btn.later": "Later",
+  "init.fail.createProject": "Create Unreal Clangd Project failed: {0}",
+  "init.fail.enableProxy": "Enable Clangd Proxy failed: {0}",
+  "init.fail.markWorkspace": "Failed to write .code-workspace marker: {0}",
 
   "diagnose.noProject": "No .uproject found, cannot run diagnostic.",
   "diagnose.ok": "Clangd project diagnostic: OK",

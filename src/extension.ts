@@ -17,6 +17,7 @@ import { activateClangd } from '@clangd';
 import { perfLog } from '@clangd/perfLog';
 import { activateUI } from '@ui';
 import { activateCommands } from '@commands';
+import { runFirstTimeInit } from '@commands/firstRunInit';
 import { showProjectInfo } from '@commands/showProjectInfo';
 import { initI18n, t } from '@i18n';
 import { ControlPanelProvider } from '@ui/controlPanel';
@@ -49,6 +50,11 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // [Phase 8] headerWatcher removed — UBT triggered by proxy-side UeDiagnosticWatcher only
     const ui = activateUI(context, config, logger, detection);
     activateCommands(context, config, logger, detection, clangd, workspace);
+
+    // [first-time-init] 首次打开插件时检测 + 弹窗 + 初始化编排
+    // fire-and-forget：内部会 await，但激活主流程不应被阻塞
+    void runFirstTimeInit({ context, config, logger, detection, clangd, workspace, clangdOps }, context)
+      .catch((err: unknown) => logger.error('[firstRunInit] unexpected error:', err));
 
     // workspace + clangdOps 暂时挂在 disposables 防止被 GC，后续 PR 接入
     disposables.push(workspace as unknown as vscode.Disposable);

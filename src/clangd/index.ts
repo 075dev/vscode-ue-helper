@@ -67,7 +67,7 @@ export {
   toIncludeFlags,
 } from './preparseIncludes';
 export { WorkspaceBackup } from './workspaceBackup';
-export { CompletionModeController, type CompletionModeProjectContext, type RewriteResult, type ToggleResult } from './completionMode';
+export { CompletionModeController, type CompletionModeProjectContext, type RewriteResult } from './completionMode';
 export {
   discoverSystemIncludes,
   listMsvcVersions,
@@ -156,17 +156,17 @@ export function activateClangd(
     }
   });
 
-  // Render the status bar item and listen for config changes.
-  completionMode.show();
+  // Plan B: 状态栏按钮已删除（toggle 完成模式 → 命令面板项移除），CompletionModeController
+  //        现在仅承载 rewriteClangd() 用于首次激活/refresh，不再需要 show()/dispose()。
+  //        onDidChange 监听配置变化仍用于触发 .clangd 重写。
   context.subscriptions.push(
     config.onDidChange((e) => {
       if (e.affectsConfiguration('vscodeUEHelper.completionMode')) {
-        completionMode.refresh();
-        // .clangd 重写由 toggle() 方法内部处理，这里只刷新 UI
+        // Plan B: fast/slow 等价后无需刷新 UI（无 status bar item），但保留 hook 触发 rewrite。
+        void completionMode.rewriteClangd();
       }
     }),
   );
-  context.subscriptions.push({ dispose: () => completionMode.dispose() });
   context.subscriptions.push(ueMacroCompletionProvider);
   context.subscriptions.push(ueReflectionLinter);
 

@@ -133,11 +133,11 @@ describe('BUTTON_GROUPS', () => {
 });
 
 describe('COMMAND_MAP', () => {
-  it('contains 16 commands (showProjectInfo and showClangdProxyStatus removed)', () => {
+  it('contains 15 commands (toggleCompletionMode removed per Plan B)', () => {
     expect(Object.keys(COMMAND_MAP)).toEqual([
       'build', 'rebuild', 'clean', 'launchEditor', 'liveCoding',
       'createProject', 'generateCompileCommands', 'diagnoseProject',
-      'toggleCompletionMode', 'setSystemIncludes', 'enableClangdProxy', 'disableClangdProxy',
+      'setSystemIncludes', 'enableClangdProxy', 'disableClangdProxy',
       'openWorkspaceFile', 'installRules', 'uninstall',
     ]);
   });

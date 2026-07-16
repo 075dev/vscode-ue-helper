@@ -272,28 +272,6 @@ function getAddCompletionsContent(): string {
 }
 
 /**
- * macroCompletionHelper.h 的内容（会被覆盖）。
- */
-function getMacroCompletionsHelperContent(): string {
-  const header = [
-    '/*',
-    '* ***** DO NOT MODIFY *****',
-    '* 此文件由 VSCodeUEHelper 自动生成，修改将被覆盖。',
-    '* 如需添加宏补全头文件，请编辑 addMacroCompletions.h',
-    '*',
-    '* 此文件在 slow 模式下被 .clangd 通过 -include 预包含。',
-    '*',
-    '* *** 注意：直接打开此文件会显示 IntelliSense 错误/警告 ***',
-    '*/',
-  ].join(EOL);
-  const includes = [
-    '// #include "defaultCompletions.h"  // 已通过 completionHelper.cpp 加载',
-    '#include "addMacroCompletions.h"',
-  ].join(EOL);
-  return header + EOL + EOL + includes + EOL;
-}
-
-/**
  * addMacroCompletions.h 的内容（托管区域格式）。
  *
  * 文件结构：
@@ -496,10 +474,12 @@ export async function createCompletionFiles(
   const results: { name: string; path: string; created: boolean }[] = [];
 
   // 1) 纯覆盖文件
+  //    Plan B: 模式合并后 macroCompletionHelper.h 成为冗余间接层
+  //    （它只 #include "addMacroCompletions.h"，后者已通过 preparse 直接包含）。
+  //    跳过生成该文件；已存在的旧文件不动（用户升级后保留无害）。
   const overwriteDefs: { name: string; content: string }[] = [
     { name: FILENAME_COMPLETION_HELPER, content: getCompletionHelperContent() },
     { name: FILENAME_DEFAULT_COMP, content: getDefaultCompletionsContent() },
-    { name: FILENAME_MACRO_COMP_HELPER, content: getMacroCompletionsHelperContent() },
     { name: FILENAME_UE_CLANGD_COMPAT, content: getUeClangdCompatContent() },
   ];
 

@@ -81,8 +81,12 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
   // 2. C++ 标准（Windows 用 /std:c++20，其他用 -std=c++20）
   addFlags.push(process.platform === 'win32' ? '/std:c++20' : '-std=c++20');
 
-  // 3. /FI 强制包含 macroCompletionHelper.h（模板用 /FI 而非 -include）
-  if (opts.completionMode === 'slow' && opts.macroHelperPath) {
+  // 3. /FI 强制包含 macroCompletionHelper.h
+  //    Plan B：模式合并后，macroHelperPath 总是被注入（保留向后兼容）。
+  //    实际效果等价：macroCompletionHelper.h 只 #include "addMacroCompletions.h"，
+  //    后者已被 preparse 列表直接包含，所以这一步在功能上是 no-op。
+  //    保留仅为了兼容可能的第三方扩展/手动修改的 .clangd。
+  if (opts.macroHelperPath) {
     addFlags.push(`/FI${opts.macroHelperPath}`);
   }
 

@@ -101,9 +101,17 @@ export class Config {
     return v && v.length > 0 ? v : undefined;
   }
 
-  /** 补全模式，默认 fast（精选头文件 ~20 个，启动快） */
+  /**
+   * 补全模式，默认 slow。
+   *
+   * Plan B 重构后 fast/slow 模式已合并：slow 已包含 fast 的全部内容（5 个 SharedPCH +
+   * addMacroCompletions.h），内部统一走 slow 路径。getter 归一化保证老用户工作区
+   * 配置 `'fast'` 不报错。
+   */
   get completionMode(): CompletionMode {
-    return this.root.get<CompletionMode>('completionMode') ?? 'fast';
+    const raw = this.root.get<CompletionMode>('completionMode');
+    // 历史值 'fast' 归一化为 'slow'，向老用户工作区配置兼容；其他也 fallback 到 'slow'
+    return raw === 'fast' || raw === 'slow' ? 'slow' : 'slow';
   }
 
   /** 是否自动备份 .code-workspace 防止 UBT 刷新覆盖，默认 true */

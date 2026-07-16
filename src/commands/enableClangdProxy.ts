@@ -64,6 +64,7 @@ export async function executeEnableClangdProxy(
   config: Config,
   logger: Logger,
   clangd: ClangdHandles,
+  opts?: { suppressReloadPrompt?: boolean },
 ): Promise<void> {
   logger.info('[enableClangdProxy] invoked');
 
@@ -79,7 +80,9 @@ export async function executeEnableClangdProxy(
       void vscode.window.showErrorMessage(t('proxy.enable.failed'));
       return;
     }
-    await promptReload(logger);
+    if (!opts?.suppressReloadPrompt) {
+      await promptReload(logger);
+    }
     return;
   }
 
@@ -103,5 +106,7 @@ export async function executeEnableClangdProxy(
   }
 
   // enable 已成功，reload/restart 失败不影响 enable 状态
-  await promptReload(logger);
+  if (!opts?.suppressReloadPrompt) {
+    await promptReload(logger);
+  }
 }

@@ -14,7 +14,6 @@ import { executeBuild } from './build';
 import { executeLaunchEditor } from './launchEditor';
 import { executeLiveCoding } from './liveCoding';
 import { executeGenerateCompileCommands } from './generateCompileCommands';
-import { executeToggleCompletionMode } from './toggleCompletionMode';
 import { executeCreateProject } from './createProject';
 import { executeInstallRules } from './installRules';
 import { executeUninstall } from './uninstall';
@@ -61,9 +60,6 @@ export function activateCommands(
   registerCommand(context, 'vscodeUEHelper.diagnoseProject', () =>
     executeDiagnoseProject(logger, detection),
   );
-  registerCommand(context, 'vscodeUEHelper.toggleCompletionMode', () =>
-    executeToggleCompletionMode(logger, clangd),
-  );
   registerCommand(context, 'vscodeUEHelper.createProject', () =>
     executeCreateProject(config, logger, detection),
   );
@@ -93,5 +89,5 @@ export function activateCommands(
   registerCommand(context, 'vscodeUEHelper.showControlPanel', () =>
     executeShowControlPanel(),
   );
-  logger.info(`[commands] registered 21 commands`);
+  logger.info(`[commands] registered 20 commands`);
 }

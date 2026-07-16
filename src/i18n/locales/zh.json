@@ -7,7 +7,6 @@
   "cmd.generateCompileCommands": "生成 compile_commands.json",
   "cmd.diagnoseProject": "诊断 Clangd 项目",
   "cmd.createProject": "创建 Unreal Clangd 项目",
-  "cmd.toggleCompletionMode": "切换 Clangd 补全模式(快速/慢速)",
   "cmd.showProjectInfo": "显示项目信息",
   "cmd.setSystemIncludes": "设置系统包含路径(Windows SDK / C++ 标准)",
   "cmd.installRules": "安装 AI Agent 规则",
@@ -63,9 +62,6 @@
   "showInfo.btn.openWs": "打开 .code-workspace",
   "showInfo.btn.downloadUE": "下载 UE",
 
-  "completion.fast": "UE Clangd: 快速补全(精选宏)— 点击切换到慢速",
-  "completion.slow": "UE Clangd: 慢速补全(所有宏)— 点击切换到快速",
-
   "systemIncludes.placeholder": "设置系统包含路径 — Phase 6 实现(仅 Windows)。",
 
   "diagnoseProject.noProject": "未选择用于 clangd 诊断的 Unreal 项目。",
@@ -100,6 +96,13 @@
   "proxy.status.logPath": "日志路径:     {value}",
   "proxy.status.backupExists": "备份存在:     {value}",
   "proxy.status.summary": "Clangd LSP Proxy: 启用={enabled}, 激活={active}",
+
+  "init.prompt": "检测到此 UE 工程尚未初始化。是否运行一次性初始化（写入 .clangd 并启用 Clangd Proxy）？",
+  "init.btn.initialize": "初始化",
+  "init.btn.later": "稍后",
+  "init.fail.createProject": "Create Unreal Clangd Project 失败：{0}",
+  "init.fail.enableProxy": "Enable Clangd Proxy 失败：{0}",
+  "init.fail.markWorkspace": "写入 .code-workspace 标记失败：{0}",
 
   "diagnose.noProject": "未找到 .uproject 文件，无法进行诊断。",
   "diagnose.ok": "Clangd 项目诊断完成：状态正常",

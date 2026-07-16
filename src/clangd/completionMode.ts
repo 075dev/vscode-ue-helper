@@ -1,37 +1,38 @@
 /**
- * completionMode —— 切换 clangd 快速/慢速宏补全模式
+ * completionMode —— 统一 slow 模式的 .clangd 重写
  *
- * Fast: 不添加 macroCompletionHelper.h 的 -include，只加载基础补全
- * Slow: 在 .clangd 的 CompileFlags.Add 中添加
- *       `-include <项目>/.vscode/vscodeuehelper/macroCompletionHelper.h`
- *       让 clangd 能补全 UPROPERTY / UFUNCTION / UE_LOG 等 30+ UE 宏
+ * Plan B 重构后 fast/slow 模式已合并（内部统一走 slow 路径，因为 slow 已包含
+ * fast 的全部内容）。此模块保留 CompletionModeController 类仅为承载
+ * rewriteClangd() 工具方法（首次激活、refresh、外部配置变化时调用），
+ * 不再拥有状态栏按钮、toggle 命令或 show/hide 渲染入口。
  *
- * 状态栏显示当前模式，点击切换。切换时自动重写 .clangd 文件。
+ * 兼容性策略：
+ *   - `setClangdOps / setProjectContext / setProjectPath / refresh / dispose`
+ *     接口保留以避免破坏现有调用点（`src/clangd/index.ts`、测试）。
+ *   - `toggle()` 方法删除——使用场景已通过命令面板入口 `toggleCompletionMode`
+ *     删除消失。
+ *   - `ToggleResult` 类型删除——依赖它的测试一并删除。
+ *
+ * 设计背景：
+ *   - `Config.completionMode` 字段保留并被归一化为 'slow'，详见 `src/core/config.ts`。
+ *   - `preparseHeaders` 始终来自 `getPrepareIncludesList('slow', ...)`，
+ *     因 `loadBundledList` 现在忽略 mode 参数。
+ *   - `macroCompletionHelper.h` 仍写入但被 `createCompletionFiles` 跳过生成；
+ *     为兼容第三方扩展/手动修改的 .clangd，`clangdConfig.defaultClangdConfig`
+ *     仍会按原路径注入 /FI。
  *
  * Phase 8 架构：通过 ClangdOps 统一 .clangd 操作，调用方不传 projectPath。
  *
  * 参考 unreal-clangd 的 completionMode 实现。
  */
 
-import * as vscode from 'vscode';
-import { Config } from '@core/config';
-import { t } from '@i18n';
-import { CompletionMode as Mode } from './types';
-import { ClangdOps } from './clangdOps';
+import type { Config } from '@core/config';
+import type { CompletionMode as Mode } from './types';
+import type { ClangdOps } from './clangdOps';
 import { writeClangdConfig } from './clangdConfig';
 import { getMacroCompletionHelperPath } from './completionFiles';
 import { getPrepareIncludesList } from './preparseIncludes';
 import { getUeClangdCompatPath } from './ueClangdCompat';
-
-/** toggle() 返回结果，让调用方知道是否实际写入了 .clangd */
-export interface ToggleResult {
-  /** 切换后的模式 */
-  mode: Mode;
-  /** 是否因缺少上下文或写入失败而跳过写入 */
-  skipped: boolean;
-  /** 可展示给用户/日志的跳过原因 */
-  warning?: RewriteWarning;
-}
 
 /** rewriteClangd() 返回结果，区分写入成功和可恢复跳过原因 */
 export interface RewriteResult {
@@ -52,18 +53,12 @@ export interface CompletionModeProjectContext {
 export type RewriteWarning = 'missingProjectPath' | 'writeFailed';
 
 export class CompletionModeController {
-  private statusBarItem: vscode.StatusBarItem;
   private projectContext: CompletionModeProjectContext | null = null;
   /** [Phase 8] 可选注入 ClangdOps，用于通过统一 API 写入 .clangd */
   private clangdOps: ClangdOps | null = null;
 
-  constructor(private readonly config: Config) {
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      99,
-    );
-    this.statusBarItem.command = 'vscodeUEHelper.toggleCompletionMode';
-  }
+  // [Plan B] 保留 constructor 兼容旧调用点
+  constructor(_config: Config) {}
 
   /**
    * [Phase 8] 注入 ClangdOps（推荐路径）。
@@ -92,47 +87,20 @@ export class CompletionModeController {
     this.setProjectContext({ projectPath });
   }
 
-  show(): void {
-    this.render();
-    this.statusBarItem.show();
-  }
-
-  hide(): void {
-    this.statusBarItem.hide();
-  }
-
-  /**
-   * 切换 fast ↔ slow，并重写 .clangd 文件。
-   *
-   * @returns ToggleResult: { mode, skipped, warning? }
-   *   skipped=true 表示 .clangd 未写入，warning 说明原因
-   */
-  async toggle(): Promise<ToggleResult> {
-    const next: Mode = this.config.completionMode === 'fast' ? 'slow' : 'fast';
-    await vscode.workspace
-      .getConfiguration('vscodeUEHelper')
-      .update('completionMode', next, vscode.ConfigurationTarget.Workspace);
-
-    // 重写 .clangd 以生效
-    const rewriteResult = await this.rewriteClangd(next);
-
-    return {
-      mode: next,
-      skipped: !rewriteResult.written,
-      ...(rewriteResult.warning ? { warning: rewriteResult.warning } : {}),
-    };
-  }
-
   /**
    * 用当前 config 中的模式重写 .clangd。
    * 用于初始激活或 refresh。
+   *
+   * Plan B 重构后：mode 内部强制为 'slow'（fast 等价于 slow）。保留参数仅为兼容
+   * 现有调用点签名；外部传入的值会被忽略。
    *
    * 优先用 ClangdOps 注入路径；如果未注入，回落到旧 projectContext 路径。
    *
    * @returns RewriteResult: written=false 表示缺少 projectPath 或写入失败
    */
-  async rewriteClangd(mode?: Mode): Promise<RewriteResult> {
-    const currentMode = mode ?? this.config.completionMode;
+  async rewriteClangd(_mode?: Mode): Promise<RewriteResult> {
+    // Plan B: 统一 slow，参数忽略
+    const currentMode: Mode = 'slow';
 
     // [Phase 8] 优先路径：通过 ClangdOps + WorkspaceState 派生路径
     if (this.clangdOps) {
@@ -145,8 +113,7 @@ export class CompletionModeController {
 
       const preparseHeaders = await getPrepareIncludesList(currentMode, projectPath);
 
-      const macroHelperPath =
-        currentMode === 'slow' ? ws.macroHelperPath ?? undefined : undefined;
+      const macroHelperPath = ws.macroHelperPath ?? undefined;
       const compatHeaderPath = ws.ueClangdCompatPath ?? undefined;
 
       const result = await this.clangdOps.writeFull({
@@ -166,8 +133,7 @@ export class CompletionModeController {
     }
     const { projectPath, engineRoot } = this.projectContext;
     const preparseHeaders = await getPrepareIncludesList(currentMode, projectPath);
-    const macroHelperPath =
-      currentMode === 'slow' ? getMacroCompletionHelperPath(projectPath) : undefined;
+    const macroHelperPath = getMacroCompletionHelperPath(projectPath);
     try {
       await writeClangdConfig(projectPath, {
         completionMode: currentMode,
@@ -183,22 +149,13 @@ export class CompletionModeController {
     }
   }
 
-  private render(): void {
-    const mode = this.config.completionMode;
-    if (mode === 'fast') {
-      this.statusBarItem.text = '$(zap) UE⚡';
-      this.statusBarItem.tooltip = t('completion.fast');
-    } else {
-      this.statusBarItem.text = '$(clock) UE⌚';
-      this.statusBarItem.tooltip = t('completion.slow');
-    }
-  }
+  /**
+   * @deprecated 状态栏按钮已删除；保留为空实现以兼容可能引用此方法的旧调用点。
+   */
+  refresh(): void {}
 
-  refresh(): void {
-    this.render();
-  }
-
-  dispose(): void {
-    this.statusBarItem.dispose();
-  }
+  /**
+   * @deprecated 状态栏按钮已删除；保留为空实现以兼容可能引用此方法的旧调用点。
+   */
+  dispose(): void {}
 }

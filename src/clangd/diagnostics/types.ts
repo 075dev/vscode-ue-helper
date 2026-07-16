@@ -47,4 +47,6 @@ export type ParsedClangd = {
 export const EXPECTED_COMPILATION_DATABASE = '.vscode/vscodeuehelper';
 export const COMPILE_COMMANDS_FILE = 'compile_commands.json';
 export const REQUIRED_SYSTEM_PREFIXES = ['/X', '/imsvc'] as const;
-export const REQUIRED_FORCED_INCLUDE_SUFFIXES = ['ueclangdcompat.h', 'macrocompletionhelper.h'] as const;
+// Plan B: macroCompletionHelper.h 不再生成（被 addMacroCompletions.h 通过 preparse 直接包含替代），
+//         因此不再作为必需文件出现在强制包含白名单中。
+export const REQUIRED_FORCED_INCLUDE_SUFFIXES = ['ueclangdcompat.h'] as const;

@@ -97,12 +97,6 @@
         "icon": "$(new-folder)"
       },
       {
-        "command": "vscodeUEHelper.toggleCompletionMode",
-        "title": "Toggle Clangd Completion Mode (Fast/Slow)",
-        "title@zh": "切换 Clangd 补全模式(快速/慢速)",
-        "category": "UE Helper"
-      },
-      {
         "command": "vscodeUEHelper.showProjectInfo",
         "title": "Show Project Info",
         "title@zh": "显示项目信息",
@@ -271,12 +265,13 @@
             "slow"
           ],
           "enumDescriptions": [
-            "Curated header list (fast indexing)",
-            "Comprehensive list (slower but complete)"
+            "已废弃:fast 模式已合并到 slow。",
+            "统一 slow 模式(包含完整宏补全)"
           ],
-          "default": "fast",
-          "description": "Clangd macro completion mode. Fast = curated header list, Slow = nearly all macros.",
-          "description@zh": "Clangd 宏补全模式。fast = 精选头文件列表,slow = 几乎所有宏。"
+          "default": "slow",
+          "description": "已废弃:fast/slow 模式已合并,统一使用 slow。设置 'fast' 仍会被归一化为 slow。",
+          "description@zh": "已废弃:fast/slow 模式已合并,统一使用 slow。设置 'fast' 仍会被归一化为 slow。",
+          "deprecationMessage": "fast/slow 模式已合并,此设置不再生效。统一使用 slow 模式。"
         },
         "vscodeUEHelper.autoBackupWorkspace": {
           "type": "boolean",

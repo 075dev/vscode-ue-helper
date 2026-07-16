@@ -99,7 +99,6 @@ export const COMMAND_MAP: Record<string, string> = {
   createProject: 'vscodeUEHelper.createProject',
   generateCompileCommands: 'vscodeUEHelper.generateCompileCommands',
   diagnoseProject: 'vscodeUEHelper.diagnoseProject',
-  toggleCompletionMode: 'vscodeUEHelper.toggleCompletionMode',
   setSystemIncludes: 'vscodeUEHelper.setSystemIncludes',
   enableClangdProxy: 'vscodeUEHelper.enableClangdProxy',
   disableClangdProxy: 'vscodeUEHelper.disableClangdProxy',
@@ -151,7 +150,6 @@ export const BUTTON_GROUPS: ButtonGroup[] = [
     i18nKey: 'panel.group.diagnostics',
     buttons: [
       { id: 'diagnoseProject', i18nKey: 'cmd.diagnoseProject', icon: '✅' },
-      { id: 'toggleCompletionMode', i18nKey: 'cmd.toggleCompletionMode', icon: '🔑' },
       { id: 'setSystemIncludes', i18nKey: 'cmd.setSystemIncludes', icon: '📚' },
     ],
   },
