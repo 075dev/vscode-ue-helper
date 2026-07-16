@@ -86,30 +86,40 @@ export function activateDetection(
   _config: Config,
   logger: Logger,
 ): DetectionHandles {
+  // deferred Promise 模式：先建 Promise 占位赋给 handles.ready，
+  // IIFE 异步检测完成后调用 resolveReady 写入结果。
+  // 避免对 undefined 做双重强转（T4.8 重构）。
+  let resolveReady!: (value: DetectionResult) => void;
+  const ready = new Promise<DetectionResult>((resolve) => {
+    resolveReady = resolve;
+  });
+
   const handles: DetectionHandles = {
     scanner: new UprojectScanner(),
     discovery: new EngineDiscovery({ candidates: [] }),
     vsBuildTools: new VsBuildTools(),
     workspaceContext: new WorkspaceContext(context.workspaceState),
-    ready: undefined as unknown as Promise<DetectionResult>,
+    ready,
   };
 
-    handles.ready = (async (): Promise<DetectionResult> => {
-      try {
-        const workspaceFile = vscode.workspace.workspaceFile;
+  // 启动异步检测 IIFE：通过闭包访问 handles.scanner / handles.discovery
+  void (async (): Promise<void> => {
+    try {
+      const workspaceFile = vscode.workspace.workspaceFile;
 
-        if (!workspaceFile) {
-          logger.error('[detection] no .code-workspace is open');
-          return {
-            projects: [],
-            engines: [],
-            workspaceFile: undefined,
-            workspaceRoot: undefined,
-            workspaceFolders: [],
-            projectFolder: null,
-            engineFolder: null,
-          };
-        }
+      if (!workspaceFile) {
+        logger.error('[detection] no .code-workspace is open');
+        resolveReady({
+          projects: [],
+          engines: [],
+          workspaceFile: undefined,
+          workspaceRoot: undefined,
+          workspaceFolders: [],
+          projectFolder: null,
+          engineFolder: null,
+        });
+        return;
+      }
 
         const workspaceFilePath = workspaceFile.fsPath;
         const workspaceRootDir = path.dirname(workspaceFilePath);
@@ -203,28 +213,28 @@ export function activateDetection(
         const engineVersions = engines.map((e) => e.version).join(', ') || '(none)';
         logger.info(`[detection] projects: ${projectNames} | engines: ${engineVersions}`);
 
-        return {
-          projects,
-          engines,
-          workspaceFile: workspaceFilePath,
-          workspaceRoot: workspaceRootDir,
-          workspaceFolders,
-          projectFolder,
-          engineFolder,
-        };
-      } catch (err) {
-        logger.error('[detection] pre-warm failed:', err);
-        return {
-          projects: [],
-          engines: [],
-          workspaceFile: undefined,
-          workspaceRoot: undefined,
-          workspaceFolders: [],
-          projectFolder: null,
-          engineFolder: null,
-        };
-      }
-    })();
+        resolveReady({
+        projects,
+        engines,
+        workspaceFile: workspaceFilePath,
+        workspaceRoot: workspaceRootDir,
+        workspaceFolders,
+        projectFolder,
+        engineFolder,
+      });
+    } catch (err) {
+      logger.error('[detection] pre-warm failed:', err);
+      resolveReady({
+        projects: [],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: undefined,
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      });
+    }
+  })();
 
   return handles;
 }
