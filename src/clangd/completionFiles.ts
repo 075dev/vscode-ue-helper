@@ -599,17 +599,3 @@ export async function populateAddCompletions(opts: PopulateOptions): Promise<Pop
     found: 0,
   };
 }
-
-/**
- * @deprecated 请使用 createCompletionFiles() 代替。
- */
-export function findUhtGeneratedHeaders(_projectPath: string): string[] {
-  return [];
-}
-
-/**
- * @deprecated 请使用 createCompletionFiles() 代替。
- */
-export function parseExistingIncludes(_filePath: string): string[] {
-  return [];
-}

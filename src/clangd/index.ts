@@ -64,8 +64,6 @@ export {
   FILENAME_MACRO_COMP_HELPER,
   FILENAME_ADD_MACRO_COMPLETIONS,
   populateAddCompletions,
-  findUhtGeneratedHeaders,
-  parseExistingIncludes,
   type PopulateOptions,
   type PopulateResult,
 } from './completionFiles';
