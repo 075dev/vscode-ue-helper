@@ -12,7 +12,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ParsedDiagnostic } from '@build/types';
+import { ParsedDiagnostic } from '@core/types/diagnostic';
 
 let collection: vscode.DiagnosticCollection | undefined;
 

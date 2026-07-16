@@ -16,7 +16,8 @@ import { spawn, ChildProcessWithoutNullStreams, execFile } from 'node:child_proc
 import { promisify } from 'node:util';
 import { MsvcParser } from '@parsers/msvcParser';
 import { UbtParser } from '@parsers/ubtParser';
-import { BuildOptions, BuildResult, ParsedDiagnostic } from './types';
+import { BuildOptions, BuildResult } from './types';
+import type { ParsedDiagnostic } from '@core/types/diagnostic';
 
 const execFileAsync = promisify(execFile);
 

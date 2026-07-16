@@ -11,7 +11,7 @@
  * 解析后的 ParsedDiagnostic 推到 Problems 面板(file:line:col 可点击跳转)。
  */
 
-import { ParsedDiagnostic } from '@build/types';
+import { ParsedDiagnostic } from '@core/types/diagnostic';
 
 // Pattern 1: file(line,col): severity Code: message
 // Group 1: file, 2: line, 3: column (optional), 4: severity, 5: code, 6: message

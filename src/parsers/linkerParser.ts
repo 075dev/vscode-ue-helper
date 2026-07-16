@@ -10,7 +10,7 @@
  * specific LLD output) and we want to be more permissive.
  */
 
-import { ParsedDiagnostic } from '@build/types';
+import { ParsedDiagnostic } from '@core/types/diagnostic';
 
 const LINKER_ERR_RE = /^LNK(\d+):\s*(.*)$/;
 const UNDEFINED_REF_RE = /undefined reference to [`']?([^\s'`]+)[`']?/;

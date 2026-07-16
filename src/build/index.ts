@@ -28,7 +28,8 @@ export {
 } from './ubt';
 export { launchEditor, type LaunchOptions } from './launchEditor';
 export { triggerLiveCoding, isLiveCodingSupported } from './liveCoding';
-export type { UBTArgs, UBTCommand, BuildResult, ParsedDiagnostic, BuildOptions } from './types';
+export type { UBTArgs, UBTCommand, BuildResult, BuildOptions } from './types';
+export type { ParsedDiagnostic } from '@core/types/diagnostic';
 
 export interface BuildHandles {
   taskProvider: UBTTaskProvider;

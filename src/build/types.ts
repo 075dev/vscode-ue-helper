@@ -1,8 +1,12 @@
 /**
  * build 层共享类型定义
+ *
+ * ParsedDiagnostic 已抽离到 @core/types/diagnostic（Wave 4 T4.2），
+ * parser 层不再依赖本文件 —— 这里只保留 build 模块自身关心的类型。
  */
 
-import { BuildConfiguration, BuildPlatform } from '@core/config';
+import type { BuildConfiguration, BuildPlatform } from '@core/config';
+import type { ParsedDiagnostic } from '@core/types/diagnostic';
 
 export interface UBTArgs {
   /** .uproject 绝对路径 */
@@ -37,17 +41,6 @@ export interface BuildResult {
   output: string[];
   /** Parsed MSVC diagnostics, ready to push to the Problems panel. */
   diagnostics: ParsedDiagnostic[];
-}
-
-export interface ParsedDiagnostic {
-  file: string;
-  line: number;
-  column?: number;
-  severity: 'error' | 'warning' | 'note';
-  code: string;
-  message: string;
-  /** Raw line for fallback display. */
-  raw: string;
 }
 
 export interface BuildOptions {
