@@ -117,26 +117,24 @@ describe('executeEnableClangdProxy', () => {
     expect(clangd.proxyManager.enable).not.toHaveBeenCalled();
   });
 
-  it('Given 默认 disabled When 首次启用 Then 先写 workspace enabled 再执行代理设置', async () => {
-    // Given
+  it('Given 默认 disabled When 首次启用 Then 不再写 enabled toggle，直接调 proxyManager.enable', async () => {
+    // Given: F-fix 后解耦 Config.clangdProxyEnabled。
+    // 用户点 "启用 proxy" 命令不再要求先在 settings.json 写 clangdProxy.enabled=true。
     const clangd = createClangdHandlesMock({ config });
-    clangd.proxyManager.enable.mockImplementation(() => {
-      expect(config.clangdProxyEnabled).toBe(true);
-      return Promise.resolve();
-    });
 
     // When
     await executeEnableClangdProxy(config, logger, clangd as never);
 
     // Then
     expect(clangd.proxyManager.enable).toHaveBeenCalledOnce();
+    // 不再触碰 clangdProxy.enabled toggle —— 这是用户配置，不该被命令悄悄改写
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect((config.update as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('clangdProxy.enabled', true);
+    expect((config.update as unknown as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('proxy enabled successfully'));
   });
 
-  it('Given proxyManager 启用失败 When 首次启用 Then 回滚 workspace enabled 并显示错误', async () => {
-    // Given
+  it('Given proxyManager 启用失败 When 首次启用 Then 弹错误，不回滚 enabled toggle', async () => {
+    // Given: F-fix 后失败路径不回滚 clangdProxy.enabled（因为我们从不主动改它）。
     const clangd = createClangdHandlesMock({ config });
     clangd.proxyManager.enable = vi.fn<[], Promise<void>>(() => Promise.reject(new Error('mock failure')));
 
@@ -145,11 +143,7 @@ describe('executeEnableClangdProxy', () => {
 
     // Then
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect((config.update as unknown as ReturnType<typeof vi.fn>).mock.calls).toEqual([
-      ['clangdProxy.enabled', true],
-      ['clangdProxy.enabled', false],
-    ]);
-    expect(config.clangdProxyEnabled).toBe(false);
+    expect((config.update as unknown as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
     expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('failed'), expect.any(Error));
     expect((vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
   });

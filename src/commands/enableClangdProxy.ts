@@ -66,6 +66,9 @@ export async function executeEnableClangdProxy(
   clangd: ClangdHandles,
   opts?: { suppressReloadPrompt?: boolean },
 ): Promise<void> {
+  // config 当前未使用（F-fix 后解耦）—— 保留签名是因为它是 commands/index.ts
+  // 公开注册表的契约；enable 命令未来可能需要它读 enable 后的状态 / 推送给 MCP 工具。
+  void config;
   logger.info('[enableClangdProxy] invoked');
 
   const { proxyManager } = clangd;
@@ -86,21 +89,16 @@ export async function executeEnableClangdProxy(
     return;
   }
 
-  // 首次启用：写 enabled=true + 备份并写入 launcher 设置
+  // 首次启用：直接走 enable，不依赖 clangdProxy.enabled 设置。
+  // 设计：用户点 "启用 proxy" 按钮 → 立即生效；enable 内部抛错则 catch 走错误路径。
+  // 取消原 "config.update('clangdProxy.enabled', true) 先于 enable" 的耦合——
+  // 该耦合在 B+C 修复后仍受 VS Code ConfigurationTarget.Workspace scope 解析影响
+  // （多 folder / 无 focus 文件夹时静默不写盘），导致 enable 看到 enabled=false 跳过。
   try {
-    // proxyManager.enable() 会读取 Config.enabled；首次启用需先写 workspace 配置。
-    await config.update('clangdProxy.enabled', true);
     await proxyManager.enable();
     logger.info('[enableClangdProxy] proxy enabled successfully');
   } catch (err) {
-    // 仅 enable 本身失败才回滚 enabled=false
-    // （proxyManager.enable 内部已事务回滚 clangd 配置，不会留半截）
     logger.error('[enableClangdProxy] failed:', err);
-    try {
-      await config.update('clangdProxy.enabled', false);
-    } catch (rollbackErr) {
-      logger.error('[enableClangdProxy] rollback failed:', rollbackErr);
-    }
     void vscode.window.showErrorMessage(t('proxy.enable.failed'));
     return;
   }

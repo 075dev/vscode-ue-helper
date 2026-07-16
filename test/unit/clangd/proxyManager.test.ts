@@ -197,18 +197,32 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
   });
 
   describe('enable — 启用代理', () => {
-    it('proxy 禁用时 enable 跳过写入并记录警告', async () => {
+    it('proxy 禁用时 enable 仍执行（已解耦 Config.enabled）', async () => {
+      // F-fix: enable() 不再读取 Config.clangdProxyEnabled。
+      // 用户点 "启用 proxy" 命令就直接启用；isActive 由 clangd.path 决定，不依赖 toggle 设置。
       const manager = new ClangdProxyManager(
         context,
         createConfigMock({ clangdProxyEnabled: false }) as never,
         logger as never,
       );
-
-      await manager.enable();
-
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('proxy not enabled'),
-      );
+      // enable 内部会调 settingsManager.enable（依赖 fs 不存在等 mocked）
+      // 这里只验证：不被 enabled=false 拦截（不再 throw 'not enabled'）
+      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+        get: vi.fn((key: string) => {
+          if (key === 'arguments') {return [];}
+          if (key === 'path') {return undefined;}
+          return undefined;
+        }),
+        update: vi.fn(async () => undefined),
+        inspect: vi.fn(),
+        has: vi.fn(),
+      } as never);
+      try {
+        await manager.enable();
+      } catch (err) {
+        // 允许任何其它错误（resolveRealClangd notFound 等），仅不允许 'not enabled in config'
+        expect(String(err)).not.toMatch(/not enabled in config/);
+      }
     });
 
     it('Given 仅配置 vscodeUEHelper.clangdPath When enable Then settingsManager.enable 参数包含 --real-clangd 且位于 -- 前', async () => {

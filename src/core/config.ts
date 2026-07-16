@@ -63,12 +63,36 @@ const DEFAULT_KEEPALIVE_MAX = 20;
 /** Clangd Proxy keepaliveTtlSec 安全默认值 */
 const DEFAULT_KEEPALIVE_TTL_SEC = 900;
 export class Config {
-  /** 底层 VS Code 配置对象，构造时一次性获取，VS Code 会自动跟踪变化 */
-  private readonly root: vscode.WorkspaceConfiguration;
+  /** 底层 VS Code 配置对象。每次 update 后必须重新 getConfiguration(),
+   *  否则本进程已拿到的 this.root 仍持有旧的 in-memory 快照，
+   *  紧接着的 getter 会读到过期值（VS Code 不主动通知同进程内的对象失效）。 */
+  private root: vscode.WorkspaceConfiguration;
 
   constructor() {
     // 这里的 'vscodeUEHelper' 必须和 package.json 里 contributes.configuration.title 对应
     this.root = vscode.workspace.getConfiguration('vscodeUEHelper');
+  }
+
+  /** 重新抓取最新 WorkspaceConfiguration —— 每次写盘后调用，让本进程 getter 拿到新值。 */
+  private refreshRoot(): void {
+    this.root = vscode.workspace.getConfiguration('vscodeUEHelper');
+  }
+
+  /**
+   * 调试辅助：返回 clangdProxy.enabled 在所有 scope 下的解析结果。
+   * 帮助排查 "Workspace 写了但读到 false" 这类静默失败。
+   */
+  inspectProxyEnabled(): { key: string; value: unknown; defaultValue: unknown } {
+    const inspected = this.root.inspect<boolean>('clangdProxy.enabled');
+    return {
+      key: 'clangdProxy.enabled',
+      value: inspected?.globalValue
+        ?? inspected?.workspaceValue
+        ?? inspected?.workspaceFolderValue
+        ?? inspected?.defaultValue
+        ?? undefined,
+      defaultValue: inspected?.defaultValue,
+    };
   }
 
   // ===== Getters（每个对应 package.json 里的一个设置） =====
@@ -209,6 +233,26 @@ export class Config {
   get clangdHeaderWatcherEnabled(): boolean {
     return this.root.get<boolean>('clangdHeaderWatcher.enabled') ?? true;
   }
+
+  // ===== Plan Add 收束：自定义 Add Flags（控制面板勾选）=====
+
+  /**
+   * 用户在控制面板「自定义 Add Flags」tab 中勾选的 flag id 列表。
+   *
+   * - 写入 .clangd 的 `CompileFlags.Add` 由 flagGlossary.resolveFlags + ClangdOps.applyAddFlags 完成。
+   * - 默认空数组 —— 「系统零默认注入」。defaultClangdConfig 永远输出 `Add: []`。
+   * - 该值与 setSystemIncludes 命令共享：命令运行后会自动加入 `system-include-windows` id（用户决策"总是同步"）。
+   *
+   * ⚠️ MSVC warning flag **不**通过此列表控制 —— 也不再有 baseline。
+   *   用户需要可在面板里手动选 / 或在 UI 范围外的源码里以 raw 字面注入。
+   */
+  get userAddFlags(): readonly string[] {
+    const raw = this.root.get<string[]>('clangd.userAddFlags');
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.filter((v): v is string => typeof v === 'string');
+  }
 // ===== 写入 / 监听 =====
 
   /**
@@ -227,6 +271,29 @@ export class Config {
     target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace,
   ): Promise<void> {
     await this.root.update(key, value, target);
+    // VS Code 不主动通知同进程内的 WorkspaceConfiguration 实例失效——
+    // 必须重新 getConfiguration 才能读到刚写入的值。
+    // 否则调用方常见的 "await config.update(); 立刻读 config.xxx" 会拿到旧值。
+    this.refreshRoot();
+    // 调试：确认刷新后能读到新值；典型误用包括 target=Workspace 但 workspaceState
+    // 未初始化（多 folder / 无 focus 文件夹 / 受限 workspace）时 update 静默失败。
+    const inspected = this.root.inspect(key as never);
+    if (inspected) {
+      const resolvedAfter =
+        inspected.workspaceFolderValue
+        ?? inspected.workspaceValue
+        ?? inspected.globalValue
+        ?? inspected.defaultValue;
+      if (resolvedAfter !== value) {
+        // 不抛错 —— 上层调用方已经 await 通了；但提示一下避免再踩坑。
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[Config.update] After update('${key}', ${JSON.stringify(value)}, ${target}), ` +
+          `inspect says resolved value is ${JSON.stringify(resolvedAfter)}. ` +
+          `Possible causes: target scope mismatch, no folder focused, or workspace state not initialized.`,
+        );
+      }
+    }
   }
 
   /**

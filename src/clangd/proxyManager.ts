@@ -142,14 +142,12 @@ export class ClangdProxyManager {
   /**
    * 启用 proxy：备份原始 clangd 设置并写入 launcher 设置。
    *
-   * 从 Config 读取 proxy 参数，从当前 clangd.arguments 读取原始参数。
-   * 如果配置中未启用 proxy，仅记录警告并跳过。
+   * 不再检查 Config.clangdProxyEnabled —— 这是 plumbing 层，应该听调用方的；
+   * 调用方（enableClangdProxy command / 自动启用逻辑）已自行决定是否要启用。
+   * 历史耦合：旧版 require 用户先 config.update('clangdProxy.enabled', true) 才能 enable，
+   * 但 B+C 修复后也只在某些 VS Code 实例下生效（target 解析问题），遂完全解耦。
    */
   async enable(): Promise<void> {
-    if (!this.enabled) {
-      this.logger.warn('[proxyManager] proxy not enabled in config, skipping enable');
-      return;
-    }
 
     // 读取当前 clangd 参数（这些将作为 -- 之后的真实 clangd 参数传递）
     const clangdConfig = vscode.workspace.getConfiguration('clangd');
