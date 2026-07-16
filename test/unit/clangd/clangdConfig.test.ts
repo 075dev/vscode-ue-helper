@@ -82,13 +82,20 @@ describe('defaultClangdConfig (模板风格)', () => {
     expect(add).toContain('/FI/path/to/macroCompletionHelper.h');
   });
 
-  it('does NOT include /FI macroHelperPath in fast mode', () => {
-    const cfg = defaultClangdConfig({
+  it('Plan B: 始终包含 /FI macroHelperPath（无论 mode 参数）', () => {
+    // Plan B 重构后：fast/slow 模式已合并，macroHelperPath 总是被注入。
+    const cfgFast = defaultClangdConfig({
       completionMode: 'fast',
       macroHelperPath: '/path/to/macroCompletionHelper.h',
     });
-    const add = cfg.CompileFlags?.Add ?? [];
-    expect(add).not.toContain('/FI/path/to/macroCompletionHelper.h');
+    const cfgSlow = defaultClangdConfig({
+      completionMode: 'slow',
+      macroHelperPath: '/path/to/macroCompletionHelper.h',
+    });
+    const addFast = cfgFast.CompileFlags?.Add ?? [];
+    const addSlow = cfgSlow.CompileFlags?.Add ?? [];
+    expect(addFast).toContain('/FI/path/to/macroCompletionHelper.h');
+    expect(addSlow).toContain('/FI/path/to/macroCompletionHelper.h');
   });
 
   it('sets Compiler when compilerPath is provided', () => {
@@ -218,10 +225,15 @@ describe('defaultClangdConfig (preparseHeaders with EngineRoot resolution)', () 
     const unresolved = add.filter((f) => f.includes('$(EngineRoot)'));
     expect(unresolved).toHaveLength(0);
 
-    // 应包含解析后的 -include 标志
-    expect(add).toContain('-include');
-    expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
-    expect(add).toContain('E:/UE_5.8/Source/Runtime/Engine/Public/EngineSharedPCH.h');
+    // 应包含解析后的强制 include 标志（Windows 用 /FI，非 Windows 用 -include）
+    if (process.platform === 'win32') {
+      expect(add).toContain('/FIE:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+      expect(add).toContain('/FIE:/UE_5.8/Source/Runtime/Engine/Public/EngineSharedPCH.h');
+    } else {
+      expect(add).toContain('-include');
+      expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+      expect(add).toContain('E:/UE_5.8/Source/Runtime/Engine/Public/EngineSharedPCH.h');
+    }
   });
 
   it('engineRoot 缺失时含 $(EngineRoot) 的 header 被过滤，绝对路径保留', () => {
@@ -237,7 +249,12 @@ describe('defaultClangdConfig (preparseHeaders with EngineRoot resolution)', () 
     expect(add).not.toContain('$(EngineRoot)');
 
     // 不含占位符的绝对路径 header 应保留
-    expect(add).toContain('/absolute/external/header.h');
+    // Windows 下输出 /FI<path> 单 token，非 Windows 下输出 -include <path> 两 token
+    if (process.platform === 'win32') {
+      expect(add).toContain('/FI/absolute/external/header.h');
+    } else {
+      expect(add).toContain('/absolute/external/header.h');
+    }
   });
 
   it('Diagnostics.MissingIncludes 设为 None', () => {
@@ -262,7 +279,9 @@ describe('defaultClangdConfig (preparseHeaders with EngineRoot resolution)', () 
     const sysIdx = add.findIndex((f) => f === '/X');
     const stdIdx = add.findIndex((f) => f.includes('std:c++20'));
     const macroIdx = add.findIndex((f) => f === '/FI/path/to/macroCompletionHelper.h');
-    const preparseIdx = add.findIndex((f) => f === '-include');
+    const preparseIdx = process.platform === 'win32'
+      ? add.findIndex((f) => f === '/FIE:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h')
+      : add.findIndex((f) => f === '-include');
     // 用 -mwaitpkg 作为 MSVC 兼容性 flag 段的起始 marker（/TP 已移除）
     const msvcIdx = add.findIndex((f) => f === '-mwaitpkg');
 
@@ -406,9 +425,13 @@ describe('defaultClangdConfig (adversarial)', () => {
     const cf = doc.CompileFlags as Record<string, unknown>;
     const add = cf.Add as string[];
 
-    // 往返后 -include 标志仍存在
-    expect(add).toContain('-include');
-    expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+    // 往返后强制 include 标志仍存在（Windows 下为 /FI<path> 单 token）
+    if (process.platform === 'win32') {
+      expect(add).toContain('/FIE:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+    } else {
+      expect(add).toContain('-include');
+      expect(add).toContain('E:/UE_5.8/Source/Runtime/Core/Public/CoreSharedPCH.h');
+    }
 
     // 往返后 MissingIncludes 仍存在
     const diag = doc.Diagnostics as Record<string, string>;

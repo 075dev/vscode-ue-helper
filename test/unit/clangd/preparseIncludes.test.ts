@@ -77,14 +77,20 @@ describe('resolvePreparseHeaders', () => {
 });
 
 describe('toIncludeFlags', () => {
-  it('将 header 列表转换为 -include 标志对', () => {
+  it('将 header 列表转换为强制 include 标志（按平台区分）', () => {
     const headers = ['/path/to/a.h', '/path/to/b.h'];
     const flags = toIncludeFlags(headers);
 
-    expect(flags).toEqual([
-      '-include', '/path/to/a.h',
-      '-include', '/path/to/b.h',
-    ]);
+    if (process.platform === 'win32') {
+      // Windows / clang-cl: MSVC 风格 /FI<path> 单 token，避免与 /Fo 多输入校验冲突
+      expect(flags).toEqual(['/FI/path/to/a.h', '/FI/path/to/b.h']);
+    } else {
+      // 非 Windows: GCC 风格 -include <path>
+      expect(flags).toEqual([
+        '-include', '/path/to/a.h',
+        '-include', '/path/to/b.h',
+      ]);
+    }
   });
 
   it('空列表返回空数组', () => {
@@ -152,6 +158,7 @@ describe('resolvePreparseHeaders (adversarial)', () => {
 
 describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
   it('不传 perfSession 仍可正常工作（向后兼容）', async () => {
+    // Plan B 重构后 mode 参数内部被忽略，统一读取 ue5-slow.json。
     // 不传第三个参数 → 不抛错，返回数组
     const result = await getPrepareIncludesList('fast', '/nonexistent/path');
     // 加载 bundled 列表（即使 projectPath 无效，base 列表仍存在）

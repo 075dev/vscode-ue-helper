@@ -21,18 +21,22 @@ import { perfLog } from './perfLog';
 import { CompletionMode, PrepareIncludesList } from './types';
 
 /**
- * Get the bundled preparse list for the given mode. Reads from
+ * Get the bundled preparse list. Reads from
  * resources/preparse-includes at runtime — esbuild copies these
  * because of `"files": ["resources/**"]` in package.json.
+ *
+ * Plan B 重构后 fast/slow 模式已合并：两个 JSON 内容相同，统一读取 ue5-slow.json。
+ * 参数 `_mode` 保留仅为兼容现有调用点签名（不破坏 getPrepareIncludesList
+ * 的接口契约）；实际始终返回 slow 列表（即全部 SharedPCH 头）。
  */
-export async function loadBundledList(mode: CompletionMode): Promise<string[]> {
+export async function loadBundledList(_mode: CompletionMode): Promise<string[]> {
   const resourcePath = path.join(
     __dirname,
     '..',
     '..',
     'resources',
     'preparse-includes',
-    `ue5-${mode}.json`,
+    'ue5-slow.json',
   );
   try {
     const text = await fs.readFile(resourcePath, 'utf-8');
@@ -57,6 +61,9 @@ export async function loadBundledList(mode: CompletionMode): Promise<string[]> {
  * 警告 `drv_out_file_argument_with_multiple_sources`；同时 UE 的
  * `UE_DEFINE_GAMEPLAY_TAG` 宏在被强制包含的 .h 中展开时 `__FILE__` 指向
  * `addCompletions.h`，触发 `static_assert(HasFileExtension(__FILE__), "must be .cpp")`。
+ *
+ * 修复：`toIncludeFlags` 在 Windows 下改用 `/FI` 而非 `-include`，
+ * MSVC 原生强制 include 不被 driver 视为 source，避免与 `/Fo` 多输入校验冲突。
  *
  * Phase 8：[可选] 接受 workspace 注入以使用 workspace.clangdHelperDir 派生路径。
  *           不传时降级到 projectPath + path.dirname（向后兼容）。
@@ -147,13 +154,26 @@ export function resolvePreparseHeaders(
 }
 
 /**
- * Render a list of headers as a `compile_commands.json` patch entry.
- * Each header becomes a `-include <header>` flag prepended to every
- * compile command. This is the mechanism clangd understands.
+ * Render a list of headers as clangd `.clangd` Add flags.
+ * Each header becomes a forced-include flag prepended to every compile command.
  *
- * Returns an array of strings (one per header) ready to splice.
+ * Returns an array of strings (one per header on Windows) ready to splice.
+ *
+ * Windows / clang-cl: use MSVC-style `/FI<path>` (single token), because:
+ *   - `-include <path>` is GCC-style and makes clang-cl treat the header as
+ *     a second input source, conflicting with `/Fo` when the entry's rsp
+ *     already specifies a single `.cpp` input. Symptom:
+ *     "Cannot specify '/Fo…obj' when compiling multiple source files".
+ *   - `/FI` is the MSVC-native forced-include flag and is intentionally
+ *     compatible with `/Fo` (designed to be a header, not a source).
+ *
+ * Non-Windows: keep `-include <path>` (GCC-style, clang-native).
  */
 export function toIncludeFlags(headers: string[]): string[] {
+  const isWindows = process.platform === 'win32';
+  if (isWindows) {
+    return headers.map((h) => `/FI${h}`);
+  }
   const flags: string[] = [];
   for (const header of headers) {
     flags.push(`-include`, header);
