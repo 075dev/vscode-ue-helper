@@ -180,9 +180,9 @@ async function walkDir(
 ): Promise<void> {
   let entries: import('node:fs').Dirent[];
   try {
-    // Buffer encoding: 'utf-8'（默认）→ Dirent<string>；空数组 Dirent[] 兜底
-    const result = await fs.readdir(dir, { withFileTypes: true });
-    entries = result as unknown as import('node:fs').Dirent[];
+    // withFileTypes: true → Promise<Dirent[]>（@types/node v20 overload: ObjectEncodingOptions & { withFileTypes: true }）
+    // name 类型为 string（默认 utf-8 编码），后续仅作路径拼接使用
+    entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
     return;
   }
