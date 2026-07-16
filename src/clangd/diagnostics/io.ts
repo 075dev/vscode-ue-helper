@@ -51,7 +51,8 @@ export function stringArray(value: unknown): readonly string[] {
 // ---- YAML 解析 ----
 
 export function parseClangdYaml(text: string): ParsedClangd {
-  const root = yaml.parse(text) as unknown;
+  // yaml.parse 返回 any，用类型注解窄化到 unknown，下游走 isRecord 类型守卫
+  const root: unknown = yaml.parse(text);
   if (!isRecord(root)) {
     return { addFlags: [] };
   }
@@ -88,7 +89,8 @@ export async function parseCompileCommands(
   jsonPath: string,
 ): Promise<readonly CompileCommandsEntry[] | undefined> {
   const text = await fs.readFile(jsonPath, 'utf-8');
-  const parsed = JSON.parse(text) as unknown;
+  // JSON.parse 返回 any，用类型注解窄化到 unknown，下游走 Array.isArray + isRecord 类型守卫
+  const parsed: unknown = JSON.parse(text);
   if (!Array.isArray(parsed)) {
     return undefined;
   }
