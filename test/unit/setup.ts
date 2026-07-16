@@ -90,6 +90,9 @@ vi.mock('vscode', () => ({
     TaskScope: { Workspace: 1, Global: 2 },
     TaskRevealKind: { Always: 1, Never: 0, Silent: 2 },
   },
+  // [T4.5 task 子模块] Shell quoting 引用风格 mock — 必须在 top-level (vscode.ShellQuoting)，
+  // 真实 vscode API 把 ShellQuoting 作为顶层 enum，不能放进 tasks 命名空间。
+  ShellQuoting: { Strong: 'strong', Weak: 'weak' },
   Diagnostic: class {
     range: unknown;
     message: string;
