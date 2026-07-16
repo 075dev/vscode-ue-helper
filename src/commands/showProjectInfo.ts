@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import { Config } from '@core/config';
 import { Logger } from '@core/logger';
-import { detectHost } from '@mcp/lifecycle';
+import { detectHost } from '@core/runtime-detect';
 import type { DetectionHandles } from '@detection';
 import { checkUprojectAssociation } from '@detection/uprojectAssociation';
 import { t } from '@i18n';

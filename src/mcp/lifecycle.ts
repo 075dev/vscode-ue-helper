@@ -5,20 +5,26 @@
  * 我们用它作为信号决定是否启动 MCP 服务器。
  * 普通 VS Code 没有这些 env var,保持静默。
  *
- * detectHost() 返回宿主信息(类型 + 标志位)。
+ * `detectHost()` 已抽离到 `@core/runtime-detect`（T4.3）,
+ * 这里通过 re-export 保持向后兼容 —— 内部模块继续用 `@mcp/lifecycle`
+ * 不会破坏,外部新代码应直接 import `@core/runtime-detect`。
  */
+
+import { detectHost } from '@core/runtime-detect';
 
 export type MCPMode = 'auto' | 'always' | 'never';
 
 export function shouldStartMCP(mode: MCPMode): boolean {
-  if (mode === 'always') {return true;}
-  if (mode === 'never') {return false;}
+  if (mode === 'always') {
+    return true;
+  }
+  if (mode === 'never') {
+    return false;
+  }
   // 'auto' mode — start iff we can detect a Cursor / Claude Code host.
   return detectHost() !== null;
 }
 
-export function detectHost(): 'cursor' | 'claude-code' | null {
-  if (process.env.CURSOR_TRACE_ID || process.env.CURSOR_USER_DATA_DIR) {return 'cursor';}
-  if (process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SSE_PORT) {return 'claude-code';}
-  return null;
-}
+// 向后兼容 re-export —— 老代码继续 `import { detectHost } from '@mcp/lifecycle'` 仍可用
+export { detectHost };
+export type { RuntimeHost } from '@core/runtime-detect';
