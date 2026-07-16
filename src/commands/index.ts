@@ -42,58 +42,42 @@ export function activateCommands(
   if (clangd?.completionMode && typeof clangd.completionMode.setConfig === 'function') {
     clangd.completionMode.setConfig(config);
   }
-  registerCommand(context, 'vscodeUEHelper.showProjectInfo', () =>
-    showProjectInfo(config, logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.build', () =>
-    executeBuild('build', config, logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.rebuild', () =>
-    executeBuild('rebuild', config, logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.clean', () =>
-    executeBuild('clean', config, logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.launchEditor', () =>
-    executeLaunchEditor(config, logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.liveCoding', () =>
-    executeLiveCoding(config, logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.generateCompileCommands', () =>
+  // 用本地计数器替代硬编码 20,避免后续增删命令时日志与实际不一致
+  let commandCount = 0;
+  const track = (label: string, fn: (...args: unknown[]) => unknown) => {
+    commandCount += 1;
+    registerCommand(context, label, fn);
+  };
+  track('vscodeUEHelper.showProjectInfo', () => showProjectInfo(config, logger, detection));
+  track('vscodeUEHelper.build', () => executeBuild('build', config, logger, detection));
+  track('vscodeUEHelper.rebuild', () => executeBuild('rebuild', config, logger, detection));
+  track('vscodeUEHelper.clean', () => executeBuild('clean', config, logger, detection));
+  track('vscodeUEHelper.launchEditor', () => executeLaunchEditor(config, logger, detection));
+  track('vscodeUEHelper.liveCoding', () => executeLiveCoding(config, logger, detection));
+  track('vscodeUEHelper.generateCompileCommands', () =>
     executeGenerateCompileCommands(config, logger, detection),
   );
-  registerCommand(context, 'vscodeUEHelper.diagnoseProject', () =>
-    executeDiagnoseProject(logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.createProject', () =>
+  track('vscodeUEHelper.diagnoseProject', () => executeDiagnoseProject(logger, detection));
+  track('vscodeUEHelper.createProject', () =>
     executeCreateProject(config, logger, detection, clangdOps),
   );
-  registerCommand(context, 'vscodeUEHelper.installRules', () =>
-    executeInstallRules(logger, detection),
-  );
-  registerCommand(context, 'vscodeUEHelper.uninstall', () => executeUninstall(logger, detection));
-  registerCommand(context, 'vscodeUEHelper.setSystemIncludes', () =>
+  track('vscodeUEHelper.installRules', () => executeInstallRules(logger, detection));
+  track('vscodeUEHelper.uninstall', () => executeUninstall(logger, detection));
+  track('vscodeUEHelper.setSystemIncludes', () =>
     executeSetSystemIncludes(config, logger, detection, workspace, clangdOps),
   );
-  registerCommand(context, 'vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile());
-  registerCommand(context, 'vscodeUEHelper.selectConfig', () =>
-    executeSelectConfig(config, logger),
-  );
-  registerCommand(context, 'vscodeUEHelper.selectTarget', () =>
-    executeSelectTarget(config, logger),
-  );
-  registerCommand(context, 'vscodeUEHelper.enableClangdProxy', () =>
+  track('vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile());
+  track('vscodeUEHelper.selectConfig', () => executeSelectConfig(config, logger));
+  track('vscodeUEHelper.selectTarget', () => executeSelectTarget(config, logger));
+  track('vscodeUEHelper.enableClangdProxy', () =>
     executeEnableClangdProxy(config, logger, clangd),
   );
-  registerCommand(context, 'vscodeUEHelper.disableClangdProxy', () =>
+  track('vscodeUEHelper.disableClangdProxy', () =>
     executeDisableClangdProxy(config, logger, clangd),
   );
-  registerCommand(context, 'vscodeUEHelper.showClangdProxyStatus', () =>
+  track('vscodeUEHelper.showClangdProxyStatus', () =>
     executeShowClangdProxyStatus(config, logger, clangd),
   );
-  registerCommand(context, 'vscodeUEHelper.showControlPanel', () =>
-    executeShowControlPanel(),
-  );
-  logger.info(`[commands] registered 20 commands`);
+  track('vscodeUEHelper.showControlPanel', () => executeShowControlPanel());
+  logger.info(`[commands] registered ${commandCount} commands`);
 }
