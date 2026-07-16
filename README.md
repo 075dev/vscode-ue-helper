@@ -1,21 +1,22 @@
 # VSCodeUEHelper
 
-> All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, and optional MCP AI agent integration.
+> All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, optional MCP AI agent integration, and an embedded clangd LSP proxy with localization support.
 
 ## Status
 
-✅ **All 7 phases complete.** Ready for development use. Phase 7 polish (marketplace icon, banner) still pending.
+✅ **All 8 phases complete.** Ready for development use.
 
 | Phase | Status | Feature |
 |---|---|---|
 | 0 | ✅ | Project skeleton, command palette, configuration schema |
 | 1 | ✅ | `.uproject` scanning, cross-platform engine discovery (Win/Mac/Linux), VS Build Tools detection |
 | 2 | ✅ | UBT Build/Rebuild/Clean, Live Coding, MSVC parsing, Problems panel, Task provider |
-| 3 | ✅ | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes (fast/slow), workspace backup |
-| 4 | ✅ | Status bar, QuickPick pickers, all 19 commands |
+| 3 | ✅ | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes, workspace backup |
+| 4 | ✅ | Status bar, QuickPick pickers, **19 commands** |
 | 5 | ✅ | MCP server (auto-enabled in Cursor / Claude Code), AI agent rules |
-| 6 | ✅ | Unit tests, 18 passing across 4 files |
-| 7 | ⏳ | Marketplace icon/banner pending; .vsce ready |
+| 6 | ✅ | Unit tests (Vitest, 675 tests / 57 files), CI-ready scripts |
+| 7 | ✅ | clangd LSP proxy + control panel webview + preparse cache, perf instrumentation |
+| 8 | ✅ | `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构、Phase 7/8 收束 |
 
 ## Inspiration
 
@@ -44,22 +45,28 @@ The code is written from scratch to avoid version-coupling, but the patterns are
   - Env var `UE_ROOT` override
 - VS Build Tools detection via `vswhere.exe` (Windows)
 - Persistent selection (Memento) — pick once, remembered next time
+- `WorkspaceState` 单一真相源：[Phase 8] 替代直接读 `detection` 字段
 
 ### Clangd IntelliSense
-- Auto-generates `compile_commands.json` via UBT `-ProjectFiles` mode
-- Writes `.clangd` to suppress MSVC false positives (`builtin-macro-redefinition`, `unknown-warning-option`, etc.)
-- Preparse-includes for UE macros:
-  - **Fast** mode (`UE⚡`): curated 18-header list — fast indexing
-  - **Slow** mode (`UE⌚`): comprehensive 49-header list — complete coverage
-- UE macro parameter completion (`UCLASS`, `UPROPERTY`, `UFUNCTION`, `USTRUCT`, `UENUM`) via managed `addMacroCompletions.h` — user code is preserved across refreshes
+- Auto-generates `compile_commands.json` via UBT `-ProjectFiles` mode（含 fallback DB）
+- Writes `.clangd` to suppress MSVC false positives + 注入 Intermediate/UHT 头目录
+- Preparse-includes for UE macros（**slow 模式统一** — fast/slow 已合并为单一 slow,49 头文件列表）
+- UE macro parameter completion (`UCLASS` / `UPROPERTY` / `UFUNCTION` / `USTRUCT` / `UENUM`) via managed `addMacroCompletions.h` — user code is preserved across refreshes
 - Workspace backup: `.code-workspace` survives UBT's `-ProjectFiles` refresh
-- `Diagnose Clangd Project` command: scans `.clangd`, `compile_commands.json`, preparse headers, clangd binary, addCompletions / addMacroCompletions files and writes a structured report (pass/warn/fail) to the Output channel — first stop when clangd indexing is broken
+- **`ClangdOps` 统一 .clangd 操作 API**：[Phase 8] 22 callers 用 `mutate`/`setAddFlag`/`replaceAddBlock`
+- `Diagnose Clangd Project` command: scans `.clangd` / `compile_commands.json` / preparse / clangd binary / addCompletions + addMacroCompletions, 输出结构化 pass/warn/fail 报告
+- **clangd LSP 代理**（独立进程,stdin/stdout JSON-RPC）：didClose keepalive、汉化（hover 词典）,`proxy-launcher.bat/sh` 自动生成
 
 ### MCP AI Agent Integration
 - Auto-starts in Cursor / Claude Code (detected via env vars)
 - 6 tools exposed: `ue_build`, `ue_launch_editor`, `ue_live_coding`, `ue_generate_compile_commands`, `ue_show_project_info`, `ue_toggle_completion_mode`
 - Stdio transport via `@modelcontextprotocol/sdk`
 - AI agent rules generated to `.cursor/rules/unreal-cpp.mdc` and `.github/copilot-instructions.md`
+
+### Control Panel
+- Webview 面板（`vscodeUEHelper.showControlPanel`）：Build/CompileCommands/Proxy 等快捷按钮
+- 状态栏 11 个按钮
+- `Set System Includes` (Windows) 自动设置 MSVC / Windows SDK include 路径
 
 ### User Project Setup
 - `Create Unreal Clangd Project` command scaffolds `.clangd` + `.vscode/unreal-clangd/addCompletions.h` + `addMacroCompletions.h`
@@ -69,8 +76,8 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 ## Installation (development)
 
 ```bash
-git clone <repo>
-cd VSCodeUEHelper
+git clone https://github.com/<your-org>/vscode-ue-helper.git
+cd vscode-ue-helper
 npm install
 npm run build
 # Press F5 in VS Code to launch Extension Development Host
@@ -82,18 +89,29 @@ Settings live under the `vscodeUEHelper.*` namespace.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `engineRoot` | string | `""` | Path to UE root. Empty = auto-detect. |
 | `ueVersion` | string | `""` | Preferred UE version (e.g., `5.4`). Empty = latest detected. |
 | `configuration` | enum | `Development` | Debug / DebugGame / Development / Shipping / Test |
 | `target` | enum | `Editor` | Editor / Game / Server / Client |
 | `platform` | enum | `Win64` | Win64 / Mac / Linux |
 | `clangdPath` | string | `""` | Path to clangd binary. Empty = auto-detect. |
-| `completionMode` | enum | `fast` | Fast = curated 18-header list. Slow = comprehensive 49-header list. |
 | `autoBackupWorkspace` | bool | `true` | Backup/restore `.code-workspace` against UBT refresh. |
 | `useMCP` | enum | `auto` | `auto` = only in Cursor/Claude Code. `always` / `never`. |
 | `lspLoggingLevel` | enum | `info` | error / warn / info / debug |
+| `clangdProxy.enabled` | bool | `false` | Enable clangd LSP proxy (didClose keepalive + localization). |
+| `clangdProxy.keepaliveMax` | number | `20` | Max keepalive documents. |
+| `clangdProxy.keepaliveTtlSec` | number | `900` | Keepalive TTL (seconds). |
+| `clangdProxy.realClangdPath` | string | `""` | Path to real clangd binary. Empty = auto-detect. |
+| `clangdProxy.localization.enabled` | bool | `false` | Enable hover localization (UE docs dict). |
+| `clangdProxy.localization.mode` | enum | `append` | append = 中文追加 / zh-only = 仅中文 |
+| `clangdHeaderWatcher.enabled` | bool | `true` | Auto-trigger UBT regen when UE reflection headers saved. |
+| `clangd.userAddFlags` | array | `[]` | Custom flags injected into `.clangd` `CompileFlags.Add`. |
+| `showPerfInStatusBar` | bool | `false` | Show performance metrics (compile_commands gen time, preparse cache hit, incremental scan latency) in status bar. |
+
+> **`completionMode` 设置已删除（H4-B 决策）**：fast/slow 模式已合并为统一 slow，无需切换。
 
 ## Commands
+
+19 commands total. All bound to `vscodeUEHelper.*` namespace.
 
 | Command | Title | Notes |
 |---|---|---|
@@ -103,23 +121,32 @@ Settings live under the `vscodeUEHelper.*` namespace.
 | `vscodeUEHelper.launchEditor` | Launch Unreal Editor | Cross-platform spawn |
 | `vscodeUEHelper.liveCoding` | Live Coding (Hot Reload) | Windows only |
 | `vscodeUEHelper.generateCompileCommands` | Generate compile_commands.json | For clangd |
+| `vscodeUEHelper.diagnoseProject` | Diagnose Clangd Project | First stop when clangd indexing is broken |
 | `vscodeUEHelper.createProject` | Create Unreal Clangd Project | Scaffold `.clangd` + customization |
-| `vscodeUEHelper.diagnoseProject` | Diagnose Clangd Project | Reports `.clangd` / `compile_commands.json` / preparse / clangd binary / addCompletions + addMacroCompletions status — first stop when clangd indexing is broken |
-| `vscodeUEHelper.toggleCompletionMode` | Toggle Clangd Completion Mode | Fast ⇄ Slow |
-| `vscodeUEHelper.showProjectInfo` | Show Project Info | Detect results |
-| `vscodeUEHelper.setSystemIncludes` | Set System Includes (Windows) | Phase 6 placeholder |
+| `vscodeUEHelper.showProjectInfo` | Show Project Info | Detection results |
+| `vscodeUEHelper.setSystemIncludes` | Set System Includes (Windows) | Auto-discover MSVC + Win SDK paths |
 | `vscodeUEHelper.installRules` | Install AI Agent Rules | Cursor + Copilot |
 | `vscodeUEHelper.uninstall` | Uninstall (Clean Generated Files) | Reverse of `createProject` |
+| `vscodeUEHelper.openWorkspaceFile` | Open `.code-workspace` | Quick action |
+| `vscodeUEHelper.selectConfig` | Select Build Configuration | QuickPick |
+| `vscodeUEHelper.selectTarget` | Select Build Target | QuickPick |
+| `vscodeUEHelper.enableClangdProxy` | Enable Clangd LSP Proxy | Toggle proxy on |
+| `vscodeUEHelper.disableClangdProxy` | Disable Clangd LSP Proxy | Toggle proxy off |
+| `vscodeUEHelper.showClangdProxyStatus` | Show Clangd Proxy Status | Diagnostics |
+| `vscodeUEHelper.showControlPanel` | Show Control Panel | Open webview |
 
 ## Development
 
 ```bash
-npm run build              # esbuild → out/extension.js (57.8kb)
+npm run build              # esbuild → out/extension.js (~826kb) + out/clangdProxy.js (~254kb) + launcher scripts
 npm run typecheck          # tsc --noEmit
-npm run lint               # ESLint
+npm run lint               # ESLint src test
 npm run format:check       # Prettier
-npm run test:unit          # Vitest (18 tests)
+npm run test:unit          # Vitest (675 tests / 57 files, coverage ≥ 80/80/75/80)
 npm run package            # vsce package → .vsix
+npm run perf:baseline      # LSP proxy overhead sample → .vscode/clangd-perf-cache/proxy-baseline.json
+npm run perf:after         # Same as above → proxy-after.json
+npm run perf:diff          # Compare two JSON files (< 1% deviation = pass)
 ```
 
 ## Requirements
@@ -134,15 +161,17 @@ npm run package            # vsce package → .vsix
 ```
 src/
 ├── extension.ts                 # Entry point — wires 5 modules
-├── core/                        # Logger, Config, command-registry
+├── core/                        # Logger, Config, command-registry, WorkspaceState
 ├── detection/                   # uproject scan, engine discovery, vswhere
 ├── build/                       # UBT CLI, runner, live coding, launch editor
-├── clangd/                      # compile_commands, .clangd, preparse, backup
+├── clangd/                      # compile_commands, .clangd, ClangdOps, preparse, proxy/
+│   └── proxy/                   # Standalone LSP proxy CLI (17 files)
 ├── parsers/                     # MSVC, UBT, linker, uproject JSON
-├── ui/                          # Status bar, quickPicks, problems panel
-├── commands/                    # 12 command handlers
+├── ui/                          # Status bar, QuickPick, control panel webview
+├── commands/                    # 19 command handlers
 ├── mcp/                         # MCP server (auto-enabled in Cursor)
-└── rules/                       # AI agent rule generators
+├── rules/                       # AI agent rule generators
+└── i18n/                        # en.json + zh.json
 ```
 
 ## License
