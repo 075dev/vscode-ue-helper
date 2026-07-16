@@ -47,7 +47,7 @@ VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 7. activateBuild(...)          ← UBT Task Provider
 8. activateClangd(...)         ← 状态栏 / 备份 / completion mode / 代理
 9. activateUI(...)             ← 11 个状态栏按钮，await detection.ready
-10. activateCommands(...)      ← 20 个命令（依赖全部 handles）
+10. activateCommands(...)      ← 19 个命令（依赖全部 handles）
 11. ControlPanelProvider.register(...)
 12. runFirstTimeInit(...)      ← fire-and-forget，首次使用弹 Initialize
 ```

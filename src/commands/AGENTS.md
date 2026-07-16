@@ -2,7 +2,7 @@
 
 ## 模块概述
 
-**16 个 VS Code 命令处理器**，用户交互的入口点。所有命令都绑定到 `vscodeUEHelper.*` 命名空间。
+**19 个 VS Code 命令处理器**，用户交互的入口点。所有命令都绑定到 `vscodeUEHelper.*` 命名空间。
 
 ## 命令列表
 
@@ -15,14 +15,20 @@
 | `launchEditor` | `launchEditor.ts` | 启动 Unreal Editor |
 | `liveCoding` | `liveCoding.ts` | Live Coding 热重载 |
 | `generateCompileCommands` | `generateCompileCommands.ts` | 生成 compile_commands.json |
-| `toggleCompletionMode` | `toggleCompletionMode.ts` | 切换 clangd 补全模式 (fast/slow) |
 | `createProject` | `createProject.ts` | 创建 UE Clangd 项目脚手架 |
+| `diagnoseProject` | `diagnoseProject.ts` | 诊断 Clangd 项目（输出报告） |
 | `installRules` | `installRules.ts` | 安装 AI Agent 规则 |
 | `uninstall` | `uninstall.ts` | 清理所有生成文件 |
 | `setSystemIncludes` | `setSystemIncludes.ts` | 设置系统包含路径 (Windows) |
 | `openWorkspaceFile` | `openWorkspaceFile.ts` | 打开 .code-workspace |
 | `selectConfig` | `selectConfig.ts` | 选择构建配置 |
 | `selectTarget` | `selectTarget.ts` | 选择构建目标 |
+| `enableClangdProxy` | `enableClangdProxy.ts` | 启用 Clangd LSP 代理 |
+| `disableClangdProxy` | `disableClangdProxy.ts` | 禁用 Clangd LSP 代理 |
+| `showClangdProxyStatus` | `showClangdProxyStatus.ts` | 显示 Clangd 代理状态 |
+| `showControlPanel` | `showControlPanel.ts` | 打开控制面板 webview |
+
+**`toggleCompletionMode` 已删除**（H4-B 决策 + Plan B 收束）：fast/slow 模式合并后无需切换。`src/commands/index.ts` 中不注册此命令；package.json 也不再有此定义。
 
 ## 实现模式
 

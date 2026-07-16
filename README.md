@@ -12,7 +12,7 @@
 | 1 | ✅ | `.uproject` scanning, cross-platform engine discovery (Win/Mac/Linux), VS Build Tools detection |
 | 2 | ✅ | UBT Build/Rebuild/Clean, Live Coding, MSVC parsing, Problems panel, Task provider |
 | 3 | ✅ | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes (fast/slow), workspace backup |
-| 4 | ✅ | Status bar, QuickPick pickers, all 12 commands |
+| 4 | ✅ | Status bar, QuickPick pickers, all 19 commands |
 | 5 | ✅ | MCP server (auto-enabled in Cursor / Claude Code), AI agent rules |
 | 6 | ✅ | Unit tests, 18 passing across 4 files |
 | 7 | ⏳ | Marketplace icon/banner pending; .vsce ready |

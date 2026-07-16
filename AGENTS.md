@@ -5,7 +5,7 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
 ## 状态速览
 
 - 0.1.0 已发布；0.6.x 合并 fast/slow 为 slow；**Phase 8 已落地** `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构；老 `activate*(detection)` API 向后兼容。
-- 20 个命令（`package.json#contributes.commands`），11 个状态栏按钮（`src/ui/statusBar.ts`）。
+- **19 个命令**（`package.json#contributes.commands`），11 个状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
 - 单元测试 56 个文件 + 1 个 .bak 手备份（共约 10.4k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 80/80/75/80。
 
 ## 模块文档
@@ -17,7 +17,7 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
 | build | `src/build/AGENTS.md` | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、DDD 三层结构 |
 | clangd | `src/clangd/AGENTS.md` | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引 |
 | clangd/proxy | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO |
-| commands | `src/commands/AGENTS.md` | 20 个命令注册表、新增命令 4 步流程 |
+| commands | `src/commands/AGENTS.md` | 19 个命令注册表、新增命令 4 步流程 |
 | detection | `src/detection/AGENTS.md` | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强 |
 | ui | `src/ui/AGENTS.md` | 11 个状态栏按钮布局、QuickPick 模式、ControlPanel Webview |
 | core | `src/core/AGENTS.md` | Logger/Config/WorkspaceState 横切基础设施、Config.update 陷阱 |
@@ -139,7 +139,7 @@ src/
 │   ├── diagnostics/    # Diagnose Clangd Project 命令用的检查器
 │   └── proxy/          # 独立 LSP 代理 CLI: cli, bridge, processBridge, framing
 ├── parsers/            # msvcParser, ubtParser, linkerParser, uprojectParser
-├── commands/           # 20 个命令处理器
+├── commands/           # 19 个命令处理器
 ├── ui/                 # statusBar, quickPicks, notifications, problemsPanel, outputChannel
 ├── mcp/                # Model Context Protocol 服务器（Cursor/Claude Code）
 ├── rules/              # AI Agent 规则生成（Cursor + Copilot）
