@@ -22,50 +22,36 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
-import { getUbtPath, getUnrealPlatform, getBuildTargetNames } from './ueHelpers';
+import { getUbtPath } from './ueHelpers';
 import { computeFingerprint } from './fingerprint';
 import { CompileCommandsCache } from './compileCommandsCache';
 import { generateFallbackCompileCommands } from './compileCommandsFallback';
 import { perfLog } from './perfLog';
 import type { CachedCompileCommands } from './types';
+import {
+  buildNativeArgs,
+  buildNonNativeArgs,
+  executeShellTask,
+  findClangToolchain,
+  isClangdAvailable,
+  getUbtPath as _getUbtPathReexportSentinel,
+} from './compileCommands/task';
 
-const execFileAsync = promisify(execFile);
+// re-export 公共 API 让外部 @clangd/compileCommands 用户零感知拆分（per T4.5 拆分策略）
+export { isClangdAvailable };
 
 /* ------------------------------------------------------------------ */
-/*  常量（对齐原版 consts.ts）                                          */
+/*  常量（仅保留主文件直接用得到的,其余已迁 task.ts）                     */
 /* ------------------------------------------------------------------ */
 
-/** VS Code Task 类型 */
-const TASK_TYPE = 'shell';
-
-/** 配置 section */
-const CONFIG_SECTION_UNREAL_CLANGD = 'unreal-clangd';
-
-/** Non-Native 路径的 UBT 参数 */
-const UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT = 'Development';
-const UPDATE_COMPILE_COMMANDS_ARG_GEN_CLANGDB = '-Mode=GenerateClangDatabase';
-const UPDATE_COMPILE_COMMANDS_ARG_ARCHITECTURE_EMPTY = '-architecture=';
-/**
- * 跳过 codegen（UHT 之外的编译动作）。GenerateClangDatabase 模式下加此参数，
- * UBT 只生成 compile DB 不继续把 .cpp 编译成 .o，IntelliSense 场景省去无谓 codegen。
- * 参考 unreal-sense.nvim 实测：首次 setup 提速显著。
- * 兜底：可能令 UHT 不产 .generated.h，但 ueClangdCompat.h + 被动诊断链路已覆盖。
- */
-const UPDATE_COMPILE_COMMANDS_ARG_NO_CODEGEN = '-NoExecCodeGenActions';
-
-/** Windows PowerShell 可执行文件名 */
-const POWERSHELL_FILE_NAME = 'PowerShell.exe';
-
-/** compile_commands.json 文件名 */
+/** compile_commands.json 文件名（主文件定位 candidates 用） */
 const FILE_NAME_COMPILE_COMMANDS = 'compile_commands.json';
 
-/** Task 名称 */
-const UPDATE_COMPILE_COMMANDS_DBGCFG_NAME = 'unreal-clangd: Update Compile Commands';
+// 抑制 lint: getUbtPath 在新 task.ts 已经 re-export,主文件仍直接使用
+void _getUbtPathReexportSentinel;
 
 /* ------------------------------------------------------------------ */
 /*  类型定义                                                            */
@@ -106,225 +92,14 @@ export interface GenerateOptions {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Shell 引用辅助                                                      */
+/*  task 子模块的导出(已迁到 ./compileCommands/task.ts)                 */
 /* ------------------------------------------------------------------ */
-
-/** 对齐原版 getShellQuoting — Windows 用 Strong 引用包裹 args。 */
-function getShellQuoting(
-  command: string,
-  args: string[],
-): {
-  command: vscode.ShellQuotedString | string;
-  args: (vscode.ShellQuotedString | string)[];
-} {
-  if (process.platform === 'win32') {
-    const modArgs: vscode.ShellQuotedString[] = [];
-    for (const arg of args) {
-      modArgs.push({ value: arg, quoting: vscode.ShellQuoting.Strong });
-    }
-    return {
-      command: { value: command, quoting: vscode.ShellQuoting.Strong },
-      args: modArgs,
-    };
-  }
-
-  return {
-    command: { value: command, quoting: vscode.ShellQuoting.Weak },
-    args,
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Task 执行                                                           */
-/* ------------------------------------------------------------------ */
-
-/**
- * 使用 VS Code Task API 执行一个 shell 任务并等待完成。
- *
- * 对齐原版 runUpdateCompileCommandsWithTask：
- *   - Windows: executable = PowerShell.exe
- *   - cwd = unrealWorkspace（引擎根目录）
- *   - problemMatchers = ['$msCompile']
- *
- * @returns exit code
- */
-function executeShellTask(
-  cmd: string,
-  args: ReadonlyArray<string>,
-  cwd: string,
-  log: Logger,
-  env?: Record<string, string>,
-): Promise<number> {
-  return new Promise<number>((resolve, reject) => {
-    const unrealFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd));
-    // 如果精确匹配不到 workspace folder，用第一个可用的
-    const scope = unrealFolder ?? vscode.workspace.workspaceFolders?.[0];
-    if (!scope) {
-      reject(new Error('No workspace folder open. Please open a .code-workspace first.'));
-      return;
-    }
-
-    const source = CONFIG_SECTION_UNREAL_CLANGD;
-
-    const task: vscode.Task = new vscode.Task(
-      { type: TASK_TYPE },
-      scope,
-      UPDATE_COMPILE_COMMANDS_DBGCFG_NAME,
-      source,
-      vscode.ShellExecution, // <-- 这里的类型断言是 vscode.Task 构造函数签名的一部分
-    );
-
-    task.group = vscode.TaskGroup.Build;
-    task.problemMatchers = ['$msCompile'];
-
-    // Shell quoting
-    const quoted = getShellQuoting(cmd, [...args]);
-
-    // Windows 的 shell executable
-    const shellExec: string | undefined = process.platform === 'win32' ? POWERSHELL_FILE_NAME : undefined;
-
-    (task as { execution: vscode.ShellExecution }).execution = new vscode.ShellExecution(
-      quoted.command,
-      quoted.args,
-      { cwd, executable: shellExec, env },
-    );
-
-    log.info(`[compileCommands] executing task: ${cmd} ${[...args].join(' ')}`);
-    log.info(`[compileCommands] cwd: ${cwd}, shell: ${shellExec ?? 'default'}`);
-
-    vscode.tasks.executeTask(task).then(
-      (execution) => {
-        const disposable = vscode.tasks.onDidEndTaskProcess((e) => {
-          if (e.execution === execution) {
-            disposable.dispose();
-            if (e.exitCode === 0 || e.exitCode === 1) {
-              // UBT -projectfiles 和 -mode=GenerateClangDataBase 都可能返回 exit code 1
-              // 在成功场景下，对齐原版行为视为正常完成
-              log.info(`[compileCommands] task exited with code ${e.exitCode}`);
-              resolve(e.exitCode ?? -1);
-            } else {
-              reject(new Error(`UBT task exited with code ${e.exitCode}`));
-            }
-          }
-        });
-
-        // 检查 AbortSignal
-        if (optsSignal) {
-          const onAbort = () => {
-            disposable.dispose();
-            reject(new Error('Task cancelled'));
-          };
-          if (optsSignal.aborted) {
-            onAbort();
-          } else {
-            optsSignal.addEventListener('abort', onAbort, { once: true });
-          }
-        }
-      },
-      (err) => reject(err),
-    );
-  });
-}
-
-/** capture the signal from the outer scope for use in executeShellTask */
-let optsSignal: AbortSignal | undefined;
-
-/* ------------------------------------------------------------------ */
-/*  Non-Native 路径：构造 UBT 参数                                       */
-/* ------------------------------------------------------------------ */
-
-/**
- * 构造 Non-Native（GenerateClangDatabase）路径的 UBT 参数：
- *
- *   <buildTargetName> <unrealPlatform> <buildType> <uprojectPath>
- *   -Mode=GenerateClangDatabase [-architecture=<arch>] -NoExecCodeGenActions
- *
- * - buildType 联动 config.configuration（默认 Development）
- * - -NoExecCodeGenActions 跳过 codegen，只产 compile DB（P0-1 提速）
- */
-async function buildNonNativeArgs(opts: GenerateOptions): Promise<string[]> {
-  const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
-
-  // 1. 查找 build target names
-  const targetNames = await getBuildTargetNames(projectDir);
-  if (targetNames.length === 0) {
-    throw new Error(
-      `No *.Target.cs files found in ${path.join(projectDir, 'Source')}. ` +
-      'A build target is required for Non-Native compile commands generation.',
-    );
-  }
-
-  // 取第一个（已按 Editor 后缀优先排序）
-  const buildTargetName = targetNames[0]!;
-
-  // 2. Unreal platform
-  const unrealPlatform = opts.platform ?? getUnrealPlatform(process.platform);
-  if (!unrealPlatform) {
-    throw new Error(`Unsupported platform: ${process.platform}. ` +
-      'Please specify "platform" in GenerateOptions.');
-  }
-
-  // buildType 联动 config.configuration（默认 Development）
-  const buildType = opts.buildType ?? UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT;
-
-  const args: string[] = [
-    buildTargetName,
-    unrealPlatform,
-    buildType,
-    opts.project,
-    UPDATE_COMPILE_COMMANDS_ARG_GEN_CLANGDB,
-  ];
-
-  // 3. Architecture（可选）
-  if (opts.architecture) {
-    args.push(`${UPDATE_COMPILE_COMMANDS_ARG_ARCHITECTURE_EMPTY}${opts.architecture}`);
-  }
-
-  // 4. 跳过 codegen：GenerateClangDatabase 模式下只需 compile DB，无需继续编译 .cpp（P0-1）
-  args.push(UPDATE_COMPILE_COMMANDS_ARG_NO_CODEGEN);
-
-  return args;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Native 路径：构造 UBT 参数                                           */
-/* ------------------------------------------------------------------ */
-
-/**
- * 对齐原版 Native 路径：
- *
- *   -projectfiles -project=<uprojectPath> -game -engine -dotnet
- */
-function buildNativeArgs(opts: GenerateOptions): string[] {
-  return [
-    '-projectfiles',
-    `-project=${opts.project}`,
-    '-game',
-    '-engine',
-    '-dotnet',
-  ];
-}
-
-/* ------------------------------------------------------------------ */
-/*  LLVM 工具链发现                                                      */
-/* ------------------------------------------------------------------ */
-
-/**
- * 通过 `where clang` 定位 clang.exe，反推 LLVM 根目录。
- * 返回 undefined 表示未找到——调用方应降级处理。
- */
-async function findClangToolchain(): Promise<string | undefined> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which';
-  try {
-    const { stdout } = await execFileAsync(cmd, ['clang']);
-    const clangPath = stdout.trim().split('\n')[0]?.trim();
-    if (!clangPath) {return undefined;}
-    // clang.exe → bin/ → LLVM root
-    return path.dirname(path.dirname(clangPath));
-  } catch {
-    return undefined;
-  }
-}
+//
+// getShellQuoting / executeShellTask / buildNativeArgs /
+// buildNonNativeArgs / findClangToolchain 全部迁出到 ./compileCommands/task.ts。
+// 主文件仅作为入口协调 + re-export,确保 @clangd/compileCommands 用户
+// 公共 API 完全不变(per T4.5 拆分策略)。
+//
 
 /* ------------------------------------------------------------------ */
 /*  主入口                                                              */
@@ -346,8 +121,7 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   const projectName = path.basename(opts.project, '.uproject');
   const engineUri = vscode.Uri.file(opts.engineRoot);
 
-  // 将 AbortSignal 暴露给 executeShellTask 内部闭包
-  optsSignal = opts.signal;
+  // [T4.5 拆分] signal 不再走模块级全局变量,直接当参数传给 executeShellTask
 
   const isNativeAtEntry = opts.isNative === true;
   try {
@@ -500,7 +274,7 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   } catch (err) {
     log.warn(`[perf] instrumentation ubtStart failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-  await executeShellTask(ubtRelPath, args, opts.engineRoot, log, taskEnv);
+  await executeShellTask(ubtRelPath, args, opts.engineRoot, log, taskEnv, opts.signal);
   try {
     perfLog.record({
       event: 'ubt.taskCompleted',
@@ -825,19 +599,8 @@ export async function linkToWorkspaceRoot(
 /* ------------------------------------------------------------------ */
 /*  isClangdAvailable                                                    */
 /* ------------------------------------------------------------------ */
-
-/**
- * 检查 clangd 是否在 PATH 中可执行。
- */
-export async function isClangdAvailable(): Promise<boolean> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which';
-  try {
-    const { stdout } = await execFileAsync(cmd, ['clangd']);
-    return stdout.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
+//
+// 已迁到 ./compileCommands/task.ts,主文件通过 import 自动 re-export。
 
 /* ------------------------------------------------------------------ */
 /*  补全缺失的 compile_commands.json 条目                                */
