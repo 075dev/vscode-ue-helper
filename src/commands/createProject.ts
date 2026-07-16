@@ -36,6 +36,7 @@ import {
 import type { FillResult } from '@clangd/compileCommands';
 import type { ClangdOps } from '@clangd/clangdOps';
 import { pickProject, pickEngine } from '@ui/quickPicks';
+import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 
 /**
@@ -367,5 +368,5 @@ export async function executeCreateProject(
   logger.info(`[createProject] ${ok}/${total} steps OK\n${lines.join('\n')}`);
 
   // 简化弹窗：只显示成功提示
-  void vscode.window.showInformationMessage('✨ Unreal Clangd 项目配置完成');
+  void vscode.window.showInformationMessage(t('createProject.success'));
 }

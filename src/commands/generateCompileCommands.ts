@@ -28,6 +28,7 @@ import {
   fillMissingCompileCommands,
 } from '@clangd';
 import { pickProject, pickEngine } from '@ui/quickPicks';
+import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
@@ -42,9 +43,7 @@ export async function executeGenerateCompileCommands(
     (await pickProject(await detection.scanner.scan())) ??
     (await detection.scanner.findSingle());
   if (!project) {
-    void vscode.window.showWarningMessage(
-      'No .uproject to generate compile_commands for.',
-    );
+    void vscode.window.showWarningMessage(t('generateCompileCommands.noProject'));
     return;
   }
 
@@ -55,9 +54,7 @@ export async function executeGenerateCompileCommands(
       (e) => e.path === detection.workspaceContext.getSelectedEngine(),
     );
   if (!engine) {
-    void vscode.window.showWarningMessage(
-      'No Unreal Engine installation selected.',
-    );
+    void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;
   }
 
@@ -65,7 +62,7 @@ export async function executeGenerateCompileCommands(
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'Updating compile commands...',
+        title: t('generateCompileCommands.updating'),
         cancellable: false,
       },
       async (progress) => {
@@ -104,7 +101,7 @@ export async function executeGenerateCompileCommands(
         progress.report({ increment: 20 });
 
         void vscode.window.showInformationMessage(
-          `compile_commands.json updated at ${linkPath}`,
+          t('generateCompileCommands.updated', { 0: linkPath }),
         );
         logger.info(`[generateCompileCommands] done → ${linkPath}`);
 
@@ -116,17 +113,18 @@ export async function executeGenerateCompileCommands(
     );
 
     // 提示用户重启 clangd
+    const restartBtn = t('generateCompileCommands.restartBtn');
+    const laterBtn = t('generateCompileCommands.laterBtn');
     const choice = await vscode.window.showInformationMessage(
-      'compile_commands.json has been updated. Restart clangd language server to apply changes?',
-      'Restart clangd',
-      'Later',
+      t('generateCompileCommands.restartPrompt'),
+      restartBtn,
+      laterBtn,
     );
-    if (choice === 'Restart clangd') {
+    if (choice === restartBtn) {
       await vscode.commands.executeCommand('clangd.restart');
     }
   } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Failed to generate compile_commands.json: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    void vscode.window.showErrorMessage(t('generateCompileCommands.failed', { 0: msg }));
   }
 }

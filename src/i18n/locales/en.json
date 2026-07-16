@@ -231,5 +231,15 @@
   "installRules.installed": "Installed AI agent rules:\n{0}\n{1}",
 
   "uninstall.cleaned": "Cleaned: {0}",
-  "uninstall.cleanedEmpty": "No generated files found to clean."
+  "uninstall.cleanedEmpty": "No generated files found to clean.",
+
+  "generateCompileCommands.noProject": "No .uproject to generate compile_commands for.",
+  "generateCompileCommands.updating": "Updating compile commands...",
+  "generateCompileCommands.updated": "compile_commands.json updated at {0}",
+  "generateCompileCommands.restartPrompt": "compile_commands.json has been updated. Restart clangd language server to apply changes?",
+  "generateCompileCommands.restartBtn": "Restart clangd",
+  "generateCompileCommands.laterBtn": "Later",
+  "generateCompileCommands.failed": "Failed to generate compile_commands.json: {0}",
+
+  "createProject.success": "Unreal Clangd project configured successfully"
 }
