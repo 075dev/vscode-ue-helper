@@ -76,4 +76,49 @@ describe('getUeClangdCompatContent (内容生成器)', () => {
   it('长度大于 50 字符', () => {
     expect(content.length).toBeGreaterThan(50);
   });
+
+  /* ================================================================ */
+  /*  Todo 8: compat 宏扩展验证                                          */
+  /*  12 个外层反射宏 + WITH_EDITOR + CURRENT_FILE_ID + GENERATED_BODY    */
+  /* ================================================================ */
+
+  it('包含 WITH_EDITOR 1', () => {
+    expect(content).toContain('#define WITH_EDITOR 1');
+  });
+
+  it('包含 WITH_EDITORONLY_DATA 1', () => {
+    expect(content).toContain('#define WITH_EDITORONLY_DATA 1');
+  });
+
+  it('包含 12 个外层反射宏空展开', () => {
+    const outerMacros = [
+      'UCLASS',
+      'USTRUCT',
+      'UENUM',
+      'UINTERFACE',
+      'UPROPERTY',
+      'UFUNCTION',
+      'UMETA',
+      'UPARAM',
+      'GENERATED_UCLASS_BODY',
+      'GENERATED_USTRUCT_BODY',
+      'GENERATED_UINTERFACE_BODY',
+      'GENERATED_IINTERFACE_BODY',
+    ];
+    for (const macro of outerMacros) {
+      expect(content).toContain(`#define ${macro}(...)`);
+    }
+  });
+
+  it('包含 GENERATED_BODY 空展开', () => {
+    expect(content).toContain('#define GENERATED_BODY(...)');
+  });
+
+  it('包含 CURRENT_FILE_ID 0', () => {
+    expect(content).toContain('#define CURRENT_FILE_ID 0');
+  });
+
+  it('外层反射宏使用 ifndef 守卫', () => {
+    expect(content).toMatch(/#ifndef UCLASS[\s\S]+#endif/);
+  });
 });

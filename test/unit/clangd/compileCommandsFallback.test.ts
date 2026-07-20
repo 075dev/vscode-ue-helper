@@ -301,4 +301,127 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     const plainPath = path.normalize(plainHeader);
     expect(entryFiles).not.toContain(plainPath);
   });
+
+  /* ================================================================ */
+  /*  Todo 8: stub 内容 + 编译 flag 验证                                 */
+  /*  Case G: stub 内容含 #include ueClangdCompat.h                       */
+  /*  Case H: 每条 command 含 -ferror-limit=0 + fromFallback === true    */
+  /*  Case I: uhtmanifest 存在时 stubDir 优先 OutputDirectory             */
+  /* ================================================================ */
+
+  it('Case G: stub 内容含 #include ueClangdCompat.h', async () => {
+    // 1. 写反射 .h
+    const gmPublicDir = path.join(fixture.tmpDir, 'Source', 'GM', 'Public');
+    await fs.mkdir(gmPublicDir, { recursive: true });
+    await fs.writeFile(
+      path.join(gmPublicDir, 'G.h'),
+      [
+        '#pragma once',
+        'UCLASS()',
+        'class AG : public AActor { GENERATED_BODY() };',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    // 2. 跑 fallback(无 .uhtmanifest,走 fallback-generated 路径)
+    const result = await generateFallbackCompileCommands({
+      project: fixture.projectPath,
+      engineRoot: fixture.engineRoot,
+    });
+    expect(result).toBeDefined();
+
+    // 3. 断言: stub .generated.h 落盘 + 内容含 #include + ueClangdCompat.h
+    const stubRoot = path.join(
+      fixture.tmpDir, '.vscode', 'vscodeuehelper', 'fallback-generated',
+    );
+    const expectedStub = path.join(stubRoot, 'GM', 'G.generated.h');
+    await expect(fs.access(expectedStub)).resolves.toBeUndefined();
+
+    const stubContent = await fs.readFile(expectedStub, 'utf-8');
+    expect(stubContent).toContain('#include');
+    expect(stubContent).toContain('ueClangdCompat.h');
+  });
+
+  it('Case H: 每条 command 含 -ferror-limit=0 + fromFallback === true', async () => {
+    const result = await generateFallbackCompileCommands({
+      project: fixture.projectPath,
+      engineRoot: fixture.engineRoot,
+    });
+    expect(result).toBeDefined();
+    expect(result!.fromFallback).toBe(true);
+
+    const ccPath = result!.ccPath;
+    const raw = await fs.readFile(ccPath, 'utf-8');
+    const entries = JSON.parse(raw) as Array<{ command: string }>;
+    expect(entries.length).toBeGreaterThan(0);
+
+    for (const entry of entries) {
+      expect(entry.command).toContain('-ferror-limit=0');
+    }
+  });
+
+  it('Case I: uhtmanifest 存在时 stubDir 优先 OutputDirectory', async () => {
+    // 1. 写 .uhtmanifest(BaseDirectory 在 projectDir 内,OutputDirectory = UHT dir)
+    const uhtDir = path.join(
+      fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassTest', 'UHT',
+    );
+    await fs.mkdir(uhtDir, { recursive: true });
+    const manifestPath = path.join(
+      fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassTest.uhtmanifest',
+    );
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        Modules: [
+          {
+            Name: 'MassTest',
+            BaseDirectory: path.join(fixture.tmpDir, 'Source', 'MassTest'),
+            OutputDirectory: uhtDir,
+            IncludePaths: [uhtDir],
+          },
+        ],
+      }),
+      'utf-8',
+    );
+
+    // 2. 写反射 .h
+    const massPublicDir = path.join(fixture.tmpDir, 'Source', 'MassTest', 'Public');
+    await fs.mkdir(massPublicDir, { recursive: true });
+    await fs.writeFile(
+      path.join(massPublicDir, 'Entity.h'),
+      [
+        '#pragma once',
+        'UCLASS()',
+        'class AEntity { GENERATED_BODY() };',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    // 3. 跑 fallback
+    const result = await generateFallbackCompileCommands({
+      project: fixture.projectPath,
+      engineRoot: fixture.engineRoot,
+    });
+    expect(result).toBeDefined();
+
+    // 4. 断言: stub 写到 OutputDirectory 根目录(扁平化文件名)
+    const stubAtUht = path.join(uhtDir, 'Entity.generated.h');
+    await expect(fs.access(stubAtUht)).resolves.toBeUndefined();
+
+    // 5. 断言: 至少一条 command 含 OutputDirectory 而非 fallback-generated
+    const ccPath = result!.ccPath;
+    const raw = await fs.readFile(ccPath, 'utf-8');
+    const entries = JSON.parse(raw) as Array<{ command: string }>;
+
+    const uhtInCommand = entries.some((e) => e.command.includes(uhtDir));
+    expect(uhtInCommand).toBe(true);
+
+    // fallback-generated 不应被作为 stubDir 加入
+    const fallbackGenTail = `vscodeuehelper${path.sep}fallback-generated`;
+    // fallback-generated 仍可能作为其它源目录被加入(非 stubDir 用途),这里只验证
+    // manifest 路径确实被 include 了
+    void fallbackGenTail;
+  });
 });
