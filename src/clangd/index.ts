@@ -53,6 +53,7 @@ export {
 export { generateCompileCommands, linkToWorkspaceRoot, isClangdAvailable, fillMissingCompileCommands } from './compileCommands';
 export { generateFallbackCompileCommands, type FallbackOptions, type FallbackResult } from './compileCommandsFallback';
 export { collectIntermediateUhtDirs, type IntermediateUhtCollectorOptions } from './intermediateUhtCollector';
+export { runUhtCodegen, type UhtResult, type RunUhtCodegenOptions, type MinimalLogger } from './uhtGeneration';
 export {
   createCompletionFiles,
   addCompletionHelperToCompileCommands,

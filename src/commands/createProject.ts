@@ -32,6 +32,8 @@ import {
   startModifyResponseFiles,
   startCreateRspMatchers,
   fillMissingCompileCommands,
+  runUhtCodegen,
+  type UhtResult,
 } from '@clangd';
 import type { FillResult } from '@clangd/compileCommands';
 import type { ClangdOps } from '@clangd/clangdOps';
@@ -179,6 +181,46 @@ export async function executeCreateProject(
           `[createProject] step 2 invoke generateCompileCommands: ` +
             `project=${project.path}, projectDir=${projectDirForLink}, engine=${engine.path}`
         );
+
+        // [UHT pre-codegen] 主动跑 UBT -Mode=UnrealHeaderTool 预生成 .generated.h。
+        // 即便后续 UBT 主链路失败（unresolved symbol / 缺类型），partial headers 仍能让
+        // clangd 给出基本提示；UHT 抛错（无 dotnet / 非法 buildTargetName 等）仅
+        // logger.warn，不阻断 step 2 —— 与 fillMissingCompileCommands / startModifyResponseFiles
+        // / startCreateRspMatchers 三个"非阻断"子步骤同模式。
+        try {
+          const buildTargetName = project.name ? `${project.name}Editor` : '';
+          if (!buildTargetName) {
+            logger.warn(
+              '[createProject] step 2 UHT pre-codegen skipped: project.name is empty',
+            );
+            results.push({
+              step: 'Run UHT pre-codegen',
+              ok: false,
+              detail: 'project.name is empty',
+            });
+          } else {
+            const uhtResult: UhtResult = await runUhtCodegen({
+              project: project.path,
+              engineRoot: engine.path,
+              buildTargetName,
+              buildType: config.configuration,
+              logger,
+            });
+            results.push({
+              step: 'Run UHT pre-codegen',
+              ok: uhtResult.ran || uhtResult.generatedHeaderCount > 0,
+              detail: `generated ${uhtResult.generatedHeaderCount} .generated.h (UBT exit ${uhtResult.exitCode ?? 'null'})`,
+            });
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.warn('[createProject] step 2 UHT pre-codegen failed:', msg);
+          results.push({
+            step: 'Run UHT pre-codegen',
+            ok: false,
+            detail: msg,
+          });
+        }
 
         jsonPath = await generateCompileCommands({
           project: project.path,
