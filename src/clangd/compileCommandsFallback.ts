@@ -222,6 +222,142 @@ async function ensureCompatHeader(projectPath: string, logger?: Logger): Promise
   return compatPath;
 }
 
+/** 反射宏正则：UCLASS / USTRUCT / UINTERFACE / UENUM 后紧跟括号 */
+const REFLECTION_MACRO_RE = /\b(UCLASS|USTRUCT|UINTERFACE|UENUM)\s*\(/;
+
+/**
+ * 从 .h 路径派生 UE module 名。
+ *
+ *  - `Source/MyModule/Public/Foo.h` → `MyModule`
+ *  - `Plugins/MyPlugin/Source/MyModule/Public/Foo.h` → `MyModule`
+ *
+ * 无法匹配标准布局时返回 undefined，调用方应跳过该 header。
+ */
+function deriveModuleName(headerPath: string, projectDir: string): string | undefined {
+  const rel = path.relative(projectDir, headerPath);
+  // path.relative 在 Windows 上使用 \，需兼容两种分隔符
+  const parts = rel.split(/[\\/]/);
+  if (parts.length < 3) { return undefined; }
+
+  // Plugins/<Plugin>/Source/<Module>/...
+  if (parts[0] === 'Plugins' && parts[2] === 'Source' && parts.length >= 4) {
+    return parts[3];
+  }
+
+  // Source/<Module>/...
+  if (parts[0] === 'Source' && parts.length >= 2) {
+    return parts[1];
+  }
+
+  return undefined;
+}
+
+/**
+ * 递归扫描目录下所有 .h 文件，复用 SKIP_DIRS 跳过 Intermediate/Binaries/Build 等生成物目录。
+ */
+async function scanHeaderFiles(dir: string, acc: string[]): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) { continue; }
+      await scanHeaderFiles(full, acc);
+    } else if (entry.isFile() && /\.h$/i.test(entry.name)) {
+      acc.push(path.normalize(full));
+    }
+  }
+}
+
+/**
+ * 为含 UE 反射宏（UCLASS / USTRUCT / UINTERFACE / UENUM）的 .h 写一份空的 stub .generated.h。
+ *
+ * 目的：当 UBT 失败导致 Intermediate/Build/<PlatformCfg>/<Target>/UHT/<Module>.generated.h 不存在时，
+ *       `#include "Foo.generated.h"` 在 clangd 索引阶段找不到对应文件会报 unknown_typename。
+ *       这里在 `.vscode/vscodeuehelper/fallback-generated/<Module>/<Header>.generated.h`
+ *       写入仅含 `#pragma once\n` 的空 stub，让 include 至少能解析。
+ *       真实的 UE 宏展开（UCLASS / GENERATED_BODY 等）由 ueClangdCompat.h 在编译期兜底（task 3）。
+ *
+ * 约束：
+ *   - 不覆盖真实产物（路径不在 Intermediate/Build/** 下）
+ *   - 不为无反射宏的普通 .h 写 stub（噪声防护）
+ *   - 已存在则跳过（用户/工具链可能已写）
+ *   - atomic write（先 .tmp 再 rename，参考 headerCache.recordHeader）
+ *
+ * @returns stub 写入数 + stub 根目录绝对路径（用于加入 includeCandidates）
+ */
+async function writeStubGeneratedHeaders(
+  projectDir: string,
+  log: Logger,
+): Promise<{ count: number; stubDir: string }> {
+  const stubDir = path.join(projectDir, FALLBACK_CC_DIR_REL, 'fallback-generated');
+
+  // 收集项目 Source + Plugins/*/Source 下的所有 .h
+  const headerFiles: string[] = [];
+  await scanHeaderFiles(path.join(projectDir, 'Source'), headerFiles);
+  const pluginsDir = path.join(projectDir, 'Plugins');
+  try {
+    const pluginEntries = await fs.readdir(pluginsDir, { withFileTypes: true });
+    for (const e of pluginEntries) {
+      if (e.isDirectory()) {
+        await scanHeaderFiles(path.join(pluginsDir, e.name, 'Source'), headerFiles);
+      }
+    }
+  } catch {
+    // 无 Plugins 目录，跳过
+  }
+
+  let count = 0;
+  for (const headerPath of headerFiles) {
+    // 1. 内容必须含 UE 反射宏
+    let content: string;
+    try {
+      content = await fs.readFile(headerPath, 'utf-8');
+    } catch {
+      continue;
+    }
+    if (!REFLECTION_MACRO_RE.test(content)) { continue; }
+
+    // 2. 派生 module 名
+    const moduleName = deriveModuleName(headerPath, projectDir);
+    if (!moduleName) { continue; }
+
+    // 3. 构造 stub 路径
+    const baseName = path.basename(headerPath); // e.g. Player.h
+    const stem = baseName.replace(/\.h$/i, ''); // e.g. Player
+    const stubFile = path.join(stubDir, moduleName, `${stem}.generated.h`);
+
+    // 4. 已存在则跳过（用户/工具链可能已手写 stub）
+    try {
+      await fs.access(stubFile);
+      continue;
+    } catch {
+      // 不存在，继续
+    }
+
+    // 5. atomic write
+    try {
+      await fs.mkdir(path.dirname(stubFile), { recursive: true });
+      const tmpPath = `${stubFile}.tmp`;
+      await fs.writeFile(tmpPath, '#pragma once\n', 'utf-8');
+      await fs.rename(tmpPath, stubFile);
+      count++;
+    } catch (err) {
+      log.warn(
+        `[fallback] failed to write stub .generated.h for ${headerPath}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  return { count, stubDir };
+}
+
 /**
  * 过滤 include 集合，仅保留实际存在的目录。
  */
@@ -287,6 +423,15 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
   //      Intermediate/Build/<PlatformCfg>/<Target>/Inc/<Module>/UHT/
   for (const uhtDir of await collectIntermediateUhtDirs({ projectDir })) {
     includeCandidates.add(uhtDir);
+  }
+
+  // 1g. 为含 UE 反射宏的 .h 写 stub .generated.h（fallback 路径下 UHT 失败时 X.generated.h 不存在，
+  //      #include "X.generated.h" 找不到会报 unknown_typename；写一份空 stub 让 include 至少能解析，
+  //      真正的宏展开由 ueClangdCompat.h 在编译期兜底）
+  const stubResult = await writeStubGeneratedHeaders(projectDir, log);
+  if (stubResult.count > 0) {
+    log.warn(`[fallback] wrote ${stubResult.count} stub .generated.h under ${stubResult.stubDir}`);
+    includeCandidates.add(stubResult.stubDir);
   }
 
   // 过滤出实际存在的目录

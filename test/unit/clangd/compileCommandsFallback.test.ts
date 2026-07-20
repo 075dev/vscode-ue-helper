@@ -129,4 +129,92 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     const expectedCompatPath = getUeClangdCompatPath(fixture.projectPath);
     await expect(fs.access(expectedCompatPath)).resolves.toBeUndefined();
   });
+
+  it('Case E: 含 UE 反射宏的 .h 写 stub .generated.h, 普通 .h 不写, stub 根目录加入 -I', async () => {
+    // 1a. 项目内 GameModule: 1 个反射 header (UCLASS) + 1 个普通 header
+    const gmPublicDir = path.join(fixture.tmpDir, 'Source', 'GameModule', 'Public');
+    await fs.mkdir(gmPublicDir, { recursive: true });
+
+    const playerHeader = path.join(gmPublicDir, 'Player.h');
+    await fs.writeFile(
+      playerHeader,
+      [
+        '#pragma once',
+        '#include "CoreMinimal.h"',
+        '#include "Player.generated.h"',
+        '',
+        'UCLASS()',
+        'class APlayer : public AActor {',
+        '  GENERATED_BODY()',
+        '};',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const helperHeader = path.join(gmPublicDir, 'Helper.h');
+    await fs.writeFile(
+      helperHeader,
+      ['#pragma once', '// plain helper, no UE reflection macro', ''].join('\n'),
+      'utf-8',
+    );
+
+    // 1b. Plugins 内的反射 header (USTRUCT) —— 验证派生 module 名用 PluginMod 而非 MyPlugin
+    const pluginPublicDir = path.join(
+      fixture.tmpDir, 'Plugins', 'MyPlugin', 'Source', 'PluginMod', 'Public',
+    );
+    await fs.mkdir(pluginPublicDir, { recursive: true });
+    const itemHeader = path.join(pluginPublicDir, 'Item.h');
+    await fs.writeFile(
+      itemHeader,
+      [
+        '#pragma once',
+        '#include "Item.generated.h"',
+        '',
+        'USTRUCT()',
+        'struct FItem {',
+        '  GENERATED_BODY()',
+        '};',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    // 2. 跑 generateFallbackCompileCommands
+    const result = await generateFallbackCompileCommands({
+      project: fixture.projectPath,
+      engineRoot: fixture.engineRoot,
+    });
+    expect(result).toBeDefined();
+
+    // 3. 断言: Player.generated.h + Item.generated.h 被创建, Helper.generated.h 未被创建
+    const stubRoot = path.join(
+      fixture.tmpDir, '.vscode', 'vscodeuehelper', 'fallback-generated',
+    );
+    const expectedPlayerStub = path.join(stubRoot, 'GameModule', 'Player.generated.h');
+    const expectedItemStub = path.join(stubRoot, 'PluginMod', 'Item.generated.h');
+    const mustNotExistHelperStub = path.join(stubRoot, 'GameModule', 'Helper.generated.h');
+
+    await expect(fs.access(expectedPlayerStub)).resolves.toBeUndefined();
+    await expect(fs.access(expectedItemStub)).resolves.toBeUndefined();
+    await expect(fs.access(mustNotExistHelperStub)).rejects.toThrow();
+
+    // 4. 断言: stub 文件内容以 #pragma once 开头
+    const playerContent = await fs.readFile(expectedPlayerStub, 'utf-8');
+    expect(playerContent.startsWith('#pragma once')).toBe(true);
+    const itemContent = await fs.readFile(expectedItemStub, 'utf-8');
+    expect(itemContent.startsWith('#pragma once')).toBe(true);
+
+    // 5. 断言: fallback DB 的 command 包含 fallback-generated 的 -I 路径
+    const ccPath = result!.ccPath;
+    const raw = await fs.readFile(ccPath, 'utf-8');
+    const entries = JSON.parse(raw) as Array<{ directory: string; command: string; file: string }>;
+    expect(entries.length).toBeGreaterThan(0);
+
+    const fallbackGenTail = `vscodeuehelper${path.sep}fallback-generated`;
+    for (const entry of entries) {
+      expect(entry.command).toContain('-I');
+      expect(entry.command).toContain(fallbackGenTail);
+    }
+  });
 });
