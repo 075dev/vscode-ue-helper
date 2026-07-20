@@ -241,18 +241,46 @@ export async function executeCreateProject(
 
         logger.info(`[createProject] step 2 generateCompileCommands returned jsonPath=${jsonPath}`);
 
-        // [LOG] step 2 调用 linkToWorkspaceRoot 前：明确打印 jsonPath + 目标 projectDir
-        // 注意：传入 project.path（.uproject 文件路径），函数内部 path.dirname() 得到
-        // projectDir，即 .uproject 所在目录
-        logger.info(
-          `[createProject] step 2 calling linkToWorkspaceRoot: ` +
-            `jsonPath=${jsonPath}, projectPath=${project.path} (projectDir will be ${projectDirForLink})`
+        // [Step 2] 检测 jsonPath 是否已经落在 fallback 目标位置（.vscode/vscodeuehelper/compile_commands.json）。
+        // fallback 路径下无需调用 linkToWorkspaceRoot：linkToWorkspaceRoot 内部虽已短路返回 target
+        // （compileCommands.ts 496-509: path.resolve(jsonPath) === path.resolve(target) 早返），
+        // 但在调用层显式跳过更清晰——fallback 路径不存在"符号链接"动作，
+        // 显式分支让 step 2 的控制流与 UBT 正常路径对称。
+        const expectedFallbackPath = path.join(
+          projectDir,
+          '.vscode',
+          'vscodeuehelper',
+          'compile_commands.json',
         );
-        const linkPath = await linkToWorkspaceRoot(jsonPath, project.path, logger);
+        const isFallbackPath = path.resolve(jsonPath) === path.resolve(expectedFallbackPath);
 
-        // [LOG] step 2 调用后：打印 linkPath，便于对照 target 是否真的到了
-        // .vscode/vscodeuehelper/compile_commands.json
-        logger.info(`[createProject] step 2 linkToWorkspaceRoot returned linkPath=${linkPath}`);
+        let linkPath: string;
+        if (isFallbackPath) {
+          logger.info(
+            `[createProject] step 2 fallback path detected, skipping linkToWorkspaceRoot: ` +
+              `jsonPath=${jsonPath} === ${expectedFallbackPath}`,
+          );
+          linkPath = jsonPath;
+          // 上报 fallback 状态：UI 看到此条即知 IntelliSense 可能不完整。
+          results.push({
+            step: t('createProject.fallbackUsed'),
+            ok: true,
+            detail: jsonPath,
+          });
+        } else {
+          // [LOG] step 2 调用 linkToWorkspaceRoot 前：明确打印 jsonPath + 目标 projectDir
+          // 注意：传入 project.path（.uproject 文件路径），函数内部 path.dirname() 得到
+          // projectDir，即 .uproject 所在目录
+          logger.info(
+            `[createProject] step 2 calling linkToWorkspaceRoot: ` +
+              `jsonPath=${jsonPath}, projectPath=${project.path} (projectDir will be ${projectDirForLink})`
+          );
+          linkPath = await linkToWorkspaceRoot(jsonPath, project.path, logger);
+
+          // [LOG] step 2 调用后：打印 linkPath，便于对照 target 是否真的到了
+          // .vscode/vscodeuehelper/compile_commands.json
+          logger.info(`[createProject] step 2 linkToWorkspaceRoot returned linkPath=${linkPath}`);
+        }
 
         // 🔧 补全缺失的 compile_commands.json 条目（新文件、头文件等）
         try {
