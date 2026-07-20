@@ -63,8 +63,8 @@ export function getUeClangdCompatContent(): string {
     '/*',
     '* ***** DO NOT MODIFY *****',
     '* 此文件由 VSCodeUEHelper 自动生成，用于 clangd 索引兼容。',
-    '* 重写 BODY_MACRO_COMBINE 宏，使 UCLASS() / GENERATED_BODY()',
-    '* 在 .generated.h 过期/缺失时仍能展开为合法 C++。',
+    '* 扩展为完整 UE 反射宏 stub：让 clangd 即使 .generated.h 缺失也能解析原 .h',
+    '* (重写 BODY_MACRO_COMBINE + 12 个外层反射宏 + WITH_EDITOR + CURRENT_FILE_ID)',
     '*',
     '* 注意：此文件仅影响 clangd 索引，不影响实际编译。',
     '*/',
@@ -102,5 +102,83 @@ export function getUeClangdCompatContent(): string {
     '',
   ].join(EOL);
 
-  return `${header}${EOL}${EOL}${pragmaOnce}${EOL}${bodyMacroCombineInner}${EOL}${bodyMacroCombine}${EOL}${compatBody}${EOL}`;
+  // 启用 WITH_EDITOR / WITH_EDITORONLY_DATA：让 #if WITH_EDITOR 块在 clangd 中展开
+  const withEditor = [
+    '// 启用 WITH_EDITOR / WITH_EDITORONLY_DATA：让 #if WITH_EDITOR 块在 clangd 中展开',
+    '#define WITH_EDITOR 1',
+    '#define WITH_EDITORONLY_DATA 1',
+    '',
+  ].join(EOL);
+
+  // 12 个外层 UE 反射宏空展开：让 UCLASS() / UPROPERTY() 等在 .generated.h 缺失时不报 unknown macro
+  const outerReflectionMacros = [
+    '// 12 个外层 UE 反射宏空展开：让 UCLASS() / UPROPERTY() 等在 .generated.h 缺失时不报 unknown macro',
+    '#ifndef UCLASS',
+    '#define UCLASS(...)',
+    '#endif',
+    '#ifndef USTRUCT',
+    '#define USTRUCT(...)',
+    '#endif',
+    '#ifndef UENUM',
+    '#define UENUM(...)',
+    '#endif',
+    '#ifndef UINTERFACE',
+    '#define UINTERFACE(...)',
+    '#endif',
+    '#ifndef UPROPERTY',
+    '#define UPROPERTY(...)',
+    '#endif',
+    '#ifndef UFUNCTION',
+    '#define UFUNCTION(...)',
+    '#endif',
+    '#ifndef UMETA',
+    '#define UMETA(...)',
+    '#endif',
+    '#ifndef UPARAM',
+    '#define UPARAM(...)',
+    '#endif',
+    '#ifndef GENERATED_UCLASS_BODY',
+    '#define GENERATED_UCLASS_BODY(...)',
+    '#endif',
+    '#ifndef GENERATED_USTRUCT_BODY',
+    '#define GENERATED_USTRUCT_BODY(...)',
+    '#endif',
+    '#ifndef GENERATED_UINTERFACE_BODY',
+    '#define GENERATED_UINTERFACE_BODY(...)',
+    '#endif',
+    '#ifndef GENERATED_IINTERFACE_BODY',
+    '#define GENERATED_IINTERFACE_BODY(...)',
+    '#endif',
+    '',
+  ].join(EOL);
+
+  // CURRENT_FILE_ID：UHT 用于标识 .generated.h 归属，无 .generated.h 时强制 0
+  const currentFileId = [
+    '// CURRENT_FILE_ID：UHT 用于标识 .generated.h 归属，无 .generated.h 时强制 0',
+    '#undef CURRENT_FILE_ID',
+    '#define CURRENT_FILE_ID 0',
+    '',
+  ].join(EOL);
+
+  // GENERATED_BODY：与 .generated.h 可能冲突的宏，强制覆盖为空展开
+  const generatedBody = [
+    '// GENERATED_BODY：与 .generated.h 可能冲突的宏，强制覆盖为空展开',
+    '#undef GENERATED_BODY',
+    '#define GENERATED_BODY(...)',
+    '',
+  ].join(EOL);
+
+  return [
+    header,
+    '',
+    pragmaOnce,
+    bodyMacroCombineInner,
+    bodyMacroCombine,
+    compatBody,
+    withEditor,
+    outerReflectionMacros,
+    currentFileId,
+    generatedBody,
+    '',
+  ].join(EOL);
 }
