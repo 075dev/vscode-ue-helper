@@ -75,6 +75,12 @@ export interface FallbackResult {
   entryCount: number;
   /** 收集的 include 路径数 */
   includeCount: number;
+  /**
+   * 标记结果来自 fallback 路径（UBT 失败时的降级 DB）。
+   * 主路径（UBT 成功生成 compile_commands.json）不设置该字段。
+   * 下游可借此区分走"重试 UBT"还是"接受 fallback"策略。
+   */
+  fromFallback?: true;
 }
 
 /**
@@ -575,6 +581,11 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
     '-DWITH_COREUOBJECT=1',
     '-fms-compatibility',
     '-fms-compatibility-version=19.29',
+    // 关闭 clangd 的诊断数量上限：fallback DB 不含完整宏/PCH，clangd 会报大量误报（如
+    // unknown_typename、未解析的 UCLASS 宏等）。默认 -ferror-limit=19 会让 clangd 在达到上限后
+    // 丢弃后续诊断，导致某些关键错误（如 .generated.h 真正缺失）被截断隐藏。设为 0 让所有
+    // 诊断都进入 Problems 面板，便于排查。注意：此 flag 仅影响 clangd 索引；真实编译仍走 UBT。
+    '-ferror-limit=0',
     ...[...includePaths].map((p) => `-I${p}`),
     // [-include 兼容头] fallback 路径下 .generated.h 可能缺失或过期，强制在所有其他 include
     // 之前 include ueClangdCompat.h。重写 BODY_MACRO_COMBINE 后，UCLASS() / GENERATED_BODY()
@@ -607,5 +618,10 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
   log.warn(
     `[fallback] FALLBACK DB written: ${entries.length} entries, ${includePaths.size} include paths -> ${ccPath}`,
   );
-  return { ccPath, entryCount: entries.length, includeCount: includePaths.size };
+  return {
+    ccPath,
+    entryCount: entries.length,
+    includeCount: includePaths.size,
+    fromFallback: true,
+  };
 }
