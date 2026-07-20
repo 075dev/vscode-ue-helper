@@ -328,6 +328,10 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
     '-fms-compatibility',
     '-fms-compatibility-version=19.29',
     ...[...includePaths].map((p) => `-I${p}`),
+    // [-include 兼容头] fallback 路径下 .generated.h 可能缺失或过期，强制在所有其他 include
+    // 之前 include ueClangdCompat.h。重写 BODY_MACRO_COMBINE 后，UCLASS() / GENERATED_BODY()
+    // 仍能展开为合法 C++ stub，避免 clangd 报 unknown_typename 以及后续补全失效。
+    // 注意：此 -include 仅影响 clangd 索引；真实编译仍由真正的 .generated.h 驱动。
     '-include',
     compatPath,
   ];
