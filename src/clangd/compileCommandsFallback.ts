@@ -310,6 +310,42 @@ async function scanHeaderFiles(dir: string, acc: string[]): Promise<void> {
 }
 
 /**
+ * 扫描项目 Source + Plugins 下含 UE 反射宏的 .h，返回绝对路径列表。
+ *
+ * 用于无 .cpp 时为 fallback DB 生成 entry（让 clangd 仍能 attach、看到反射宏展开后的类型）。
+ * 复用 scanHeaderFiles 递归逻辑 + REFLECTION_MACRO_RE 过滤；
+ * 不写 stub（stub 由 writeStubGeneratedHeaders 提前生成，本函数不重复 IO）。
+ */
+async function scanReflectedHeadersForEntries(projectDir: string): Promise<string[]> {
+  const headerFiles: string[] = [];
+  await scanHeaderFiles(path.join(projectDir, 'Source'), headerFiles);
+  try {
+    const pluginsDir = path.join(projectDir, 'Plugins');
+    const pluginEntries = await fs.readdir(pluginsDir, { withFileTypes: true });
+    for (const e of pluginEntries) {
+      if (e.isDirectory()) {
+        await scanHeaderFiles(path.join(pluginsDir, e.name, 'Source'), headerFiles);
+      }
+    }
+  } catch {
+    // 无 Plugins 目录，跳过
+  }
+
+  const reflected: string[] = [];
+  for (const headerPath of headerFiles) {
+    try {
+      const content = await fs.readFile(headerPath, 'utf-8');
+      if (REFLECTION_MACRO_RE.test(content)) {
+        reflected.push(path.normalize(headerPath));
+      }
+    } catch {
+      // 读取失败跳过
+    }
+  }
+  return reflected;
+}
+
+/**
  * 为含 UE 反射宏（UCLASS / USTRUCT / UINTERFACE / UENUM）的 .h 写一份兜底 stub .generated.h。
  *
  * 目的：当 UBT 失败导致 Intermediate/Build/<PlatformCfg>/<Target>/UHT/<Module>.generated.h 不存在时，
@@ -516,9 +552,14 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
     // 无 Plugins，跳过
   }
 
-  if (cppFiles.length === 0) {
-    log.warn('[fallback] no .cpp files found, cannot generate fallback DB');
-    return undefined;
+  // 3b. 扫反射 .h（无 .cpp 时作为 fallback entries；不重写 stub，stub 由 writeStubGeneratedHeaders 提前生成）
+  const reflectedHeaders = await scanReflectedHeadersForEntries(projectDir);
+
+  // entries 顺序：.cpp 先，然后反射 .h
+  const allSourceFiles = [...cppFiles, ...reflectedHeaders];
+  if (allSourceFiles.length === 0) {
+    // 既无 .cpp 也无反射 .h（极少见，新项目空目录）：仍写出空 entries，让 clangd 能 attach
+    log.warn('[fallback] no .cpp or reflected headers found, writing empty entries array');
   }
 
   // 4. 构造条目
@@ -543,10 +584,10 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
     compatPath,
   ];
 
-  const entries = cppFiles.map((cpp) => ({
+  const entries = allSourceFiles.map((file) => ({
     directory: projectDir,
-    file: cpp,
-    command: `${commonArgs.join(' ')} ${cpp}`,
+    file,
+    command: `${commonArgs.join(' ')} ${file}`,
   }));
 
   // 5. 原子写入（temp + rename）

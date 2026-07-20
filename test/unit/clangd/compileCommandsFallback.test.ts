@@ -5,6 +5,8 @@
  * Case B：无 Intermediate 时 fallback 仍可用（不抛错）
  * Case C：多个模块的 UHT 目录全部收集
  * Case D：每个 fallback entry 的 command 必须包含 -include + ueClangdCompat.h 绝对路径，兼容头文件本身必须真在磁盘上存在
+ * Case E：含 UE 反射宏的 .h 写 stub .generated.h, 普通 .h 不写, stub 根目录加入 -I
+ * Case F：无 .cpp 时仍写出 compile_commands.json, entries 含反射 .h（Todo 3 验证）
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
@@ -216,5 +218,87 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
       expect(entry.command).toContain('-I');
       expect(entry.command).toContain(fallbackGenTail);
     }
+  });
+
+  it('Case F: 无 .cpp 时仍写出 compile_commands.json, entries 含反射 .h entry(directory=projectDir)', async () => {
+    // 1. 删掉 beforeEach 自动创建的 Game.cpp（让 fixture 完全没有 .cpp）
+    await fs.rm(path.join(fixture.tmpDir, 'Source', 'Game'), { recursive: true, force: true });
+
+    // 2. 写两个反射 .h（含 UE 反射宏）+ 一个普通 .h（验证过滤生效）
+    const modDir = path.join(fixture.tmpDir, 'Source', 'PureHeaderModule', 'Public');
+    await fs.mkdir(modDir, { recursive: true });
+
+    const playerHeader = path.join(modDir, 'Player.h');
+    await fs.writeFile(
+      playerHeader,
+      [
+        '#pragma once',
+        '#include "CoreMinimal.h"',
+        '#include "Player.generated.h"',
+        '',
+        'UCLASS()',
+        'class APlayer : public AActor {',
+        '  GENERATED_BODY()',
+        '};',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const npcHeader = path.join(modDir, 'Npc.h');
+    await fs.writeFile(
+      npcHeader,
+      [
+        '#pragma once',
+        '#include "Npc.generated.h"',
+        '',
+        'USTRUCT()',
+        'struct FNpc { GENERATED_BODY() };',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    // 普通 .h（无 UE 反射宏）—— 必须被过滤掉，不能产生 entry
+    const plainHeader = path.join(modDir, 'Plain.h');
+    await fs.writeFile(
+      plainHeader,
+      ['#pragma once', '// 普通头文件，不含 UE 反射宏', ''].join('\n'),
+      'utf-8',
+    );
+
+    // 3. 跑 generateFallbackCompileCommands —— 关键：即使无 .cpp 也必须返回 ccPath
+    const result = await generateFallbackCompileCommands({
+      project: fixture.projectPath,
+      engineRoot: fixture.engineRoot,
+    });
+    expect(result).toBeDefined();
+    expect(result?.ccPath).toBeTruthy();
+
+    // 4. 断言: cc.json 写出, entries 数量 = 反射 .h 数（2 个） + 普通 .h 不计入
+    const ccPath = result!.ccPath;
+    const raw = await fs.readFile(ccPath, 'utf-8');
+    const entries = JSON.parse(raw) as Array<{ directory: string; command: string; file: string }>;
+
+    expect(entries.length).toBe(2);
+
+    // 5. 断言: entries 是反射 .h 文件, directory=projectDir
+    const entryFiles = entries.map((e) => e.file).sort();
+    const expectedFiles = [playerHeader, npcHeader].map((p) => path.normalize(p)).sort();
+    expect(entryFiles).toEqual(expectedFiles);
+
+    for (const entry of entries) {
+      expect(entry.directory).toBe(fixture.tmpDir);
+      // command 必须含 commonArgs 片段
+      expect(entry.command).toContain('clang++');
+      expect(entry.command).toContain('-std=c++20');
+      expect(entry.command).toContain('-DUE_BUILD_DEVELOPMENT=1');
+      expect(entry.command).toContain('-include');
+      expect(entry.command).toContain('ueClangdCompat.h');
+    }
+
+    // 6. 断言: 普通 .h 没产生 entry
+    const plainPath = path.normalize(plainHeader);
+    expect(entryFiles).not.toContain(plainPath);
   });
 });
