@@ -183,27 +183,27 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     const config = { configuration: 'Development' } as unknown as Parameters<typeof executeCreateProject>[0];
     const detection = {
       scanner: {
-        scan: vi.fn(async () => [{
+        scan: vi.fn(() => Promise.resolve([{
           path: projectPath,
           name: 'MyProj',
           directory: projectDir,
           modules: [],
           enginePath: 'C:\\UE_5.4',
           engineVersion: '5.4.0',
-        }]),
+        }])),
       },
       discovery: {
-        discover: vi.fn(async () => [{
+        discover: vi.fn(() => Promise.resolve([{
           path: 'C:\\UE_5.4',
           version: '5.4.0',
-        }]),
+        }])),
       },
       vsBuildTools: {} as never,
       workspaceContext: {
         getSelectedProject: vi.fn(() => projectPath),
         getSelectedEngine: vi.fn(() => 'C:\\UE_5.4'),
-        setProject: vi.fn(async () => undefined),
-        setEngine: vi.fn(async () => undefined),
+        setProject: vi.fn(() => Promise.resolve(undefined)),
+        setEngine: vi.fn(() => Promise.resolve(undefined)),
       },
       ready: Promise.resolve({
         projects: [],
@@ -217,7 +217,7 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     } as unknown as Parameters<typeof executeCreateProject>[2];
 
     const clangdOps = {
-      writeFull: vi.fn(async () => ({ path: path.join(projectDir, '.clangd') })),
+      writeFull: vi.fn(() => Promise.resolve({ path: path.join(projectDir, '.clangd') })),
     } as unknown as Parameters<typeof executeCreateProject>[3];
 
     // ---- 跑 executeCreateProject,期望不抛错 ----
@@ -266,27 +266,27 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     const config = { configuration: 'Development' } as unknown as Parameters<typeof executeCreateProject>[0];
     const detection = {
       scanner: {
-        scan: vi.fn(async () => [{
+        scan: vi.fn(() => Promise.resolve([{
           path: projectPath,
           name: 'MyProj',
           directory: projectDir,
           modules: [],
           enginePath: 'C:\\UE_5.4',
           engineVersion: '5.4.0',
-        }]),
+        }])),
       },
       discovery: {
-        discover: vi.fn(async () => [{
+        discover: vi.fn(() => Promise.resolve([{
           path: 'C:\\UE_5.4',
           version: '5.4.0',
-        }]),
+        }])),
       },
       vsBuildTools: {} as never,
       workspaceContext: {
         getSelectedProject: vi.fn(() => projectPath),
         getSelectedEngine: vi.fn(() => 'C:\\UE_5.4'),
-        setProject: vi.fn(async () => undefined),
-        setEngine: vi.fn(async () => undefined),
+        setProject: vi.fn(() => Promise.resolve(undefined)),
+        setEngine: vi.fn(() => Promise.resolve(undefined)),
       },
       ready: Promise.resolve({
         projects: [],
@@ -300,7 +300,7 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     } as unknown as Parameters<typeof executeCreateProject>[2];
 
     const clangdOps = {
-      writeFull: vi.fn(async () => ({ path: path.join(projectDir, '.clangd') })),
+      writeFull: vi.fn(() => Promise.resolve({ path: path.join(projectDir, '.clangd') })),
     } as unknown as Parameters<typeof executeCreateProject>[3];
 
     await expect(
