@@ -44,17 +44,27 @@ function createMockLogger() {
 }
 
 function createMockConfig() {
+  // 真实 Config 内部用 this.root.get<...>("clangdProxy.enabled") 这种**带点号全名**读取
+  // （见 src/core/config.ts:167-218）。所以 mock 必须用同样的全名作为存储键，getter 通过 cfg['...'] 重读。
   const cfg: Record<string, unknown> = {
     configuration: 'Development', target: 'Editor', platform: 'Win64',
     // T2.1 后 completionMode 永远是 'slow'；mock config 也改为 'slow' 保持状态栏状态一致。
     completionMode: 'slow', useMCP: 'auto', autoBackupWorkspace: true, lspLoggingLevel: 'info',
-    clangdProxyEnabled: false, clangdProxyKeepaliveMax: 20, clangdProxyKeepaliveTtlSec: 900,
-    clangdProxyRealClangdPath: undefined, clangdProxyLogPath: undefined,
-    clangdProxyLocalizationEnabled: false, clangdProxyLocalizationMode: 'append',
-    clangdProxyLocalizationTargets: ['diagnostics', 'codeActions', 'hover'],
+    'clangdProxy.enabled': false,
+    'clangdProxy.keepaliveMax': 20,
+    'clangdProxy.keepaliveTtlSec': 900,
+    'clangdProxy.realClangdPath': undefined,
+    'clangdProxy.logPath': undefined,
+    'clangdProxy.localization.enabled': false,
+    'clangdProxy.localization.mode': 'append',
+    'clangdProxy.localization.targets': ['diagnostics', 'codeActions', 'hover'],
   };
   const updateCalls: Array<[string, unknown]> = [];
-  const update = (key: string, value: unknown): Promise<void> => { updateCalls.push([key, value]); cfg[key] = value; return Promise.resolve(); };
+  const update = (key: string, value: unknown): Promise<void> => {
+    updateCalls.push([key, value]);
+    cfg[key] = value;
+    return Promise.resolve();
+  };
   return {
     get configuration() { return cfg.configuration; },
     get target() { return cfg.target; },
@@ -63,18 +73,43 @@ function createMockConfig() {
     get useMCP() { return cfg.useMCP; },
     get autoBackupWorkspace() { return cfg.autoBackupWorkspace; },
     get lspLoggingLevel() { return cfg.lspLoggingLevel; },
-    get clangdProxyEnabled() { return cfg.clangdProxyEnabled; },
-    get clangdProxyKeepaliveMax() { return cfg.clangdProxyKeepaliveMax; },
-    get clangdProxyKeepaliveTtlSec() { return cfg.clangdProxyKeepaliveTtlSec; },
-    get clangdProxyRealClangdPath() { return cfg.clangdProxyRealClangdPath; },
-    get clangdProxyLogPath() { return cfg.clangdProxyLogPath; },
-    get clangdProxyLocalizationEnabled() { return cfg.clangdProxyLocalizationEnabled; },
-    get clangdProxyLocalizationMode() { return cfg.clangdProxyLocalizationMode; },
-    get clangdProxyLocalizationTargets() { return cfg.clangdProxyLocalizationTargets; },
+    get clangdProxyEnabled() { return cfg['clangdProxy.enabled']; },
+    get clangdProxyKeepaliveMax() { return cfg['clangdProxy.keepaliveMax']; },
+    get clangdProxyKeepaliveTtlSec() { return cfg['clangdProxy.keepaliveTtlSec']; },
+    get clangdProxyRealClangdPath() { return cfg['clangdProxy.realClangdPath']; },
+    get clangdProxyLogPath() { return cfg['clangdProxy.logPath']; },
+    get clangdProxyLocalizationEnabled() { return cfg['clangdProxy.localization.enabled']; },
+    get clangdProxyLocalizationMode() { return cfg['clangdProxy.localization.mode']; },
+    get clangdProxyLocalizationTargets() { return cfg['clangdProxy.localization.targets']; },
     update, _updateCalls: updateCalls,
-    onDidChange: () => ({ dispose: () => {} }),
+    // 真实 Config.onDidChange 返回 listener subscription；测试里 mock 也保留订阅并提供
+    // _fire()，方便"用户从 settings.json 改了配置"这条路径做端到端回归。
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onDidChange: createMockOnDidChange(),
     ueVersion: undefined, clangdPath: undefined,
   } as unknown as import('@core/config').Config & { _updateCalls: Array<[string, unknown]> };
+}
+
+// 抽出 onDidChange mock 工厂，避免在 createMockConfig 大字面量里写 IIFE + 自引用导致
+// lint/类型签名混乱。返回 callable + vi.fn 包装以兼容 toHaveBeenCalledTimes 等 spy 断言。
+function createMockOnDidChange() {
+  type Listener = (e: { affectsConfiguration: (k: string) => boolean }) => void;
+  const listeners: Listener[] = [];
+  const subscription = { dispose: vi.fn() };
+  const spy = vi.fn((listener: Listener) => {
+    listeners.push(listener);
+    return subscription;
+  });
+  // 测试钩子：手动触发所有订阅者。参数模拟真实 ConfigurationChangeEvent 形状。
+  const fire = (key: string): void => {
+    for (const l of listeners) {
+      l({ affectsConfiguration: (k: string) => k.startsWith('vscodeUEHelper.') || k === key });
+    }
+  };
+  const result = spy as unknown as ReturnType<typeof spy> & { _fire: typeof fire; _listeners: Listener[] };
+  result._fire = fire;
+  result._listeners = listeners;
+  return result;
 }
 
 function createMockDetectionHandles() {
@@ -90,28 +125,45 @@ function createMockDetectionHandles() {
   };
 }
 
-function createMockClangdHandles() {
+function createMockClangdHandles(config: ReturnType<typeof createMockConfig>) {
+  // isActive 真实读 settingsManager.isUsingOurLauncher（跟 clangd.path 实际值有关）。
+  // 默认 false；测试可在拿到 mock 后通过赋值改写模拟 enable/disable 效果。
+  let isActive = false;
   return {
     proxyManager: {
-      getStatus: vi.fn().mockReturnValue({
-        enabled: false, active: false, launcherPath: '',
-        realClangdPath: undefined, keepaliveMax: 20, keepaliveTtlSec: 900,
-        localizationEnabled: false, localizationMode: 'append',
-        logPath: undefined, backupExists: false,
+      // 真实 proxyManager.getStatus() 内部从 this.config 读 enabled/keepalive*/localization*/logPath，
+      // 这里 mock 也同步行为：每次调用重读 config getter，让"保存后推 statusValues"的回归
+      // 测试能验证真实字段链。
+      getStatus: vi.fn().mockImplementation(() => ({
+        enabled: config.clangdProxyEnabled,
+        active: isActive,
+        launcherPath: '',
+        realClangdPath: config.clangdProxyRealClangdPath,
+        keepaliveMax: config.clangdProxyKeepaliveMax,
+        keepaliveTtlSec: config.clangdProxyKeepaliveTtlSec,
+        localizationEnabled: config.clangdProxyLocalizationEnabled,
+        localizationMode: config.clangdProxyLocalizationMode,
+        logPath: config.clangdProxyLogPath,
+        backupExists: false,
         lastKnownProblem: undefined,
-      }),
+      })),
+      get isActive() { return isActive; },
+      // 暴露 setter 让测试可以模拟 enable/disable 命令路径：实际场景下
+      // settingsManager.enable() 把 clangd.path 改成 launcher → isActive=true。
+      _setActive(v: boolean) { isActive = v; },
       enable: vi.fn(), disable: vi.fn(),
     },
   };
 }
 
 function createDeps() {
+  const config = createMockConfig();
   return {
     context: { subscriptions: [] } as unknown as vscode.ExtensionContext,
-    config: createMockConfig(),
+    config,
     logger: createMockLogger(),
-    detection: createMockDetectionHandles() as never,
-    clangd: createMockClangdHandles() as never,
+    detection: createMockDetectionHandles() as unknown as import('@detection').DetectionHandles,
+    clangd: createMockClangdHandles(config) as unknown as import('@clangd').ClangdHandles,
   };
 }
 
@@ -306,6 +358,24 @@ describe('ControlPanelProvider', () => {
     expect(saveCall![0]).toMatchObject({ scope: 'config', result: { success: true, saved: 2, failed: 0 } });
   });
 
+  // [Status 同步 bug 回归测试] 保存 config 后必须推一次 statusValues，
+  // 否则 Status Tab 上看到的 configuration / target 等字段不会刷新。
+  it('saveConfig 后同步推送 statusValues 反映新值', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
+    listener({ type: 'saveConfig', updates: [{ key: 'configuration', value: 'Shipping' }, { key: 'target', value: 'Game' }] });
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const statusCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'statusValues');
+    expect(statusCall).toBeDefined();
+    expect((statusCall![0] as { values: { configuration: string; target: string } }).values).toMatchObject({
+      configuration: 'Shipping',
+      target: 'Game',
+    });
+  });
+
   it('handles saveProxyConfig batch updates', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
@@ -319,6 +389,38 @@ describe('ControlPanelProvider', () => {
     expect(saveCall![0]).toMatchObject({ scope: 'proxy', result: { success: true, saved: 2, failed: 0 } });
   });
 
+  // [Status 同步 bug 回归测试] 保存 proxy 配置后必须同步推 statusValues，让 Status Tab
+  // 上看到的 proxyEnabled / keepaliveMax / localizationEnabled / logPath 等实时刷新。
+  // proxyRealClangdPath / logPath 走 'value ?? (auto-detect)/(not set)' 显示逻辑；测试用
+  // 真实字符串以绕开回落分支验证完整字段链。
+  it('saveProxyConfig 后同步推送 statusValues 反映刚写入的 proxy 配置', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
+    listener({ type: 'saveProxyConfig', updates: [
+      { key: 'clangdProxyEnabled', value: true },
+      { key: 'clangdProxyKeepaliveMax', value: 42 },
+      { key: 'clangdProxyKeepaliveTtlSec', value: 1234 },
+      { key: 'localizationEnabled', value: true },
+      { key: 'localizationMode', value: 'zh-only' },
+      { key: 'clangdProxyRealClangdPath', value: '/custom/clangd' },
+      { key: 'clangdProxyLogPath', value: '/tmp/proxy.log' },
+    ] });
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const statusCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'statusValues');
+    expect(statusCall).toBeDefined();
+    const values = (statusCall![0] as { values: Record<string, unknown> }).values;
+    expect(values.proxyEnabled).toBe(true);
+    expect(values.proxyKeepaliveMax).toBe(42);
+    expect(values.proxyKeepaliveTtlSec).toBe(1234);
+    expect(values.proxyLocalizationEnabled).toBe(true);
+    expect(values.proxyLocalizationMode).toBe('zh-only');
+    expect(values.proxyRealClangdPath).toBe('/custom/clangd');
+    expect(values.proxyLogPath).toBe('/tmp/proxy.log');
+  });
+
   it('handles getStatus', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
@@ -329,6 +431,79 @@ describe('ControlPanelProvider', () => {
     const statusCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'statusValues');
     expect(statusCall).toBeDefined();
     expect((statusCall![0] as { values: unknown }).values).toMatchObject({ configuration: 'Development', target: 'Editor', proxyEnabled: false });
+  });
+
+  // [外部激活状态同步 bug 回归] 用户跑过 enableClangdProxy 命令后，clangd.path 已指向
+  // launcher（F-fix 设计故意不写 clangdProxy.enabled 配置），但 UI 不应显示"未启用"。
+  // 派生规则：proxyEnabled 显示 = isActive || enabled，让 Status 反映事实状态。
+  it('proxyEnabled 显示派生为 isActive || enabled —— 用户开了 proxy 但 enabled 配置 false 时仍显示已启用', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    // 模拟 enable 命令路径：settingsManager 已写入 launcher，但 Config.clangdProxyEnabled=false
+    (deps.clangd.proxyManager as unknown as { _setActive: (v: boolean) => void })._setActive(true);
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
+    listener({ type: 'getStatus' });
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const statusCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'statusValues');
+    expect(statusCall).toBeDefined();
+    const values = (statusCall![0] as { values: { proxyEnabled: boolean; proxyActive: boolean } }).values;
+    expect(values.proxyActive).toBe(true);
+    expect(values.proxyEnabled).toBe(true);
+  });
+
+  // [代理设置 Tab 派生显示] getProxyConfig 同样派生 enabled，覆盖代理设置表单的回读。
+  it('getProxyConfig 表单显示也派生为 isActive || enabled', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    (deps.clangd.proxyManager as unknown as { _setActive: (v: boolean) => void })._setActive(true);
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (msg: unknown) => void;
+    listener({ type: 'getProxyConfig' });
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const call = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'proxyConfigValues');
+    expect(call).toBeDefined();
+    const values = (call![0] as { values: { clangdProxyEnabled: boolean } }).values;
+    expect(values.clangdProxyEnabled).toBe(true);
+  });
+
+  // [外部配置同步 bug 回归] 用户从 VS Code 设置 UI / settings.json 改了 vscodeUEHelper.*
+  // 配置后，控制面板应立即收到最新 statusValues 与 proxyConfigValues，不再需要切换 tab
+  // 或按 refresh 按钮。
+  it('config.onDidChange 触发后自动推送 proxyConfigValues + statusValues 到 webview', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(mockView, {} as unknown as vscode.WebviewViewResolveContext, {} as unknown as vscode.CancellationToken);
+    // 模拟用户在 Settings UI 把 clangdProxyEnabled 改回 true 后，VS Code 触发
+    // workspace.onDidChangeConfiguration → Config.onDidChange 转发到我们的 listener。
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- mock cast 类型不可解析，eslint 误判；mock 是 spy 而非 bound method
+    const onDidChange = deps.config.onDidChange as unknown as { _fire: (k: string) => void };
+    onDidChange._fire('vscodeUEHelper.clangdProxy.enabled');
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const proxyCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'proxyConfigValues');
+    const statusCall = calls.find((c: unknown[]) => (c[0] as { type?: string })?.type === 'statusValues');
+    expect(proxyCall).toBeDefined();
+    expect(statusCall).toBeDefined();
+    expect((proxyCall![0] as { values: { clangdProxyEnabled: boolean } }).values.clangdProxyEnabled).toBe(false);
+    expect((statusCall![0] as { values: { proxyEnabled: boolean } }).values.proxyEnabled).toBe(false);
+  });
+
+  // [外部配置同步 bug 回归] register 应该真的把 onDidChange 的 disposable 推进
+  // context.subscriptions，确保 dispose 时 listener 被回收（防内存泄漏）。
+  // 这里用 .mock.calls.length 而非 toHaveBeenCalledTimes，因为 deps.config 经过
+  // `as unknown as Config` cast 后类型推断走 method-path，eslint unbound-method
+  // 规则会把 expect(toHaveBeenCalledTimes) 误报为 unbound method。calls.length
+  // 与 spy .mock.calls 直接对齐，行为等价。
+  it('register 把 config.onDidChange listener push 到 context.subscriptions', () => {
+    const deps = createDeps();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- mock cast 类型不可解析；mock 是 spy 而非 bound method
+    const onDidChangeSpy = deps.config.onDidChange as unknown as { mock: { calls: unknown[][] } };
+    ControlPanelProvider.register(deps);
+    expect(onDidChangeSpy.mock.calls.length).toBe(1);
+    expect(deps.context.subscriptions.length).toBeGreaterThanOrEqual(2); // registerWebviewViewProvider disposable + onDidChange disposable
   });
 
   it('CONFIG_KEY_MAP maps proxy field names', () => {

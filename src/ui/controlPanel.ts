@@ -58,7 +58,51 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     );
     deps.context.subscriptions.push(disposable);
     deps.logger.info('[controlPanel] provider registered');
+
+    // [外部配置同步 bug 修复] 订阅 vscodeUEHelper.* 配置变化，自动把最新 proxy/status
+    // 推到 webview。仅靠 webview 内部 save handler 无法覆盖以下场景：
+    //   - 用户在 VS Code 设置 UI 改了 clangdProxy.enabled / keepalive 等
+    //   - 用户直接编辑 .vscode/settings.json
+    //   - 其它命令（如 setSystemIncludes、firstRunInit）改了 vscodeUEHelper.*
+    // 没有这个 listener，控制面板只在 save 与 visibility 切换时刷新，会一直停留在旧值。
+    // Config.onDidChange 内部已过滤无关 namespace（src/core/config.ts:311-317）。
+    const configListener = deps.config.onDidChange(() => {
+      // onDidChange 由 VS Code workspace.onDidChangeConfiguration 触发，同进程内是异步
+      // （microtask 后）。webview 仍然可能尚未 ready，但 postMessage 内部已经处理 _view 不存在
+      // 的情况（静默跳过），所以这里不必等待 panelReady。
+      provider.pushProxyConfig();
+      provider.pushStatus();
+    });
+    deps.context.subscriptions.push(configListener);
     return disposable;
+  }
+
+  /**
+   * 把当前 proxy 表单回写到 webview —— 用于被 config.onDidChange 触发，也供外部
+   * （如命令调用）显式刷新时复用。proxyEnabled 派生为"真实激活 OR 配置启用"，
+   * 让 enable 命令开 proxy 但 clangdProxy.enabled 还没写时的"看起来没开"陷阱消失。
+   * 该函数不抛错，_view 不存在则跳过（panelReady 前的早期 onDidChange 安全）。
+   */
+  private pushProxyConfig(): void {
+    const { config, clangd } = this.deps;
+    const displayEnabled = clangd.proxyManager.isActive || config.clangdProxyEnabled;
+    this.postMessage({
+      type: 'proxyConfigValues',
+      values: {
+        clangdProxyEnabled: displayEnabled,
+        clangdProxyKeepaliveMax: config.clangdProxyKeepaliveMax,
+        clangdProxyKeepaliveTtlSec: config.clangdProxyKeepaliveTtlSec,
+        clangdProxyRealClangdPath: config.clangdProxyRealClangdPath ?? '',
+        clangdProxyLogPath: config.clangdProxyLogPath ?? '',
+        localizationEnabled: config.clangdProxyLocalizationEnabled,
+        localizationMode: config.clangdProxyLocalizationMode,
+      },
+    });
+  }
+
+  /** 把当前 status 推到 webview —— 同上，供 onDidChange 与命令复用 */
+  private pushStatus(): void {
+    this.postMessage({ type: 'statusValues', values: this.buildStatusValues() });
   }
 
   static show(): void {
@@ -153,18 +197,8 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'getProxyConfig':
-        this.postMessage({
-          type: 'proxyConfigValues',
-          values: {
-            clangdProxyEnabled: config.clangdProxyEnabled,
-            clangdProxyKeepaliveMax: config.clangdProxyKeepaliveMax,
-            clangdProxyKeepaliveTtlSec: config.clangdProxyKeepaliveTtlSec,
-            clangdProxyRealClangdPath: config.clangdProxyRealClangdPath ?? '',
-            clangdProxyLogPath: config.clangdProxyLogPath ?? '',
-            localizationEnabled: config.clangdProxyLocalizationEnabled,
-            localizationMode: config.clangdProxyLocalizationMode,
-          },
-        });
+        // 复用 pushProxyConfig()，统一走 "isActive || enabled" 派生显示。
+        this.pushProxyConfig();
         break;
 
       case 'updateConfig':
@@ -185,14 +219,27 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
       case 'saveConfig':
         this.postMessage({ type: 'saveResult', scope: 'config', result: await this.batchSave(msg.updates) });
+        // [Status 同步 bug 修复] 保存顶层配置后也推一次 statusValues，Status Tab 上的
+        // configuration / target / clangdPath / lspLoggingLevel 等字段才能即时反映。
+        // config.onDidChange 监听器也会触发（异步），这里显式同步先推一份保证 webview
+        // 立即收到，避免刷新时序空白。
+        this.pushStatus();
         break;
 
       case 'saveProxyConfig':
         this.postMessage({ type: 'saveResult', scope: 'proxy', result: await this.batchSave(msg.updates) });
+        // [Status 同步 bug 修复] 保存 Proxy 配置后必须再推一次 statusValues。原代码只
+        // 回 saveResult，导致用户在 Status Tab 上看到的 proxyEnabled / keepalive /
+        // localization / logPath / backup 等状态一直停留在旧值，要切走/刷新按钮才更新。
+        this.pushStatus();
+        // 同时回写 proxy 表单——保证用户在 Proxy Tab 上看到刚保存的值覆盖原 UI 状态
+        // （例如 uncheck clangdProxyEnabled 后此 checkbox 显示 unchecked 而不是
+        // 仍派生显示 enabled）。pushProxyConfig 内部仍走 isActive||enabled 派生。
+        this.pushProxyConfig();
         break;
 
       case 'getStatus':
-        this.postMessage({ type: 'statusValues', values: this.buildStatusValues() });
+        this.pushStatus();
         break;
 
       case 'getAddFlags': {
@@ -326,7 +373,13 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       mcpMode: config.useMCP,
       mcpHost,
       logLevel: config.lspLoggingLevel,
-      proxyEnabled: ps.enabled,
+      // [外部激活状态同步 bug 修复] proxyEnabled 派生为"真实激活 OR 配置启用"。
+      // enableClangdProxy 命令为避免 Config.update scope 静默失败陷阱故意不写
+      // clangdProxy.enabled 配置（F-fix 决策），但 clangd.path 已经指向 launcher
+      // → proxy 实际激活。如果只看 config 显示 false，就是用户报告的"开了却显示没开"。
+      // 派生为 isActive || enabled，让 Status 反映事实；保存路径仍写原 config key
+      // （去激活需要走 disable 命令或在配置里改）。
+      proxyEnabled: ps.enabled || clangd.proxyManager.isActive,
       proxyActive: clangd.proxyManager.isActive,
       proxyLauncherPath: ps.launcherPath,
       proxyRealClangdPath: ps.realClangdPath ?? '(auto-detect)',
