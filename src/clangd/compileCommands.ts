@@ -409,18 +409,29 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
         log.warn(`[perf] failed to write fallback cache: ${msg}`);
       }
 
-      // [P0-B] fallback 后挂 fillMissingCompileCommands：
-      //        修复 plugin .cpp 不在主 target 时漏补。fallback DB 写入后再扫一遍源文件补条目。
+      // [P0-B / Todo 6] 仅主路径/无 fromFallback 时挂 fillMissingCompileCommands。
+      //        fallback DB 已覆盖所有 Source/Plugins .cpp + 反射 .h,fillMissing 重复且无用;
+      //        短路避免重复 IO。fromFallback 标记由 generateFallbackCompileCommands 设置。
+      //        UHT 错误检测隐式覆盖:candidates 命中 = UBT 成功(无 UHT 错误)→ 走主路径不 fallback;
+      //        candidates 未命中 = UBT 失败(可能 UHT 错) → fallback。executeShellTask 只暴露
+      //        exit code(vscode.tasks API 无 stdout/stderr),所以无法做 UHT 字面正则匹配。
       try {
-        const fillResult = await fillMissingCompileCommands(
-          fbResult.ccPath, opts.project, log, opts.workspace,
-        );
-        if (fillResult) {
-          perfLog.record({
-            event: 'compileCommands.fillMissing',
-            elapsedMs: performance.now() - entryStart,
-            meta: { outcome: fillResult.skippedReason ? 'skipped' : 'added', added: fillResult.added.length },
-          });
+        if (fbResult.fromFallback === true) {
+          log.info(
+            '[compileCommands] skipping fillMissingCompileCommands ' +
+              '(fallback DB already covers all Source/Plugins .cpp + reflection .h)',
+          );
+        } else {
+          const fillResult = await fillMissingCompileCommands(
+            fbResult.ccPath, opts.project, log, opts.workspace,
+          );
+          if (fillResult) {
+            perfLog.record({
+              event: 'compileCommands.fillMissing',
+              elapsedMs: performance.now() - entryStart,
+              meta: { outcome: fillResult.skippedReason ? 'skipped' : 'added', added: fillResult.added.length },
+            });
+          }
         }
       } catch (fillErr) {
         const msg = fillErr instanceof Error ? fillErr.message : String(fillErr);
