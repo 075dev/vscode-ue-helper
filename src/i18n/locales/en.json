@@ -241,5 +241,8 @@
   "generateCompileCommands.laterBtn": "Later",
   "generateCompileCommands.failed": "Failed to generate compile_commands.json: {0}",
 
-  "createProject.success": "Unreal Clangd project configured successfully"
+  "createProject.success": "Unreal Clangd project configured successfully",
+  "createProject.uhtPreCodegen": "Pre-generate .generated.h ({count} files)",
+  "createProject.fallbackUsed": "Build errors detected. Using fallback compile_commands.json (IntelliSense may be incomplete until errors are fixed).",
+  "createProject.stubGenerated": "Generated stub .generated.h for {count} reflection headers"
 }

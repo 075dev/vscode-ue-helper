@@ -187,6 +187,10 @@ export async function executeCreateProject(
         // clangd 给出基本提示；UHT 抛错（无 dotnet / 非法 buildTargetName 等）仅
         // logger.warn，不阻断 step 2 —— 与 fillMissingCompileCommands / startModifyResponseFiles
         // / startCreateRspMatchers 三个"非阻断"子步骤同模式。
+        // [i18n 迁移] results.push 的 step 字段统一改用 t() 包装
+        // （createProject.uhtPreCodegen key 在 zh/en locale 中带 {count} 占位符），
+        // 便于在中文/英文环境下分别展示"UHT 预生成 .generated.h (N 个)"等本地化文本；
+        // detail 字段保留为原始英文/数字调试串，不强制走 i18n。
         try {
           const buildTargetName = project.name ? `${project.name}Editor` : '';
           if (!buildTargetName) {
@@ -194,7 +198,7 @@ export async function executeCreateProject(
               '[createProject] step 2 UHT pre-codegen skipped: project.name is empty',
             );
             results.push({
-              step: 'Run UHT pre-codegen',
+              step: t('createProject.uhtPreCodegen', { count: 0 }),
               ok: false,
               detail: 'project.name is empty',
             });
@@ -207,7 +211,9 @@ export async function executeCreateProject(
               logger,
             });
             results.push({
-              step: 'Run UHT pre-codegen',
+              step: t('createProject.uhtPreCodegen', {
+                count: uhtResult.generatedHeaderCount,
+              }),
               ok: uhtResult.ran || uhtResult.generatedHeaderCount > 0,
               detail: `generated ${uhtResult.generatedHeaderCount} .generated.h (UBT exit ${uhtResult.exitCode ?? 'null'})`,
             });
@@ -216,7 +222,7 @@ export async function executeCreateProject(
           const msg = err instanceof Error ? err.message : String(err);
           logger.warn('[createProject] step 2 UHT pre-codegen failed:', msg);
           results.push({
-            step: 'Run UHT pre-codegen',
+            step: t('createProject.uhtPreCodegen', { count: 0 }),
             ok: false,
             detail: msg,
           });

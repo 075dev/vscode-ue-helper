@@ -241,5 +241,8 @@
   "generateCompileCommands.laterBtn": "稍后 / Later",
   "generateCompileCommands.failed": "生成 compile_commands.json 失败：{0} / Failed to generate compile_commands.json: {0}",
 
-  "createProject.success": "Unreal Clangd 项目配置完成 / Unreal Clangd project configured"
+  "createProject.success": "Unreal Clangd 项目配置完成 / Unreal Clangd project configured",
+  "createProject.uhtPreCodegen": "UHT 预生成 .generated.h ({count} 个) / Pre-generate .generated.h ({count} files)",
+  "createProject.fallbackUsed": "项目存在构建错误,已启用降级 compile_commands.json(IntelliSense 可能不完整,请修复构建错误后重新运行)。/ Build errors detected. Using fallback compile_commands.json (IntelliSense may be incomplete until errors are fixed).",
+  "createProject.stubGenerated": "为 {count} 个反射头文件生成 stub .generated.h / Generated stub .generated.h for {count} reflection headers"
 }
