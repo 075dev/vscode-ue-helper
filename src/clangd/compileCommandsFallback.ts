@@ -203,6 +203,42 @@ async function extractUhtManifestIncludes(projectDir: string): Promise<string[]>
 }
 
 /**
+ * 从 UHT manifest 提取项目内模块的 OutputDirectory。
+ *
+ * 用于 stub .generated.h 的优先写入位置（UHT 失败时 OutputDirectory 目录可能尚未生成，
+ * 此时把 stub 直接写到同一位置即可让 `-I<OutputDirectory>` 自然找到 stub）。
+ * 仅保留 BaseDirectory 在 projectDir 下（含子目录）的模块，
+ * 避免误用引擎自带 manifest 的引擎模块 OutputDirectory。
+ *
+ * best-effort：manifest 不存在或解析失败则返回空。
+ */
+async function extractUhtManifestOutputDirs(projectDir: string): Promise<string[]> {
+  const buildDir = path.join(projectDir, 'Intermediate', 'Build');
+  const manifests = await findFilesByExt(buildDir, '.uhtmanifest');
+  const outputs: string[] = [];
+  for (const manifest of manifests) {
+    try {
+      const content = await fs.readFile(manifest, 'utf-8');
+      const parsed = JSON.parse(content) as {
+        Modules?: Array<{ BaseDirectory?: string; OutputDirectory?: string }>;
+      };
+      for (const mod of parsed.Modules ?? []) {
+        const baseDir = mod.BaseDirectory;
+        const outputDir = mod.OutputDirectory;
+        if (!baseDir || !outputDir) { continue; }
+        // 仅保留 BaseDirectory 位于 projectDir 之内的模块
+        const rel = path.relative(projectDir, baseDir);
+        if (rel.startsWith('..') || path.isAbsolute(rel)) { continue; }
+        outputs.push(outputDir);
+      }
+    } catch {
+      // 解析失败跳过该 manifest
+    }
+  }
+  return outputs;
+}
+
+/**
  * 确保 ueClangdCompat.h 存在，不存在则 best-effort 写入。
  * fallback 可能在 createProject step 2（completionFiles 之前）调用，需自洽。
  */
@@ -274,18 +310,23 @@ async function scanHeaderFiles(dir: string, acc: string[]): Promise<void> {
 }
 
 /**
- * 为含 UE 反射宏（UCLASS / USTRUCT / UINTERFACE / UENUM）的 .h 写一份空的 stub .generated.h。
+ * 为含 UE 反射宏（UCLASS / USTRUCT / UINTERFACE / UENUM）的 .h 写一份兜底 stub .generated.h。
  *
  * 目的：当 UBT 失败导致 Intermediate/Build/<PlatformCfg>/<Target>/UHT/<Module>.generated.h 不存在时，
  *       `#include "Foo.generated.h"` 在 clangd 索引阶段找不到对应文件会报 unknown_typename。
- *       这里在 `.vscode/vscodeuehelper/fallback-generated/<Module>/<Header>.generated.h`
- *       写入仅含 `#pragma once\n` 的空 stub，让 include 至少能解析。
- *       真实的 UE 宏展开（UCLASS / GENERATED_BODY 等）由 ueClangdCompat.h 在编译期兜底（task 3）。
+ *       这里写入一份最小 stub：仅含 `#pragma once` + `#include "<ueClangdCompat.h>"`，
+ *       让 include 路径至少能解析、clangd 把 .h 视作空 unit（真正的 UCLASS / GENERATED_BODY
+ *       等宏展开由 ueClangdCompat.h 在编译期兜底）。
+ *
+ * stub 路径优先级：
+ *   1. 解析 .uhtmanifest（Intermediate/Build/**.uhtmanifest），取项目内模块的 OutputDirectory。
+ *      写入该目录时可以让 `-I<OutputDirectory>` 自然覆盖到 stub（UBT 失败场景）。
+ *   2. 无 manifest 匹配时回退到 `.vscode/vscodeuehelper/fallback-generated/<Module>/`，
+ *      按模块分子目录避免同名 header 冲突。
  *
  * 约束：
- *   - 不覆盖真实产物（路径不在 Intermediate/Build/** 下）
+ *   - 不覆盖真实产物（任何路径写入前 fs.access 探测，存在则跳过）
  *   - 不为无反射宏的普通 .h 写 stub（噪声防护）
- *   - 已存在则跳过（用户/工具链可能已写）
  *   - atomic write（先 .tmp 再 rename，参考 headerCache.recordHeader）
  *
  * @returns stub 写入数 + stub 根目录绝对路径（用于加入 includeCandidates）
@@ -294,7 +335,10 @@ async function writeStubGeneratedHeaders(
   projectDir: string,
   log: Logger,
 ): Promise<{ count: number; stubDir: string }> {
-  const stubDir = path.join(projectDir, FALLBACK_CC_DIR_REL, 'fallback-generated');
+  // 优先从 .uhtmanifest 取 OutputDirectory 作为 stub 写入根目录 + -I 候选；
+  // 无匹配时回退到项目内自建目录 fallback-generated（绝不污染 Intermediate）。
+  const manifestOutputs = await extractUhtManifestOutputDirs(projectDir);
+  const fallbackDir = path.join(projectDir, FALLBACK_CC_DIR_REL, 'fallback-generated');
 
   // 收集项目 Source + Plugins/*/Source 下的所有 .h
   const headerFiles: string[] = [];
@@ -310,6 +354,17 @@ async function writeStubGeneratedHeaders(
   } catch {
     // 无 Plugins 目录，跳过
   }
+
+  // 解析 compat 头绝对路径（供 stub 文件 #include 用）。
+  // getUeClangdCompatPath 内部用 path.dirname(projectPath) 定位 projectDir,
+  // 这里传 path.join(projectDir, 'Stub.uproject') 即可让 dirname 解出 projectDir。
+  const projectPathStub = path.join(projectDir, 'Stub.uproject');
+  const compatAbsPath = getUeClangdCompatPath(projectPathStub);
+  const stubContent = `#pragma once\n#include "${compatAbsPath}"\n`;
+
+  // 仅取首个匹配的 OutputDirectory 作为主 stub 写入根目录 + stubDir 返回值。
+  // stubDir 字段语义为单一字符串，与调用方 add(stubResult.stubDir) 兼容。
+  const primaryOutputDir: string | null = manifestOutputs[0] ?? null;
 
   let count = 0;
   for (const headerPath of headerFiles) {
@@ -327,11 +382,16 @@ async function writeStubGeneratedHeaders(
     if (!moduleName) { continue; }
 
     // 3. 构造 stub 路径
+    //    a) 有 manifest 匹配的 OutputDirectory:写到那里（扁平化文件名，
+    //       OutputDirectory 本身已按模块分目录）。取首个 OutputDirectory 作为主 stubDir。
+    //    b) 无 manifest 时:写到 fallback-generated/<Module>/ 子目录。
     const baseName = path.basename(headerPath); // e.g. Player.h
     const stem = baseName.replace(/\.h$/i, ''); // e.g. Player
-    const stubFile = path.join(stubDir, moduleName, `${stem}.generated.h`);
+    const stubFile = primaryOutputDir
+      ? path.join(primaryOutputDir, `${stem}.generated.h`)
+      : path.join(fallbackDir, moduleName, `${stem}.generated.h`);
 
-    // 4. 已存在则跳过（用户/工具链可能已手写 stub）
+    // 4. 已存在则跳过（真实产物/手写 stub 优先，绝不覆盖）
     try {
       await fs.access(stubFile);
       continue;
@@ -343,7 +403,7 @@ async function writeStubGeneratedHeaders(
     try {
       await fs.mkdir(path.dirname(stubFile), { recursive: true });
       const tmpPath = `${stubFile}.tmp`;
-      await fs.writeFile(tmpPath, '#pragma once\n', 'utf-8');
+      await fs.writeFile(tmpPath, stubContent, 'utf-8');
       await fs.rename(tmpPath, stubFile);
       count++;
     } catch (err) {
@@ -355,6 +415,8 @@ async function writeStubGeneratedHeaders(
     }
   }
 
+  // stubDir：有 manifest 时取首个 OutputDirectory；否则 fallback-generated。
+  const stubDir = primaryOutputDir ?? fallbackDir;
   return { count, stubDir };
 }
 
