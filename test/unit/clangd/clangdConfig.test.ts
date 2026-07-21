@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import * as yaml from 'yaml';
+// [Phase 9 SSoT] 测试内部直 import src/，绕开 @clangd/clangdConfig barrel（已脱锁）
+// eslint-disable-next-line no-restricted-imports
 import {
   renderClangdConfig,
   defaultClangdConfig,
-} from '@clangd/clangdConfig';
+} from '../../../src/clangd/clangdConfig';
 
 describe('renderClangdConfig (yaml 序列化)', () => {
   it('renders an empty config', () => {

@@ -16,7 +16,7 @@
 | 5 | ✅ | MCP server (auto-enabled in Cursor / Claude Code), AI agent rules |
 | 6 | ✅ | Unit tests (Vitest, 675 tests / 57 files), CI-ready scripts |
 | 7 | ✅ | clangd LSP proxy + control panel webview + preparse cache, perf instrumentation |
-| 8 | ✅ | `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构、Phase 7/8 收束 |
+| 8 | ✅ | `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构、Phase 7/8/9 SSoT 收束 |
 
 ## Inspiration
 
@@ -60,7 +60,7 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 - Preparse-includes for UE macros（**slow 模式统一** — fast/slow 已合并为单一 slow,49 头文件列表）
 - UE macro parameter completion (`UCLASS` / `UPROPERTY` / `UFUNCTION` / `USTRUCT` / `UENUM`) via managed `addMacroCompletions.h` — user code is preserved across refreshes
 - Workspace backup: `.code-workspace` survives UBT's `-ProjectFiles` refresh
-- **`ClangdOps` 统一 .clangd 操作 API**：[Phase 8] 22 callers 用 `mutate`/`setAddFlag`/`replaceAddBlock`
+- **`ClangdOps` 统一 .clangd 操作 API**：[Phase 8] 22 callers 用 `mutate / applyAddFlags / readConfig / exists / writeFull`；`setAddFlag / replaceAddBlock / setIndexBackground / updateSystemIncludes` 等细粒度 setter **不提供**——它们只是 mutate 闭包的固化。
 - `Diagnose Clangd Project` command: scans `.clangd` / `compile_commands.json` / preparse / clangd binary / addCompletions + addMacroCompletions, 输出结构化 pass/warn/fail 报告
 - **clangd LSP 代理**（独立进程,stdin/stdout JSON-RPC）：didClose keepalive、汉化（hover 词典）,`proxy-launcher.bat/sh` 自动生成
 

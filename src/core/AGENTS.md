@@ -39,22 +39,48 @@ console.log(config.clangdHeaderWatcherEnabled);      // 已是新值
 
 **`completionMode` 设置已完全删除**（H4-B 决策，见 REMEDIATION-PLAN §十二）。Config getter 永远返回 `'slow'` 字面量，UI 移除 toggle 按钮。
 
-## WorkspaceState [Phase 8]
+## WorkspaceState [Phase 8 + 9 SSoT 收尾]
 
-**单一真相源**。构造时订阅 `detection.ready` 并 `setResult`，所有模块通过 `workspace` getter 拿派生路径：
+**单一真相源**（Phase 8）+ **selected* 收敛**（Phase 9）。构造时订阅 `detection.ready` 并 `setResult`，所有模块通过 `workspace` getter 拿派生路径：
 
 ```typescript
-const workspace = new WorkspaceState({ detection, logger });
-// ... workspace.projectDir        动态从 DetectionResult 派生
-//     workspace.engineRoot
-//     workspace.ubtPath            compute-on-demand
-//     workspace.knownRoots
-//     workspace.errorMessage
+const workspace = new WorkspaceState({ detection, logger, workspaceContext: detection.workspaceContext });
+// ... 派生路径 getter ── 20+ Level 1/2/3 字段
+workspace.projectDir                 // 项目根目录（来自 .uproject）
+workspace.engineRoot                 // 引擎根目录（来自 Build.version）
+workspace.workspaceFile              // .code-workspace 绝对路径
+workspace.workspaceFolders           // 已分配 role 的 folders[]
+workspace.workspaceRoot              // .code-workspace 的 dirname
+workspace.clangdConfigPath            // 项目根 .clangd
+workspace.clangdHelperDir            // .vscode/vscodeuehelper/
+workspace.compileCommandsPath        // compile_commands.json 路径
+// ... 6 个补全文件路径（macroHelperPath / addCompletionsPath / addMacroCompletionsPath ...）
+
+// ... 用户选择（Phase 9 新增，持久化于 workspaceContext.memento）
+workspace.selectedProject            // string | null
+workspace.selectedEngine             // string | null
+await workspace.setSelectedProject(project)
+await workspace.setSelectedEngine(engine)
 ```
+
+**SSoT 规则（必须遵守，违反会被 ESLint 拦下）**：
+
+| ❌ 禁止 | ✅ 改用 |
+|---|---|
+| `vscode.workspace.workspaceFile` 直读 | `workspace.workspaceFile` |
+| `vscode.workspace.workspaceFolders` 直读 | `workspace.workspaceFolders` |
+| `vscode.workspace.getWorkspaceFolder(...)` 直读（除构造 vscode.Task 时） | `workspace.workspaceFolders` |
+| `detection.workspaceContext.getSelectedProject()` 等 | `workspace.selectedProject` / `workspace.selectedEngine` |
+| `detection.workspaceContext.setProject(...)` / `setEngine(...)` | `workspace.setSelectedProject(...)` / `workspace.setSelectedEngine(...)` |
+| `path.join(root, '.clangd')` 等文件路径拼接 | `workspace.clangdConfigPath` / `workspace.compileCommandsPath` |
+
+ESLint 锁规则见仓库根 `.eslintrc.json` 内的 `no-restricted-syntax` / `no-restricted-imports`。
+新增 getter 必须经过"派生规则"审核——见根 AGENTS.md 顶部 WorkspaceState 设计原则 §2。
 
 **迁移指南**：
 - 老 API `activate*(detection)` 内部转调 `workspace` getter，向后兼容。
-- **新代码应直接接 `workspace` 参数**，**不要新增 `projectDir: string`** 类型参数 —— 这正是 `@deprecated` 集中区域。
+- **新代码应直接接 `workspace` 参数**，**不要新增 `projectDir: string`** 类型参数。
+- 命令函数 `workspace` 参数为可选时——表示老调用方/test 兼容，生产 `commands/index.ts` 必传。
 
 ## command-registry 模式
 

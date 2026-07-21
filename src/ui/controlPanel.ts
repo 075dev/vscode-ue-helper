@@ -6,8 +6,10 @@ import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
+import type { WorkspaceState } from '@core/workspace';
 import type { ClangdHandles } from '@clangd';
 import type { ClangdOps } from '@clangd/clangdOps';
+import type { ProjectInfo, EngineInstall } from '@detection/types';
 import { resolveFlags, getGlossaryForWebview } from '@clangd/flagGlossary';
 import { getControlPanelHtml } from './controlPanel.html';
 import { COMMAND_MAP, CONFIG_KEY_MAP } from './controlPanelMessages';
@@ -18,6 +20,8 @@ export interface ControlPanelDeps {
   config: Config;
   logger: Logger;
   detection: DetectionHandles;
+  // [Phase 9 SSoT] 与 UI 其他模块一致：可选依赖，未传则 selected* fallback 到 detection
+  workspace?: WorkspaceState;
   clangd: ClangdHandles;
   /** [Plan Add 收束] 注入用于在 .clangd 上整体重写 Add 字段 */
   clangdOps?: ClangdOps;
@@ -138,14 +142,21 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private async refreshTitleInfo(): Promise<void> {
-    const { detection } = this.deps;
+    const { detection, workspace } = this.deps;
     try {
       const { projects, engines } = await detection.ready;
-      const selectedProject = detection.workspaceContext.getSelectedProject();
-      const project = projects.find((p) => p.path === selectedProject) ?? projects[0];
+      // [Phase 9 SSoT] 收敛 selected* 访问
+      function legacyFindProject(): ProjectInfo | undefined {
+        const sp = detection.workspaceContext.getSelectedProject();
+        return sp ? projects.find((p) => p.path === sp) : undefined;
+      }
+      function legacyFindEngine(): EngineInstall | undefined {
+        const se = detection.workspaceContext.getSelectedEngine();
+        return se ? engines.find((e) => e.path === se) : undefined;
+      }
+      const project = workspace?.resolveSelectedProject(projects) ?? legacyFindProject() ?? projects[0];
       this.projectName = project?.name ?? '';
-      const selectedEngine = detection.workspaceContext.getSelectedEngine();
-      const engine = engines.find((e) => e.path === selectedEngine) ?? engines[0];
+      const engine = workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine() ?? engines[0];
       this.engineVersion = engine?.version ?? '';
     } catch {
       this.projectName = '';
@@ -339,19 +350,22 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private buildStatusValues(): import('./controlPanelMessages').StatusValues {
-    const { config, detection, clangd } = this.deps;
+    const { config, detection, clangd, workspace } = this.deps;
     let projectPath = '', enginePath = '', workspaceFilePath = '', hasWorkspaceFile = false;
     const mcpHost = '';
 
     try {
-      const selectedProject = detection.workspaceContext.getSelectedProject();
-      if (selectedProject) {projectPath = selectedProject;}
-      const selectedEngine = detection.workspaceContext.getSelectedEngine();
-      if (selectedEngine) {enginePath = selectedEngine;}
-      const wsFolders = vscode.workspace.workspaceFolders;
-      if (wsFolders && wsFolders.length > 0) {
-        const wsFile = vscode.workspace.workspaceFile;
-        if (wsFile) { workspaceFilePath = wsFile.fsPath; hasWorkspaceFile = true; }
+      // [Phase 9 SSoT] 收敛 selected* 访问
+      // status 字段只展示用——单一真源是 workspace，但 workspaceContext 在 production 是 backing store
+      const sp = workspace?.selectedProject ?? detection.workspaceContext.getSelectedProject();
+      if (sp) {projectPath = sp;}
+      const se = workspace?.selectedEngine ?? detection.workspaceContext.getSelectedEngine();
+      if (se) {enginePath = se;}
+      // [Phase 9 SSoT] workspaceFile 走 workspace.workspaceFile（单一真相源；无 fallback）
+      const wsFile = workspace?.workspaceFile;
+      if (wsFile) {
+        workspaceFilePath = wsFile;
+        hasWorkspaceFile = true;
       }
     } catch { /* ignore */ }
 

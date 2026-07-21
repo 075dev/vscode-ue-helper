@@ -30,10 +30,8 @@ import {
   fillMissingCompileCommands,
   createCompletionFiles,
   addCompletionHelperToCompileCommands,
-  writeClangdConfig,
   defaultClangdConfig,
   renderClangdConfig,
-  findClangdConfig,
   WorkspaceBackup,
   CompletionModeController,
   discoverSystemIncludes,
@@ -72,11 +70,10 @@ describe('@clangd barrel exports', () => {
       expect(typeof addCompletionHelperToCompileCommands).toBe('function');
     });
 
-    it('.clangd 配置 API 三件套都在', () => {
-      expect(typeof writeClangdConfig).toBe('function');
+    // [Phase 9 SSoT] writeClangdConfig / findClangdConfig 已删除——唯一写入走 ClangdOps
+    it('.clangd 配置 API 仅 defaultClangdConfig + renderClangdConfig（写入由 ClangdOps 统一）', () => {
       expect(typeof defaultClangdConfig).toBe('function');
       expect(typeof renderClangdConfig).toBe('function');
-      expect(typeof findClangdConfig).toBe('function');
     });
 
     it('WorkspaceBackup 是类', () => {

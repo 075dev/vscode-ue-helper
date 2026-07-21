@@ -5,7 +5,7 @@
  *   1. 用 clangd --version 推断 InstalledDir,再跑 clang++.exe -v -E 拿到系统 include
  *   2. 三个 quickPick: MSVC 版本 → Windows SDK 版本 → C++ 标准
  *   3. 渲染 /imsvc + -fms-compatibility-version 标志
- *   4. 用 replaceSystemIncludeBlock splice 进 .clangd 的 CompileFlags.Add
+ *   4. 通过 ClangdOps.applyAddFlags 写入 .clangd 的 CompileFlags.Add（[Phase 9 SSoT] 唯一写入路径）
  *
  * Windows-only。其他平台命令显示信息提示后返回。
  *
@@ -29,30 +29,37 @@ import {
 import { resolveFlags } from '@clangd/flagGlossary';
 import { pickProject } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
+import type { ProjectInfo } from '@detection/types';
 
 export async function executeSetSystemIncludes(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
-  _workspace?: WorkspaceState,
+  // [Phase 9 SSoT] 已存在的参数——开始真正使用
+  workspace?: WorkspaceState,
   clangdOps?: ClangdOps,
-): Promise<void> {  if (process.platform !== 'win32') {
+): Promise<void> {
+  if (process.platform !== 'win32') {
     void vscode.window.showInformationMessage(
       'Set System Includes only applies on Windows (MSVC + Windows SDK).',
     );
     return;
   }
 
-  // Resolve the active project + engine (same shape as executeBuild).
+  // [Phase 9 SSoT] 收敛 selected* 访问
   const { projects } = await detection.ready;
-  let project = projects.find((p) => p.path === detection.workspaceContext.getSelectedProject());
+  function legacyFindProject(): ProjectInfo | undefined {
+    const sp = detection.workspaceContext.getSelectedProject();
+    return sp ? projects.find((p) => p.path === sp) : undefined;
+  }
+  let project = workspace?.resolveSelectedProject(projects) ?? legacyFindProject();
   if (!project && projects.length === 1) {project = projects[0];}
   if (!project) {project = await pickProject(projects);}
   if (!project) {return;}
-  await detection.workspaceContext.setProject(project);
+  await (workspace ? workspace.setSelectedProject(project) : detection.workspaceContext.setProject(project));
 
   // 引擎已经在工作区中选择过，直接读取
-  const enginePath = detection.workspaceContext.getSelectedEngine();
+  const enginePath = workspace?.selectedEngine ?? detection.workspaceContext.getSelectedEngine();
   logger.info(`[setSystemIncludes] project: ${project.path}, engine: ${enginePath ?? 'not selected'}`);
 
   // Discover what clangd currently sees.

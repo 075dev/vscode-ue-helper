@@ -28,6 +28,8 @@ import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { WorkspaceState } from '@core/workspace';
 import { ClangdConfig } from './types';
+// [Phase 9 SSoT] clangdOps 内部使用 clangdConfig（仅 defaultClangdConfig + renderClangdConfig——fs 写由本类 _atomicWrite 单一处理）
+// eslint-disable-next-line no-restricted-imports
 import { ClangdConfigOptions, defaultClangdConfig, renderClangdConfig } from './clangdConfig';
 
 export interface ClangdOpsOptions {
@@ -69,13 +71,34 @@ export class ClangdOps implements vscode.Disposable {
   async readConfig(): Promise<ClangdConfig | null> {
     const target = this.workspace.clangdConfigPath;
     if (!target) {return null;}
+    const text = await this.readText();
+    if (text === null) {return null;}
     try {
-      const text = await fs.readFile(target, 'utf-8');
       const parsed: unknown = yaml.parse(text);
       if (!parsed || typeof parsed !== 'object') {return null;}
       return parsed as ClangdConfig;
     } catch (err) {
       this.logger.warn(`[clangdOps] readConfig failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /**
+   * [Phase 9 SSoT 收尾] 读取 .clangd 原始文本（无 YAML 解析）
+   *
+   * 这是诊断 / 第三方解析等"我需要原始文本"场景的统一入口。统一从 WorkspaceState 派生路径，
+   * 禁止调用方直接 `path.join(...) + fs.readFile`。
+   *
+   * @param overridePath - 可选；不传则走 WorkspaceState.clangdConfigPath
+   * @returns 原始文本；路径不存在 / 读失败返回 null
+   */
+  async readText(overridePath?: string): Promise<string | null> {
+    const target = overridePath ?? this.workspace.clangdConfigPath;
+    if (!target) {return null;}
+    try {
+      return await fs.readFile(target, 'utf-8');
+    } catch (err) {
+      this.logger.warn(`[clangdOps] readText failed: ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   }

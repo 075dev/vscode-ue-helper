@@ -12,36 +12,50 @@ import { triggerLiveCoding, isLiveCodingSupported } from '@build';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
+import type { ProjectInfo, EngineInstall } from '@detection/types';
+import type { WorkspaceState } from '@core/workspace';
 
 export async function executeLiveCoding(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
+  // [Phase 9 SSoT] 可选——为老调用方/test 留 fallback；生产 index.ts 必传
+  workspace?: WorkspaceState,
 ): Promise<void> {
   if (!isLiveCodingSupported(config.platform)) {
     void vscode.window.showWarningMessage(t('liveCoding.windowsOnly'));
     return;
   }
 
+  // [Phase 9 SSoT] 收敛 selected* 访问（production 走 workspace.resolveSelected*，legacy fallback 仅供老调用方/test）
+  function legacyFindProject(): ProjectInfo | undefined {
+    const sp = detection.workspaceContext.getSelectedProject();
+    return sp ? projects.find((p) => p.path === sp) : undefined;
+  }
+  function legacyFindEngine(): EngineInstall | undefined {
+    const se = detection.workspaceContext.getSelectedEngine();
+    return se ? engines.find((e) => e.path === se) : undefined;
+  }
+
   const { projects } = await detection.ready;
-  let project = projects.find((p) => p.path === detection.workspaceContext.getSelectedProject());
+  let project = workspace?.resolveSelectedProject(projects) ?? legacyFindProject();
   if (!project && projects.length === 1) { project = projects[0]; }
   if (!project) { project = await pickProject(projects); }
   if (!project) {
     void vscode.window.showWarningMessage(t('liveCoding.noProject'));
     return;
   }
-  await detection.workspaceContext.setProject(project);
+  await (workspace ? workspace.setSelectedProject(project) : detection.workspaceContext.setProject(project));
 
   const engines = await detection.discovery.discover();
-  let engine = engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine());
+  let engine = workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine();
   if (!engine && engines.length === 1) { engine = engines[0]; }
   if (!engine) { engine = await pickEngine(engines); }
   if (!engine) {
     void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;
   }
-  await detection.workspaceContext.setEngine(engine);
+  await (workspace ? workspace.setSelectedEngine(engine) : detection.workspaceContext.setEngine(engine));
 
   logger.info(`[liveCoding] triggering for ${project.name} on ${engine.version}`);
   try {

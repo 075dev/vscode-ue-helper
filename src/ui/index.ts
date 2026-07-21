@@ -25,6 +25,8 @@ import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
+import type { ProjectInfo, EngineInstall } from '@detection/types';
+import type { WorkspaceState } from '@core/workspace';
 import {
   StatusBarManager,
   settingsFromConfig,
@@ -59,6 +61,8 @@ export function activateUI(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
+  // [Phase 9 SSoT] 可选——保留 legacy 调用兼容；production 由 extension.ts 注入
+  workspace?: WorkspaceState,
 ): UIHandles {
   const statusBar = new StatusBarManager();
 
@@ -76,12 +80,17 @@ export function activateUI(
         logger.info(`[ui]   engine:  version="${e.version}" path="${e.path}"`);
       }
 
-      const selectedProject = result.projects.find(
-        (p) => p.path === detection.workspaceContext.getSelectedProject(),
-      );
-      const selectedEngine = result.engines.find(
-        (e) => e.path === detection.workspaceContext.getSelectedEngine(),
-      );
+      // [Phase 9 SSoT] 收敛 selected* 访问
+      function legacyFindProject(): ProjectInfo | undefined {
+        const sp = detection.workspaceContext.getSelectedProject();
+        return sp ? result.projects.find((p) => p.path === sp) : undefined;
+      }
+      function legacyFindEngine(): EngineInstall | undefined {
+        const se = detection.workspaceContext.getSelectedEngine();
+        return se ? result.engines.find((e) => e.path === se) : undefined;
+      }
+      const selectedProject = workspace?.resolveSelectedProject(result.projects) ?? legacyFindProject();
+      const selectedEngine = workspace?.resolveSelectedEngine(result.engines) ?? legacyFindEngine();
       logger.info(
         `[ui] selection: selectedProject=${selectedProject?.path ?? '(none)'} selectedEngine=${selectedEngine?.path ?? '(none)'}`,
       );

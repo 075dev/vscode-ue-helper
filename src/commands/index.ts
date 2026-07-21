@@ -48,25 +48,25 @@ export function activateCommands(
     commandCount += 1;
     registerCommand(context, label, fn);
   };
-  track('vscodeUEHelper.showProjectInfo', () => showProjectInfo(config, logger, detection));
-  track('vscodeUEHelper.build', () => executeBuild('build', config, logger, detection));
-  track('vscodeUEHelper.rebuild', () => executeBuild('rebuild', config, logger, detection));
-  track('vscodeUEHelper.clean', () => executeBuild('clean', config, logger, detection));
-  track('vscodeUEHelper.launchEditor', () => executeLaunchEditor(config, logger, detection));
-  track('vscodeUEHelper.liveCoding', () => executeLiveCoding(config, logger, detection));
+  track('vscodeUEHelper.showProjectInfo', () => showProjectInfo(config, logger, detection, workspace));
+  track('vscodeUEHelper.build', () => executeBuild('build', config, logger, detection, workspace));
+  track('vscodeUEHelper.rebuild', () => executeBuild('rebuild', config, logger, detection, workspace));
+  track('vscodeUEHelper.clean', () => executeBuild('clean', config, logger, detection, workspace));
+  track('vscodeUEHelper.launchEditor', () => executeLaunchEditor(config, logger, detection, workspace));
+  track('vscodeUEHelper.liveCoding', () => executeLiveCoding(config, logger, detection, workspace));
   track('vscodeUEHelper.generateCompileCommands', () =>
-    executeGenerateCompileCommands(config, logger, detection),
+    executeGenerateCompileCommands(config, logger, detection, workspace),
   );
-  track('vscodeUEHelper.diagnoseProject', () => executeDiagnoseProject(logger, detection));
+  track('vscodeUEHelper.diagnoseProject', () => executeDiagnoseProject(logger, detection, workspace, clangdOps));
   track('vscodeUEHelper.createProject', () =>
-    executeCreateProject(config, logger, detection, clangdOps),
+    executeCreateProject(config, logger, detection, clangdOps, workspace),
   );
-  track('vscodeUEHelper.installRules', () => executeInstallRules(logger, detection));
-  track('vscodeUEHelper.uninstall', () => executeUninstall(logger, detection));
+  track('vscodeUEHelper.installRules', () => executeInstallRules(logger, workspace));
+  track('vscodeUEHelper.uninstall', () => executeUninstall(logger, workspace));
   track('vscodeUEHelper.setSystemIncludes', () =>
     executeSetSystemIncludes(config, logger, detection, workspace, clangdOps),
   );
-  track('vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile());
+  track('vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile(workspace));
   track('vscodeUEHelper.selectConfig', () => executeSelectConfig(config, logger));
   track('vscodeUEHelper.selectTarget', () => executeSelectTarget(config, logger));
   track('vscodeUEHelper.enableClangdProxy', () =>

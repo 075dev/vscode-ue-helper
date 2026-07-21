@@ -29,6 +29,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from './logger';
+import type { WorkspaceContext } from '@detection/workspaceContext';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
 
 /** 从 .code-workspace folders[] 派生的 folder 元信息（detection 层标记 role） */
@@ -78,6 +79,11 @@ export interface WorkspaceStateOptions {
       engineFolder: WorkspaceFolderInfo | null;
     }>;
   };
+  /**
+   * [Phase 9 SSoT] 用户选择状态（持久化）。可选——不传则 selected* getter 返回 null，
+   * 但生产代码（extension.ts）必须传入以收敛全部 selection 访问到 WorkspaceState。
+   */
+  workspaceContext?: WorkspaceContext;
   /** Logger 实例 */
   logger: Logger;
 }
@@ -98,6 +104,8 @@ export class WorkspaceState implements vscode.Disposable {
   private _engineFolder: WorkspaceFolderInfo | null = null;
   private _project: ProjectInfo | null = null;
   private _engine: EngineInstall | null = null;
+  /** [Phase 9 SSoT] 用户选择状态（持久化）—— 可选依赖 */
+  private _workspaceContext: WorkspaceContext | null = null;
 
   /** 已弹过报错的字段（整 session 只弹一次） */
   private readonly _notifiedFields = new Set<WorkspaceField>();
@@ -112,6 +120,8 @@ export class WorkspaceState implements vscode.Disposable {
 
   constructor(opts: WorkspaceStateOptions) {
     this.logger = opts.logger;
+    // [Phase 9 SSoT] 可选依赖，未传时 selection getter 返回 null
+    this._workspaceContext = opts.workspaceContext ?? null;
     // 立即订阅 detection.ready，注入完成后自动 setResult
     void opts.detection.ready.then((result) => {
       this.setResult(result);
@@ -169,6 +179,64 @@ export class WorkspaceState implements vscode.Disposable {
   }
   get engine(): EngineInstall | null {
     return this._resolve<EngineInstall>('engine', () => this._engine);
+  }
+
+  // ===== [Phase 9 SSoT] 用户选择（持久化于 WorkspaceContext） =====
+
+  /** 用户选定的项目路径（持久化）。未设置 = null。 */
+  get selectedProject(): string | null {
+    return this._workspaceContext?.getSelectedProject() ?? null;
+  }
+
+  /** 用户选定的引擎路径（持久化）。未设置 = null。 */
+  get selectedEngine(): string | null {
+    return this._workspaceContext?.getSelectedEngine() ?? null;
+  }
+
+  /**
+   * 写入用户选定的项目（持久化）。
+   *
+   * 语义：传 `undefined` 显式清除选择（与 WorkspaceContext.setProject 一致）。
+   * 未注入 workspaceContext 时为 no-op（warning 一条）。
+   */
+  async setSelectedProject(project: ProjectInfo | undefined): Promise<void> {
+    if (!this._workspaceContext) {
+      this.logger.warn('[workspace] setSelectedProject called without workspaceContext (no-op)');
+      return;
+    }
+    await this._workspaceContext.setProject(project);
+  }
+
+  /**
+   * 写入用户选定的引擎（持久化）。未注入 workspaceContext 时为 no-op（warning 一条）。
+   */
+  async setSelectedEngine(engine: EngineInstall | undefined): Promise<void> {
+    if (!this._workspaceContext) {
+      this.logger.warn('[workspace] setSelectedEngine called without workspaceContext (no-op)');
+      return;
+    }
+    await this._workspaceContext.setEngine(engine);
+  }
+
+  // ===== [Phase 9 SSoT 收尾] 用户选择解析（命令层 helper） =====
+
+  /**
+   * 从项目列表中找到持久化的选择；没有则返回 undefined（调用方自己处理 fallback）。
+   *
+   * 收口 10+ 处命令函数里的 `projects.find((p) => p.path === workspace.selectedProject)`
+   * 重复模式。
+   */
+  resolveSelectedProject(projects: readonly ProjectInfo[]): ProjectInfo | undefined {
+    const path = this.selectedProject;
+    if (!path) {return undefined;}
+    return projects.find((p) => p.path === path);
+  }
+
+  /** 同 resolveSelectedProject，引擎版。 */
+  resolveSelectedEngine(engines: readonly EngineInstall[]): EngineInstall | undefined {
+    const path = this.selectedEngine;
+    if (!path) {return undefined;}
+    return engines.find((e) => e.path === path);
   }
 
   // ===== Level 1 派生路径 =====
@@ -327,6 +395,7 @@ export class WorkspaceState implements vscode.Disposable {
     this._workspaceFolders = [];
     this._projectFolder = null;
     this._engineFolder = null;
+    this._workspaceContext = null;
   }
 
   // ===== Disposable =====
@@ -351,6 +420,7 @@ export class WorkspaceState implements vscode.Disposable {
     this._workspaceFolders = [];
     this._projectFolder = null;
     this._engineFolder = null;
+    this._workspaceContext = null;
     this.logger.info('[workspace] disposed');
   }
 

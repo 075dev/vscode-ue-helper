@@ -3,11 +3,14 @@
  *
  * 委托到 diagnostics/ 子模块。
  * 公共 API 保持向后兼容：diagnoseProject, formatDiagnosticReport, 所有类型。
+ *
+ * [Phase 9 SSoT 收尾] .clangd 读取走 ClangdOps.readText()（统一 fs 入口；不再直 readFile）。
+ * 诊断需要 raw text 给 parseClangdYaml 转成 ParsedClangd；ClangdOps.readText() 是为此设计的。
  */
 
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { WorkspaceState } from '@core/workspace';
+import type { ClangdOps } from './clangdOps';
 import {
   type DiagnosticCheck,
   type ParsedClangd,
@@ -25,13 +28,27 @@ export { formatDiagnosticReport } from './diagnostics/format';
 export async function diagnoseProject(
   projectPath: string,
   workspace?: WorkspaceState,
+  // [Phase 9 SSoT 收尾] 可选——production 由命令链注入；未注入时回落到 fs 直读（测试兼容）
+  clangdOps?: ClangdOps,
 ): Promise<import('./diagnostics/types').DiagnosticReport> {
   const projectDir = path.dirname(projectPath);
+  // [Phase 9 SSoT] .clangd 路径走 WorkspaceState.clangdConfigPath（单一真相源），不再 path.join 拼
   const clangdFile = workspace?.clangdConfigPath ?? path.join(projectDir, '.clangd');
   const checks: DiagnosticCheck[] = [];
 
-  const clangdContent = await fs.readFile(clangdFile, 'utf-8').catch(() => undefined);
-  if (clangdContent === undefined) {
+  // [Phase 9 SSoT 收尾] 优先 ClangdOps.readText()（单一 fs 入口）；未注入时回落到 fs 直读兼容老测试
+  const clangdContent = clangdOps
+    ? await clangdOps.readText(clangdFile)
+    : await (async (): Promise<string | null> => {
+        // [Test fallback] 未注入 ClangdOps 时 fs 直读
+        const { readFile } = await import('node:fs/promises');
+        try {
+          return await readFile(clangdFile, 'utf-8');
+        } catch {
+          return null;
+        }
+      })();
+  if (clangdContent === null) {
     checks.push({ name: 'clangdConfig', status: 'fail', severity: 'error', message: '.clangd 文件不存在', path: clangdFile });
     return buildReport(projectPath, checks);
   }

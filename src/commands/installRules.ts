@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { t } from '@i18n';
-import type { DetectionHandles } from '@detection';
+import type { WorkspaceState } from '@core/workspace';
 
 const RULES_CONTENT = `# UE Helper — AI Agent Rules
 
@@ -40,13 +40,10 @@ work effectively with Unreal Engine C++ projects opened in this workspace.
 
 export async function executeInstallRules(
   logger: Logger,
-  detection: DetectionHandles,
+  // [Phase 9 SSoT] 唯一真相源 workspace.projectDir——删除 detection 与 workspaceFolders 双真相源反模式
+  workspace?: WorkspaceState,
 ): Promise<void> {
-  const { projects } = await detection.ready;
-  const project = projects[0];
-  const root = project
-    ? path.dirname(project.path)
-    : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const root = workspace?.projectDir;
   if (!root) {
     void vscode.window.showWarningMessage(t('cmd.noWorkspaceRoot'));
     return;

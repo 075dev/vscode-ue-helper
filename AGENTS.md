@@ -4,7 +4,11 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
 
 ## 状态速览
 
-- 0.1.0 已发布；0.6.x 合并 fast/slow 为 slow；**Phase 8 已落地** `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构；老 `activate*(detection)` API 向后兼容。
+- 0.1.0 已发布；0.6.x 合并 fast/slow 为 slow；**Phase 8 + 9 架构**：`WorkspaceState`（13 import / 36 callers）+ `ClangdOps`（22 callers）单一真相源，`phase 9 SSoT 收尾`完成——
+  - `.clangd` 唯一写入：删 `writeClangdConfig` / `findClangdConfig`，统一走 `ClangdOps.{writeFull|mutate|applyAddFlags}`
+  - 29 处 `detection.workspaceContext.getSelected*` 收敛到 `workspace.selectedProject` / `selectedEngine`，新增 `resolveSelectedProject/Engine()` 收口 10 个命令文件重复模式
+  - 全局 `.eslintrc.json` 锁定 3 类 syntax bypass + 1 类 import bypass
+  - 13 个 `test/unit/core/ssot.test.ts` 回归守卫 + 12 个 `test/unit/core/workspace.test.ts` 行为测试
 - **19 个命令**（`package.json#contributes.commands`），11 个状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
 - 单元测试 56 个文件 + 1 个 .bak 手备份（共约 10.4k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 80/80/75/80。
 
@@ -104,7 +108,7 @@ import { Logger } from '../../core/logger';      // ❌ 违反风格
 9. **`out/` 必须清理**——`npm run clean` 只删 `out/src/` 和 `out/test/`（防打包残留），不会删 `out/extension.js`。`npm run build` 内部会先 clean 再 bundle。
 10. **`Config.update` 写完必须 refresh**——`src/core/config.ts` 内部已处理，但调用方常见误用：`await config.update(); 立刻读 config.xxx` 会拿到旧值（VS Code 同进程内不主动通知 WorkspaceConfiguration 失效）。改动该类代码要测试写入后读回。
 11. **`completionMode` 设置已死但 API 还在**——`Config.completionMode` getter 强制归一化为 `'slow'`，`package.json` 标 `deprecationMessage`，但旧代码路径仍存在。新代码不要再读 `config.completionMode` 判断分支（详情见 `src/core/AGENTS.md`）。
-12. **`populateAddCompletions` 是撒谎型兼容层**——`src/clangd/completionFiles.ts:591` 返回 `{added:0, skipped:0, found:0}`，**但文件实际已在磁盘生成**。读返回值做决策的代码全错。新代码直接调 `createCompletionFiles()`。
+12. ~~**`populateAddCompletions` 是撒谎型兼容层**~~ —— ✅ **已解决（Phase 9）**：grep `src/` 全仓库零匹配，函数不存在。AGENTS.md 此条目仅作历史档案保留，未来读者不要"复活"该函数。新代码直接调 `createCompletionFiles()`（仍是单一写入点）。
 13. **6 个汉化 TODO 是僵尸承诺**——`src/clangd/proxy/localization.ts:79/91/103` + `src/clangd/proxy/bridge.ts:676/685/694` 都写 "后续实现"，未排进任何 phase。规划时不要假设汉化已上线。
 
 ## 风格与约定

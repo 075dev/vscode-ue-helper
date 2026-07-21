@@ -2,14 +2,14 @@
  * flagGlossary —— `.clangd` CompileFlags.Add 中所有可注入 flag 的数据源
  *
  * 设计动机（per Plan A.1）：
- * 过去 `defaultClangdConfig()` 在 Add 字段中散点注入 7 类来源的 flag
- * （compatHeader、systemInclude、MSVC warning、macroHelper、preparse、
- * /std:c++20、intermediateUhtDirs），跨模块累积导致 clangd 报难以定位的错误。
+ * 过去 `defaultClangdConfig()` 在 Add 字段中散点注入多类 flag 来源，跨模块
+ * 累积导致 clangd 报难以定位的错误。
  *
- * 现在把"系统隐式注入"全部去除，由用户在控制面板「自定义 Add Flags」tab
- * 显式勾选决定。本文件提供：
+ * 现在 [Phase 9 SSoT] 把"系统隐式注入"全部去除，由用户在控制面板「自定义
+ * Add Flags」tab 显式勾选决定。本文件提供：
  *   - DEFAULT_FLAG_GLOSSARY：UI 渲染用的元数据（id / category / 标题 / 中文说明 / severity）
  *   - resolveFlags：把勾选 id + 动态路径 context 解析成最终 Add 字面串
+ *   - 唯一写入点：ClangdOps.applyAddFlags（不要直接 fs.writeFile .clangd）
  *
  * ⚠️ MSVC warning 64 项由 baseline 集中管理，**不**进入 flagGlossary。
  *

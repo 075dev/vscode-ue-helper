@@ -1,5 +1,5 @@
 /**
- * clangdConfig —— 在项目根写 .clangd 文件
+ * clangdConfig —— .clangd 默认内容工厂 + YAML 序列化
  *
  * 设计变更（per Plan Add 收束 —— 强化版）：
  * - `CompileFlags.Add` 字段**永远输出空数组** (`[]`)。所有 Add 由用户在控制面板
@@ -7,7 +7,8 @@
  *   通过 ClangdOps.applyAddFlags 写入。
  * - 系统零默认注入：defaultClangdConfig 不再内置任何 MSVC warning、/std:、
  *   -I、/FI、/imsvc 等 baseline flag。
- * - 旧 API（writeClangdConfig / findClangdConfig）保留以兼容仍直调它们的命令路径。
+ * - [Phase 9 SSoT] 唯一写入入口是 ClangdOps（writeFull / mutate / applyAddFlags）。
+ *   本文件只产出"配置对象 + YAML 文本"，不直接 fs.writeFile（旧的 writeClangdConfig / findClangdConfig 已删除）。
  *
  * 典型生成的 .clangd:
  *
@@ -19,11 +20,11 @@
  *   UnusedIncludes: None
  * InlayHints:
  *   Enabled: Yes
- * ...
+ *   ParameterNames: Yes
+ *   DeducedTypes: Yes
+ *   Designators: Yes
  */
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import * as yaml from 'yaml';
 import { ClangdConfig, IfBlock } from './types';
 
@@ -95,42 +96,4 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
 export function renderClangdConfig(config: ClangdConfig): string {
   const doc = new yaml.Document(config);
   return doc.toString({ lineWidth: 0 });  // lineWidth=0 禁止自动折行（防止长路径被 yaml 库折行）
-}
-
-// ===== 写文件 =====
-
-/**
- * 把 .clangd 写入项目根目录（兼容旧 API，内部走 ClangdOps 风格）
- *
- * 重写整个文件（非增量），保证只有一个 CompileFlags 块。
- *
- * @deprecated 推荐用 ClangdOps.writeFull 与 applyAddFlags，避免重复传 projectPath。
- */
-export async function writeClangdConfig(
-  projectPath: string,
-  opts: ClangdConfigOptions = {},
-): Promise<string> {
-  const target = path.join(path.dirname(projectPath), '.clangd');
-  const yamlText = renderClangdConfig(defaultClangdConfig(opts));
-  // 原子写入：temp + rename（per PATTERNS §3 第 280-285 行）
-  const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmp, yamlText, 'utf-8');
-  try {
-    await fs.rename(tmp, target);
-  } catch (err) {
-    try { await fs.unlink(tmp); } catch { /* ignore */ }
-    throw err;
-  }
-  return target;
-}
-
-/** 查找 .clangd（兼容旧 API） */
-export async function findClangdConfig(projectPath: string): Promise<string | null> {
-  const target = path.join(path.dirname(projectPath), '.clangd');
-  try {
-    await fs.access(target);
-    return target;
-  } catch {
-    return null;
-  }
 }

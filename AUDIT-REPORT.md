@@ -391,6 +391,8 @@ npm uninstall execa neverthrow xstate
 
 **严重度**：🟡 MEDIUM —— 误导接口
 
+**✅ 已解决（Phase 9 SSoT 收尾）**：`grep populateAddCompletions src/` 全仓库零匹配（已在 audit 之前静态删除；函数从未存在于当前 HEAD）。AGENTS.md TRAP #12 同步标记"已解决"。13 个 `test/unit/core/ssot.test.ts` 回归守卫防复活。
+
 ---
 
 ### M8. 4 个 type unsafe 断言点（`as unknown as`）
@@ -474,6 +476,8 @@ npm uninstall execa neverthrow xstate
 **修复**（15 分钟）：删除这两个函数。
 
 **严重度**：🟡 MEDIUM —— 死代码
+
+**✅ 已解决**：grep `findUhtGeneratedHeaders|parseExistingIncludes src/` 同样零匹配（与 M7 同步——这俩函数也是 audit 之前就静态删除了）。无需进一步动作。
 
 ---
 

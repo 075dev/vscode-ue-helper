@@ -14,18 +14,26 @@ import { Config } from '@core/config';
 import { Logger } from '@core/logger';
 import { detectHost } from '@core/runtime-detect';
 import type { DetectionHandles } from '@detection';
+import type { WorkspaceState } from '@core/workspace';
 import { t } from '@i18n';
+import type { ProjectInfo, EngineInstall } from '@detection/types';
 
 export async function showProjectInfo(
   config: Config,
   logger: Logger,
   detection?: DetectionHandles,
+  // [Phase 9 SSoT] 可选——为老调用方留 fallback；production 走 workspace
+  workspace?: WorkspaceState,
 ): Promise<void> {
   logger.info('showProjectInfo invoked');
   logger.show();
 
-  const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-  const workspace = workspaceFolders.length > 0 ? workspaceFolders[0]?.uri.fsPath : '(none)';
+  // [Phase 9 SSoT] 优先 workspace.workspaceRoot，回退 workspace.workspaceFolders[0]；保留 '(none)' 显示语义
+  const workspaceFolders = workspace?.workspaceFolders ?? [];
+  const workspaceRootDisplay =
+    workspace?.workspaceRoot ??
+    (workspaceFolders.length > 0 ? workspaceFolders[0]?.absPath : undefined) ??
+    '(none)';
 
   if (!detection) {
     logger.warn('showProjectInfo: detection handles unavailable');
@@ -34,20 +42,25 @@ export async function showProjectInfo(
 
   const { projects, engines, workspaceFile } = await detection.ready;
 
-  const selectedProject =
-    projects.length > 0
-      ? projects.find((p) => p.path === detection.workspaceContext.getSelectedProject())
-      : undefined;
-  const selectedEngine =
-    engines.length > 0
-      ? engines.find((e) => e.path === detection.workspaceContext.getSelectedEngine())
-      : undefined;
+  // [Phase 9 SSoT] 收敛 selected* 访问
+  const selectedProject = projects.length > 0
+    ? (workspace?.resolveSelectedProject(projects) ?? ((): ProjectInfo | undefined => {
+        const sp = detection.workspaceContext.getSelectedProject();
+        return sp ? projects.find((p) => p.path === sp) : undefined;
+      })())
+    : undefined;
+  const selectedEngine = engines.length > 0
+    ? (workspace?.resolveSelectedEngine(engines) ?? ((): EngineInstall | undefined => {
+        const se = detection.workspaceContext.getSelectedEngine();
+        return se ? engines.find((e) => e.path === se) : undefined;
+      })())
+    : undefined;
   const mcpHost = detectHost();
 
   const lines = [
     t('showInfo.title'),
     '',
-    t('showInfo.workspace', { path: String(workspace) }),
+    t('showInfo.workspace', { path: String(workspaceRootDisplay) }),
     t('showInfo.projectsFound', { count: String(projects.length) }),
     ...projects.slice(0, 5).map((p, i) =>
       t('showInfo.projectLine', {
@@ -95,7 +108,7 @@ export async function showProjectInfo(
       const choice = await vscode.window.showWarningMessage(
         t('showInfo.noEnginesWithWs', {
           project: projects[0]?.name ?? '(none)',
-          workspace: String(workspace),
+          workspace: String(workspaceRootDisplay),
         }),
         t('showInfo.btn.openWs'),
       );

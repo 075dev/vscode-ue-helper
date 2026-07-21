@@ -5,10 +5,11 @@
  * 补全文件系统（curated header）、工作区备份防 UBT 覆盖、
  * completion-mode 状态栏（fast/slow 实际控制 .clangd）。
  *
- * Phase 8 架构：通过 ClangdOps + WorkspaceState 统一 .clangd 操作。
+ * Phase 8 架构 + Phase 9 SSoT：通过 ClangdOps + WorkspaceState 统一 .clangd 操作
+ * 与项目/引擎信息访问；过期直写 API（writeClangdConfig / findClangdConfig）已删除。
  *
  * 主要导出:
- *   - writeClangdConfig / renderClangdConfig: 写/渲染 .clangd（兼容旧 API）
+ *   - renderClangdConfig: 渲染 .clangd YAML（仅产出文本，fs 由 ClangdOps 统一）
  *   - generateCompileCommands / linkToWorkspaceRoot: 跑 UBT 生成 compile_commands.json
  *   - createCompletionFiles / addCompletionHelperToCompileCommands: 补全文件系统
  *   - WorkspaceBackup: 备份 .code-workspace 防 UBT 覆盖
@@ -32,11 +33,11 @@ import { perfLog } from './perfLog';
 import { PerfStatusBar } from '@ui/perfStatusBar';
 import { IncrementalFileWatcher } from './fileWatcher';
 
+// [Phase 9 SSoT] clangd 模块内部允许 import 自己的 clangdConfig（仅产出 config 对象 + YAML 字符串，无 fs 副作用）
+// eslint-disable-next-line no-restricted-imports
 export {
-  writeClangdConfig,
   defaultClangdConfig,
   renderClangdConfig,
-  findClangdConfig,
   type ClangdConfigOptions,
 } from './clangdConfig';
 export {
@@ -122,7 +123,9 @@ export function activateClangd(
   if (clangdOps) {
     completionMode.setClangdOps(clangdOps);
   }
-  const backup = new WorkspaceBackup(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '');
+  // [Phase 9 SSoT] WorkspaceBackup 接收 .uproject 路径走 WorkspaceState —— 删除 vscode.workspace.workspaceFolders 直读
+  // detection 未 ready 时 projectFile 为 null，WorkspaceBackup.snapshot/restore 自然 no-op（设计如此）
+  const backup = new WorkspaceBackup(workspace?.projectFile ?? '');
   // 传 workspace 引用而非 projectDir/engineRoot 快照：activateClangd 同步执行时 detection
   // 尚未 ready，读 workspace.projectDir 会触发 _notifyMissing 永久污染 getter。改成在
   // enable/buildProxyArgs 时动态读（此时 ready 已完成）。

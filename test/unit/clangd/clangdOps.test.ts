@@ -211,3 +211,66 @@ describe('ClangdOps.applyAddFlags (Plan B.1 收束后的统一入口)', () => {
     await cleanup();
   });
 });
+
+describe('ClangdOps.readText (Phase 9 SSoT 收尾)', () => {
+  it('读 .clangd 原始文本（无 YAML 解析）', async () => {
+    const h = await setupHarness({
+      initialConfig: {
+        CompileFlags: { Add: ['/X', '/imsvc"path"'] },
+      },
+    });
+    try {
+      const text = await h.ops.readText();
+      expect(text).not.toBeNull();
+      // 文本应包含原始字符串，包括字段顺序
+      expect(text).toContain('CompileFlags');
+      expect(text).toContain('/X');
+      expect(text).toContain('imsvc');
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it('overridePath 走自定义路径（绕开 WorkspaceState 派生）', async () => {
+    const h = await setupHarness();
+    try {
+      const customPath = path.join(h.tmpDir, 'custom-clangd');
+      await fs.writeFile(customPath, 'CompileFlags:\n  Add: [custom]', 'utf-8');
+      const text = await h.ops.readText(customPath);
+      expect(text).toBe('CompileFlags:\n  Add: [custom]');
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it('.clangd 不存在 → 返回 null 不抛错', async () => {
+    const h = await setupHarness();
+    try {
+      // setupHarness 不预写文件
+      const text = await h.ops.readText();
+      expect(text).toBeNull();
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it('readConfig 与 readText 文本一致（验证 readText 是真源）', async () => {
+    const h = await setupHarness({
+      initialConfig: {
+        CompileFlags: { Add: ['-std=c++20'], Remove: ['-Wno-foo'] },
+      },
+    });
+    try {
+      const text = await h.ops.readText();
+      const cfg = await h.ops.readConfig();
+      expect(text).not.toBeNull();
+      expect(cfg).not.toBeNull();
+      // yaml.parse 应该把文本转回同样的 config
+      expect(cfg).toMatchObject({
+        CompileFlags: { Add: ['-std=c++20'], Remove: ['-Wno-foo'] },
+      });
+    } finally {
+      await h.cleanup();
+    }
+  });
+});

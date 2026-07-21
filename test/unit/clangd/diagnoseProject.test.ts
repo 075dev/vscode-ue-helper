@@ -10,7 +10,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import { createCompletionFiles, getCompletionHelperPath } from '@clangd/completionFiles';
-import { defaultClangdConfig, renderClangdConfig } from '@clangd/clangdConfig';
+// [Phase 9 SSoT] 测试内部直 import src/，绕开 barrel
+// eslint-disable-next-line no-restricted-imports
+import { defaultClangdConfig, renderClangdConfig } from '../../../src/clangd/clangdConfig';
 import { getUeClangdCompatPath } from '@clangd/ueClangdCompat';
 import { diagnoseProject } from '@clangd/diagnoseProject';
 

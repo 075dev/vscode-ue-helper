@@ -181,6 +181,8 @@ describe('getPrepareIncludesList (Phase 7 perfSession 注入)', () => {
       getLastIncrementalScanMs: () => 0,
       onMetricUpdate: () => ({ dispose: () => {} }),
       flushToDisk: async () => {},
+      // [Phase 9 SSoT] 新增方法——mock 不需要实现
+      setWorkspace: () => {},
     };
 
     await getPrepareIncludesList('slow', '/nonexistent/path', {

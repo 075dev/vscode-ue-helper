@@ -56,6 +56,9 @@ export interface PerfSession {
 
   /** 立即 flush 内存队列到磁盘（dev 模式写盘，prod 模式 no-op） */
   flushToDisk(): Promise<void>;
+
+  /** [Phase 9 SSoT] 注入 WorkspaceState 让 flushToDisk 走单一真相源——消除 vscode.workspace.workspaceFolders 直读 */
+  setWorkspace(workspace: { readonly projectDir: string | null }): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -112,10 +115,17 @@ class PerfSessionImpl implements PerfSession {
   private preparseMisses = 0;
   private incrLastMs = 0;
   private flushTimer: NodeJS.Timeout | null = null;
+  /** [Phase 9 SSoT] 由 setWorkspace 注入；resolveProjectDir 读这里而非 vscode.workspace */
+  private _workspace: { readonly projectDir: string | null } | null = null;
 
   /** 显式接收 logger；undefined 时回落到 default logger（共用 extension 通道） */
   constructor(private readonly logger?: Logger) {
     // 不在构造时创建真实 logger —— 默认会在 loggerNeeded 时懒加载
+  }
+
+  /** [Phase 9 SSoT] 注入 WorkspaceState 让 flushToDisk 走单一真相源。 */
+  setWorkspace(workspace: { readonly projectDir: string | null }): void {
+    this._workspace = workspace;
   }
 
   private ensureLogger(): Logger {
@@ -300,11 +310,8 @@ class PerfSessionImpl implements PerfSession {
   }
 
   private resolveProjectDir(): string | null {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-      return null;
-    }
-    return folders[0]?.uri.fsPath ?? null;
+    // [Phase 9 SSoT] 走注入的 WorkspaceState.projectDir，不再直读 vscode.workspace
+    return this._workspace?.projectDir ?? null;
   }
 
   private async ensureCacheDir(projectDir: string): Promise<string> {

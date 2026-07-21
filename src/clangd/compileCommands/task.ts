@@ -127,8 +127,10 @@ export function executeShellTask(
   signal?: AbortSignal,
 ): Promise<number> {
   return new Promise<number>((resolve, reject) => {
+    // [Phase 9 SSoT Edge] 反查 vscode.WorkspaceFolder 必须用原生 vscode API——vscode.Task(scope:) 签名只接受原生类型
+    // eslint-disable-next-line no-restricted-syntax
     const unrealFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd));
-    // 如果精确匹配不到 workspace folder，用第一个可用的
+    // eslint-disable-next-line no-restricted-syntax
     const scope = unrealFolder ?? vscode.workspace.workspaceFolders?.[0];
     if (!scope) {
       reject(new Error('No workspace folder open. Please open a .code-workspace first.'));

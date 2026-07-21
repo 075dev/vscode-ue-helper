@@ -308,6 +308,8 @@
 | 工时 | 30 min |
 | 回滚 | `git revert HEAD` |
 
+**状态**：✅ **已完成**（Phase 9 SSoT 收尾）。`grep populateAddCompletions src/` → 0；13 个 `test/unit/core/ssot.test.ts` 防复活。AUDIT-REPORT.md M7/M11 同步标记"已解决"。
+
 ### T4.7 — MSVC 正则同步（选项 B）
 
 | 字段 | 值 |

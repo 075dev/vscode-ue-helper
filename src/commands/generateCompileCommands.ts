@@ -30,12 +30,16 @@ import {
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
+import type { EngineInstall } from '@detection/types';
+import type { WorkspaceState } from '@core/workspace';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
 export async function executeGenerateCompileCommands(
   config: Config,
   logger: Logger,
   detection: DetectionHandles,
+  // [Phase 9 SSoT] 可选——为老调用方/test 留 fallback；生产 index.ts 必传
+  workspace?: WorkspaceState,
 ): Promise<void> {
   // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
@@ -47,11 +51,15 @@ export async function executeGenerateCompileCommands(
   }
 
   const engines = await detection.discovery.discover();
+  // [Phase 9 SSoT] 收敛 selected* 访问
+  function legacyFind(): EngineInstall | undefined {
+    const se = detection.workspaceContext.getSelectedEngine();
+    return se ? engines.find((e) => e.path === se) : undefined;
+  }
   const engine =
     (await pickEngine(engines)) ??
-    engines.find(
-      (e) => e.path === detection.workspaceContext.getSelectedEngine(),
-    );
+    workspace?.resolveSelectedEngine(engines) ??
+    legacyFind();
   if (!engine) {
     void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;

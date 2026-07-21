@@ -38,9 +38,12 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // [Phase 8 架构] WorkspaceState 单一真相源
     // 构造时自动订阅 detection.ready 并 setResult。所有模块通过 workspace getter 访问
     // 项目/引擎/路径信息，统一派生路径 get 函数 + 去重错误通知。
-    const workspace = new WorkspaceState({ detection, logger });
+    // [Phase 9 SSoT] 注入 WorkspaceContext，selected* getter 才生效；收敛 29 处
+    //   `detection.workspaceContext.*` 调用全部到 workspace.selected* / setSelected*。
+    const workspace = new WorkspaceState({ detection, logger, workspaceContext: detection.workspaceContext });
 
     // [Phase 8 架构] ClangdOps 统一 .clangd 操作 API（mutate / setAddFlag / replaceAddBlock）
+    // [Phase 9 SSoT] 实际 API: readConfig / exists / writeFull / mutate / applyAddFlags（无 setAddFlag / replaceAddBlock）
     const clangdOps = new ClangdOps({ workspace, logger });
 
     // 旧模块激活流程（保持兼容，后续 PR 逐步迁移到接受 workspace 参数）
@@ -48,7 +51,7 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // [Phase 8 Stage 1] 注入 ClangdOps 给 activateClangd，让 CompletionModeController 走统一 API
     const clangd = activateClangd(context, config, logger, detection, workspace, clangdOps);
     // [Phase 8] headerWatcher removed — UBT triggered by proxy-side UeDiagnosticWatcher only
-    const ui = activateUI(context, config, logger, detection);
+    const ui = activateUI(context, config, logger, detection, workspace);
     // [Plan Add 收束] 把 clangdOps 沿 commands 链透传给 createProject / setSystemIncludes
     activateCommands(context, config, logger, detection, clangd, workspace, clangdOps);
 
@@ -62,7 +65,7 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     context.subscriptions.push(workspace);
     context.subscriptions.push(clangdOps);
 
-    ControlPanelProvider.register({ context, config, logger, detection, clangd, clangdOps });
+    ControlPanelProvider.register({ context, config, logger, detection, workspace, clangd, clangdOps });
 
     const elapsed = Date.now() - activationStart;
     logger.info(`VSCodeUEHelper activated in ${elapsed}ms`);
@@ -79,6 +82,9 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 
     void build;
     void ui;
+
+    // [Phase 9 SSoT] 把 workspace 注入 perfLog 单例，让 flushToDisk 走单一真相源
+    perfLog.setWorkspace(workspace);
 
     const hasShownWelcome = context.globalState.get<boolean>('vscodeUEHelper.welcomed');
     if (!hasShownWelcome) {

@@ -9,7 +9,7 @@
  *
  * 用途：
  *   - compileCommandsFallback: 注入 -I 让 clangd 找到 .generated.h
- *   - defaultClangdConfig: 注入 -I 作为 .clangd CompileFlags.Add
+ *   - flagGlossary.resolveFlags('uht-include-dirs') → ClangdOps.applyAddFlags（[Phase 9 SSoT]）
  *
  * 性能：<ModuleCount> 次 readdir + stat，典型 5-20ms。
  */

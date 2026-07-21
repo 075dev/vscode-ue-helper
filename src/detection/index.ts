@@ -105,6 +105,8 @@ export function activateDetection(
   // 启动异步检测 IIFE：通过闭包访问 handles.scanner / handles.discovery
   void (async (): Promise<void> => {
     try {
+      // [Phase 9 SSoT] 这里合法直读 vscode.workspace.workspaceFile —— detection 层是 single source of truth 的根
+      // eslint-disable-next-line no-restricted-syntax -- detection 根（唯一往 WorkspaceState 注入的入口）
       const workspaceFile = vscode.workspace.workspaceFile;
 
       if (!workspaceFile) {
