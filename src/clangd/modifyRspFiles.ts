@@ -132,6 +132,8 @@ export async function startModifyResponseFiles(
  * @returns rsp 目录的绝对路径，或 null
  */
 async function findRspDirectory(projectDir: string): Promise<string | null> {
+  // [Phase 11 SSoT] 保留 path.join——这是 UBT 工具链生成的 .vscode/<项目名>/ 路径(.rsp 在这里),
+  // 不是 vscodeuehelper helper 目录。clangdHelperDir 不适用。
   const vscodeDir = path.join(projectDir, '.vscode');
 
   // 策略 1：从 compile_commands.json 的第一个条目推断目录名

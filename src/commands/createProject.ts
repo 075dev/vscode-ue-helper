@@ -103,7 +103,8 @@ export async function executeCreateProject(
   // compile_commands.json 生成路径，step 2 赋值，step 4 使用
   let jsonPath = '';
   // 仅用于日志信息（createCompletionFiles 内部已有自己的路径派生）
-  const customDir = path.join(projectDir, '.vscode', 'vscodeuehelper');
+  // [Phase 11 SSoT] 走 WorkspaceState.clangdHelperDir；fallback 留给测试兼容
+  const customDir = workspace?.clangdHelperDir ?? path.join(projectDir, '.vscode', 'vscodeuehelper');
 
   // === 5-step pipeline ===
   const results: { step: string; ok: boolean; detail: string }[] = [];
@@ -256,12 +257,14 @@ export async function executeCreateProject(
         // （compileCommands.ts 496-509: path.resolve(jsonPath) === path.resolve(target) 早返），
         // 但在调用层显式跳过更清晰——fallback 路径不存在"符号链接"动作，
         // 显式分支让 step 2 的控制流与 UBT 正常路径对称。
-        const expectedFallbackPath = path.join(
-          projectDir,
-          '.vscode',
-          'vscodeuehelper',
-          'compile_commands.json',
-        );
+        // [Phase 11 SSoT] 走 WorkspaceState.compileCommandsPath（单一真相源）
+        const expectedFallbackPath =
+          workspace?.compileCommandsPath ?? path.join(
+            projectDir,
+            '.vscode',
+            'vscodeuehelper',
+            'compile_commands.json',
+          );
         const isFallbackPath = path.resolve(jsonPath) === path.resolve(expectedFallbackPath);
 
         let linkPath: string;

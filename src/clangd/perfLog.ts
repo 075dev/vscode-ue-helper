@@ -58,7 +58,13 @@ export interface PerfSession {
   flushToDisk(): Promise<void>;
 
   /** [Phase 9 SSoT] 注入 WorkspaceState 让 flushToDisk 走单一真相源——消除 vscode.workspace.workspaceFolders 直读 */
-  setWorkspace(workspace: { readonly projectDir: string | null }): void;
+  // [Phase 11 SSoT] 扩展接口含 clangdPerfCachePath；perfLog.ensureCacheDir 改走 getter
+  setWorkspace(
+    workspace: {
+      readonly projectDir: string | null;
+      readonly clangdPerfCachePath?: string | null;
+    },
+  ): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -116,7 +122,11 @@ class PerfSessionImpl implements PerfSession {
   private incrLastMs = 0;
   private flushTimer: NodeJS.Timeout | null = null;
   /** [Phase 9 SSoT] 由 setWorkspace 注入；resolveProjectDir 读这里而非 vscode.workspace */
-  private _workspace: { readonly projectDir: string | null } | null = null;
+  // [Phase 11 SSoT] 扩展接口含 clangdPerfCachePath；perfLog.ensureCacheDir 改走 getter
+  private _workspace: {
+    readonly projectDir: string | null;
+    readonly clangdPerfCachePath?: string | null;
+  } | null = null;
 
   /** 显式接收 logger；undefined 时回落到 default logger（共用 extension 通道） */
   constructor(private readonly logger?: Logger) {
@@ -124,7 +134,12 @@ class PerfSessionImpl implements PerfSession {
   }
 
   /** [Phase 9 SSoT] 注入 WorkspaceState 让 flushToDisk 走单一真相源。 */
-  setWorkspace(workspace: { readonly projectDir: string | null }): void {
+  setWorkspace(
+    workspace: {
+      readonly projectDir: string | null;
+      readonly clangdPerfCachePath?: string | null;
+    },
+  ): void {
     this._workspace = workspace;
   }
 
@@ -319,7 +334,10 @@ class PerfSessionImpl implements PerfSession {
     const path = await import('node:path');
 
     // 路径安全校验（per T-7-03）：必须 startsWith 项目路径
-    const cacheDir = path.join(projectDir, '.vscode', 'clangd-perf-cache');
+    // [Phase 11 SSoT] 优先 WorkspaceState.clangdPerfCachePath；fallback 用 path.join 保留行为兼容
+    const cacheDir =
+      this._workspace?.clangdPerfCachePath ??
+      path.join(projectDir, '.vscode', 'clangd-perf-cache');
     const normalized = path.normalize(cacheDir);
     if (!normalized.startsWith(path.normalize(projectDir) + path.sep) &&
         normalized !== path.normalize(projectDir)) {

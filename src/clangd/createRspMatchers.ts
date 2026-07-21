@@ -116,6 +116,8 @@ export async function startCreateRspMatchers(
  * 查找 rsp 文件所在目录。
  */
 async function findRspDirForMatchers(projectDir: string): Promise<string | null> {
+  // [Phase 11 SSoT] 保留 path.join——这是 UBT 工具链生成的 .vscode/<项目名>/ 路径(grep .rsp 用),
+  // 不是 vscodeuehelper helper 目录。clangdHelperDir 不适用。
   const vscodeDir = path.join(projectDir, '.vscode');
   try {
     const entries = await fs.readdir(vscodeDir);

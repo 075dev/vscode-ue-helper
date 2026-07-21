@@ -50,6 +50,7 @@ export type WorkspaceField =
   | 'workspaceRoot'
   | 'clangdConfigPath'
   | 'clangdHelperDir'
+  | 'clangdPerfCachePath'
   | 'compileCommandsDir'
   | 'compileCommandsPath'
   | 'macroHelperPath'
@@ -287,6 +288,21 @@ export class WorkspaceState implements vscode.Disposable {
     return this._resolve<string>('clangdHelperDir', () => {
       const dir = this.projectDir;
       return dir ? path.join(dir, '.vscode', 'vscodeuehelper') : null;
+    });
+  }
+  /**
+   * [Phase 11] Performance 缓存目录（.vscode/clangd-perf-cache/）的绝对路径。
+   *
+   * 与 clangdHelperDir 同级（都在 .vscode/ 下但不同子目录）。
+   * .vscode/vscodeuehelper 是给 clangd 看的 completion helper + compile_commands.json；
+   * .vscode/clangd-perf-cache 是 perfLog / compileCommandsCache / headerCache 的本地缓存区。
+   *
+   * projectDir 不可派生时返回 null 并弹一次"重新生成工作区"警告。
+   */
+  get clangdPerfCachePath(): string | null {
+    return this._resolve<string>('clangdPerfCachePath', () => {
+      const dir = this.projectDir;
+      return dir ? path.join(dir, '.vscode', 'clangd-perf-cache') : null;
     });
   }
   get compileCommandsDir(): string | null {

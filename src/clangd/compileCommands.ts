@@ -297,7 +297,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     // 优先：UE 5.x GenerateClangDatabase 默认输出到引擎根目录
     path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS),
     // 备选：项目目录的 .vscode/vscodeuehelper/（linkToWorkspaceRoot 目标位置）
-    path.join(projectDir, '.vscode', 'vscodeuehelper', FILE_NAME_COMPILE_COMMANDS),
+    // [Phase 11 SSoT] 走 WorkspaceState.compileCommandsPath（与 linkToWorkspaceRoot 目标对齐）
+    opts.workspace?.compileCommandsPath ??
+      path.join(projectDir, '.vscode', 'vscodeuehelper', FILE_NAME_COMPILE_COMMANDS),
     // 备选：项目目录根
     path.join(projectDir, FILE_NAME_COMPILE_COMMANDS),
     // 备选：引擎根目录的 .vscode/<项目名>/（旧版 Native 模式可能）
