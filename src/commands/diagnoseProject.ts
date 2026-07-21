@@ -17,7 +17,7 @@ export async function executeDiagnoseProject(
 ): Promise<void> {
   logger.info('[diagnoseProject] invoked');
 
-  const projects = await detection.scanner.scan();
+  const { projects } = await detection.ready;
   let project = projects.find(
     (item) => item.path === detection.workspaceContext.getSelectedProject(),
   );

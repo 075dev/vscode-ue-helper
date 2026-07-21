@@ -39,9 +39,8 @@ export async function executeGenerateCompileCommands(
 ): Promise<void> {
   // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
-  const project =
-    (await pickProject(await detection.scanner.scan())) ??
-    (await detection.scanner.findSingle());
+  const { projects } = await detection.ready;
+  const project = (await pickProject(projects)) ?? projects[0];
   if (!project) {
     void vscode.window.showWarningMessage(t('generateCompileCommands.noProject'));
     return;

@@ -140,11 +140,10 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   private async refreshTitleInfo(): Promise<void> {
     const { detection } = this.deps;
     try {
-      const projects = await detection.scanner.scan();
+      const { projects, engines } = await detection.ready;
       const selectedProject = detection.workspaceContext.getSelectedProject();
       const project = projects.find((p) => p.path === selectedProject) ?? projects[0];
       this.projectName = project?.name ?? '';
-      const engines = await detection.discovery.discover();
       const selectedEngine = detection.workspaceContext.getSelectedEngine();
       const engine = engines.find((e) => e.path === selectedEngine) ?? engines[0];
       this.engineVersion = engine?.version ?? '';

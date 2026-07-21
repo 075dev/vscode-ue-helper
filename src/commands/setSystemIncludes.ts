@@ -44,7 +44,7 @@ export async function executeSetSystemIncludes(
   }
 
   // Resolve the active project + engine (same shape as executeBuild).
-  const projects = await detection.scanner.scan();
+  const { projects } = await detection.ready;
   let project = projects.find((p) => p.path === detection.workspaceContext.getSelectedProject());
   if (!project && projects.length === 1) {project = projects[0];}
   if (!project) {project = await pickProject(projects);}

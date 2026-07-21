@@ -70,7 +70,7 @@ export async function executeCreateProject(
   logger.info('[createProject] invoked');
 
   // === Project + engine resolution ===
-  const projects = await detection.scanner.scan();
+  const { projects } = await detection.ready;
   let project = projects.find(
     (p) => p.path === detection.workspaceContext.getSelectedProject(),
   );

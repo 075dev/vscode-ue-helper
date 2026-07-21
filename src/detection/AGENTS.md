@@ -14,14 +14,11 @@
 | 文件 | 职责 |
 |---|---|
 | `index.ts` | activateDetection 入口 |
-| `uprojectScanner.ts` | 解析 `.uproject` JSON（json5，支持 trailing commas） |
-| `engineDiscovery.ts` | 引擎路径枚举、版本读取（Build.version） |
-| `engineLocator.ts` | 跨平台引擎发现（Windows 注册表 / Mac / Linux 路径） |
+| `uprojectScanner.ts` | 解析 `.uproject` JSON（json5，支持 trailing commas），`scan(folderPaths)` 强制要求 folderPaths |
+| `engineDiscovery.ts` | 引擎路径验证与版本读取（基于 .code-workspace 声明的路径） |
 | `workspaceContext.ts` | 工作区状态持久化（context.workspaceState） |
 | `workspaceFolders.ts` | 解析 .code-workspace folders[]，分配 role（project / engine / unknown） |
-| `workspaceEngines.ts` | 从 workspace folders 派生引擎候选（启发式） |
-| `uprojectAssociation.ts` | .uproject ↔ .code-workspace 关联校验 |
-| `vsBuildTools.ts` | Windows 上 MSVC 工具链发现（vswhere.exe） |
+| `vsBuildTools.ts` | Windows 上 MSVC 工具链发现（vswhere.exe，编译器相关，非项目/引擎） |
 | `types.ts` | ProjectInfo / EngineInstall / WorkspaceFolderInfo / VSInstallation |
 
 ## 关键架构：信任 .code-workspace
@@ -41,18 +38,29 @@ folders[1] = UE 引擎根目录
 ## DetectionHandles 结构
 
 ```typescript
-interface DetectionHandles {
-  scanner: UprojectScanner;           // .uproject 解析器
-  discovery: EngineDiscovery;         // 引擎发现器
-  vsBuildTools: VsBuildTools;         // MSVC 发现器
-  workspaceContext: WorkspaceContext; // 持久化状态
-  ready: Promise<DetectionResult>;    // UI 层 await 这个 Promise
+export interface DetectionHandles {
+  scanner: UprojectScanner;
+  discovery: EngineDiscovery;
+  vsBuildTools: VsBuildTools;
+  workspaceContext: WorkspaceContext;
+  ready: Promise<DetectionResult>;
 }
 
-interface DetectionResult {
+export interface DetectionResult {
+  /** 解析后的项目（来自 path === '.' 的 folder） */
   projects: ProjectInfo[];
+  /** 解析后的引擎（来自 name === 'UE5' 的 folder） */
   engines: EngineInstall[];
+  /** .code-workspace 文件绝对路径（来自 vscode.workspace.workspaceFile） */
   workspaceFile: string | undefined;
+  /** .code-workspace 文件所在目录 */
+  workspaceRoot: string | undefined;
+  /** 解析后的 folders[] 全部条目（含 project/engine 识别后的 role） */
+  workspaceFolders: WorkspaceFolderInfo[];
+  /** 识别为项目的 folder（path === '.'） */
+  projectFolder: WorkspaceFolderInfo | null;
+  /** 识别为引擎的 folder（name === 'UE5'） */
+  engineFolder: WorkspaceFolderInfo | null;
 }
 ```
 

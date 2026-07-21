@@ -122,7 +122,7 @@ export function activateClangd(
   if (clangdOps) {
     completionMode.setClangdOps(clangdOps);
   }
-  const backup = new WorkspaceBackup(detection.scanner['maxResults']?.toString() ?? '');
+  const backup = new WorkspaceBackup(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '');
   // 传 workspace 引用而非 projectDir/engineRoot 快照：activateClangd 同步执行时 detection
   // 尚未 ready，读 workspace.projectDir 会触发 _notifyMissing 永久污染 getter。改成在
   // enable/buildProxyArgs 时动态读（此时 ready 已完成）。

@@ -35,6 +35,16 @@ function createDetectionMock(projectPath: string): DetectionHandles {
     workspaceContext: {
       getSelectedProject: vi.fn().mockReturnValue(projectPath),
     },
+    // [P0 fix] executeDiagnoseProject 现在消费 detection.ready,扫描器 + workspaceContext 不够。
+    ready: Promise.resolve({
+      projects: [{ path: projectPath, name: 'MyGame' }],
+      engines: [],
+      workspaceFile: projectPath.replace(/\.uproject$/i, '.code-workspace'),
+      workspaceRoot: projectPath.replace(/[\\/][^\\/]+\.uproject$/i, ''),
+      workspaceFolders: [],
+      projectFolder: null,
+      engineFolder: null,
+    }),
   } as unknown as DetectionHandles;
 }
 

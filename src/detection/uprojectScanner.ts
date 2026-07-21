@@ -1,20 +1,20 @@
 /**
- * uprojectScanner —— 查找和解析 .uproject 文件
+ * uprojectScanner —— 解析 .uproject 文件
  *
- * ## 关键改动历史
+ * ## 设计原则
  *
- * Phase 0-2: 扫整个 workspace 找 .uproject
- * Phase 1+: 项目路径只来自 .code-workspace folders[],所以接受 folderPaths 参数
+ * 项目路径严格来自 .code-workspace folders[],不接受任何全工作区扫描。
+ * 调用方必须显式传入 folderPaths 数组,否则抛错。
+ *
+ * ## 入口
+ *
+ * - scan(folderPaths): 必须传 folderPaths 数组(从 detection.workspaceFolders 取)
+ * - parseFromPath(uprojectPath): 给定已知路径直接解析(detection 主入口用这个)
  *
  * ## JSON5 解析
  *
  * UE 的 .uproject 不是严格 JSON —— 允许注释、尾部逗号、单引号。
  * 之前用 JSON.parse 会失败(用户报告 status bar 显示 No Project),改用 JSON5.parse。
- *
- * ## 入口
- *
- * - scan(folderPaths?): 扫一组 folder 找所有 .uproject
- * - parseFromPath(uprojectPath): 给定已知路径直接解析(detection 主入口用这个)
  */
 
 import * as fs from 'node:fs/promises';
@@ -29,39 +29,36 @@ interface RawUProject {
 }
 
 export class UprojectScanner {
-  constructor(private readonly maxResults: number = 50) {}
-
   /**
-   * Scan .uproject files. If `folderPaths` is provided, only those folders
-   * are inspected. Otherwise the workspace root is searched.
+   * Scan .uproject files inside the given workspace folders.
+   *
+   * **Caller must supply `folderPaths` explicitly** — this method never
+   * falls back to a full-workspace scan. Empty / undefined input throws so
+   * that any future violation is caught at runtime (TypeScript also
+   * prevents `scan()` without arguments because the parameter is required).
    */
-  async scan(folderPaths?: string[]): Promise<ProjectInfo[]> {
-    let files: string[];
-    if (folderPaths && folderPaths.length > 0) {
-      files = [];
-      for (const folder of folderPaths) {
-        try {
-          // Use VS Code's native file search — it handles Windows drive
-          // letters, path encoding, and case-insensitivity correctly.
-          // `fs.readdir` directly on Windows paths can fail in extension
-          // host context (we saw "projects: (none)" with 2 folders detected).
-          const pattern = new vscode.RelativePattern(folder, '*.uproject');
-          const found = await vscode.workspace.findFiles(pattern);
-          for (const uri of found) {
-            files.push(uri.fsPath);
-          }
-        } catch (err) {
-          // Folder may not exist or not be readable — skip silently.
-          console.warn(`[uprojectScanner] failed to scan ${folder}:`, err);
-        }
-      }
-    } else {
-      const found = await vscode.workspace.findFiles(
-        '**/*.uproject',
-        '{**/Saved/**,**/Intermediate/**,**/.git/**,**/node_modules/**}',
-        this.maxResults,
+  async scan(folderPaths: string[]): Promise<ProjectInfo[]> {
+    if (!folderPaths || folderPaths.length === 0) {
+      throw new Error(
+        'UprojectScanner.scan requires non-empty folderPaths array — no full-workspace scanning allowed',
       );
-      files = found.map((u) => u.fsPath);
+    }
+    const files: string[] = [];
+    for (const folder of folderPaths) {
+      try {
+        // Use VS Code's native file search — it handles Windows drive
+        // letters, path encoding, and case-insensitivity correctly.
+        // `fs.readdir` directly on Windows paths can fail in extension
+        // host context (we saw "projects: (none)" with 2 folders detected).
+        const pattern = new vscode.RelativePattern(folder, '*.uproject');
+        const found = await vscode.workspace.findFiles(pattern);
+        for (const uri of found) {
+          files.push(uri.fsPath);
+        }
+      } catch (err) {
+        // Folder may not exist or not be readable — skip silently.
+        console.warn(`[uprojectScanner] failed to scan ${folder}:`, err);
+      }
     }
 
     const projects: ProjectInfo[] = [];
@@ -74,11 +71,6 @@ export class UprojectScanner {
       }
     }
     return projects;
-  }
-
-  async findSingle(folderPaths?: string[]): Promise<ProjectInfo | null> {
-    const projects = await this.scan(folderPaths);
-    return projects.length === 1 ? (projects[0] ?? null) : null;
   }
 
   /**

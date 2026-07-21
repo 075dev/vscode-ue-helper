@@ -37,15 +37,22 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 - Cross-platform editor launch (Windows / Mac / Linux)
 
 ### Engine & Project Detection
-- Automatic `.uproject` scan of workspace
-- Cross-platform Unreal Engine discovery:
-  - Windows: registry `HKLM\SOFTWARE\EpicGames\Unreal Engine\<version>`
-  - Mac: `~/Library/Application Support/Epic/UnrealEngine`, `/Users/Shared/Epic Games`
-  - Linux: `~/UnrealEngine`, `/opt/UnrealEngine`, `/usr/local/UnrealEngine`
-  - Env var `UE_ROOT` override
-- VS Build Tools detection via `vswhere.exe` (Windows)
-- Persistent selection (Memento) — pick once, remembered next time
-- `WorkspaceState` 单一真相源：[Phase 8] 替代直接读 `detection` 字段
+
+检测层**完全信任 `.code-workspace` 的 `folders[]`**，不做文件系统递归扫描（UE 项目体量大，扫描会卡顿）。`folders[]` 的 role 分配规则是硬编码的：
+
+| `folders[]` 字段 | 角色 | 动作 |
+|---|---|---|
+| `path === '.'` | `project` | 读取 `<name>.uproject`（JSON5 解析，支持 trailing commas） |
+| `name === 'UE5'` | `engine` | 读取 `Engine/Build/Build.version` 拿 `Major.Minor.Patch` |
+| 其他 | `unknown` | 忽略 |
+
+如果 `.code-workspace` 没打开，detection 直接返回空结果，UI 显示警告。
+
+- **`.uproject` 解析**：`UprojectScanner` 用 `json5` 库解析（Epic 在 `.uproject` 里用了 trailing commas，标准 JSON 不支持）。
+- **引擎版本读取**：`EngineDiscovery` 验证候选路径下存在 `Engine/Build/Build.version`，按版本号倒序去重。
+- **VS Build Tools 检测**（仅 Windows）：`VsBuildTools` 通过 `vswhere.exe -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64` 发现 MSVC 安装，拼接 `VC/Tools/MSVC/<version>/bin/Hostx64/x64`。
+- **持久化用户选择**：`WorkspaceContext` 把"用户选定的项目路径 / 引擎路径"存到 `context.workspaceState`（VS Code Memento API），跨会话保留；下次打开同一工作区直接恢复。
+- **`WorkspaceState` 统一读取入口**（Phase 8）：`src/core/workspace.ts` 把 detection 结果封装成 lazy 派生字段（`projectFolder` / `engineFolder` / `projectDir` / `engineDir` 等），所有消费模块统一从这里读，不再直接读 detection 句柄。
 
 ### Clangd IntelliSense
 - Auto-generates `compile_commands.json` via UBT `-ProjectFiles` mode（含 fallback DB）

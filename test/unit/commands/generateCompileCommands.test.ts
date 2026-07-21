@@ -126,6 +126,16 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
         setProject: vi.fn(),
         setEngine: vi.fn(),
       },
+      // [P0 fix] executeGenerateCompileCommands 现在消费 detection.ready
+      ready: Promise.resolve({
+        projects: [{ path: PROJECT_PATH, name: 'MyGame' }],
+        engines: [{ path: ENGINE_PATH, version: '5.4' }],
+        workspaceFile: 'C:\\UEProjects\\MyGame\\MyGame.code-workspace',
+        workspaceRoot: 'C:\\UEProjects\\MyGame',
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      }),
     } as unknown as DetectionHandles;
 
     // ---- 配置 mock 行为 ----
@@ -244,6 +254,16 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
           setProject: vi.fn(),
           setEngine: vi.fn(),
         },
+        // [P0 fix] 同上 beforeEach 内的 ready mock,这里用 tempDir 派生的 projectPath
+        ready: Promise.resolve({
+          projects: [{ path: projectPath, name: 'MyGame' }],
+          engines: [{ path: ENGINE_PATH, version: '5.4' }],
+          workspaceFile: path.join(tempDir, 'MyGame.code-workspace'),
+          workspaceRoot: tempDir,
+          workspaceFolders: [],
+          projectFolder: null,
+          engineFolder: null,
+        }),
       } as unknown as DetectionHandles;
       mockPickProject.mockResolvedValue({ path: projectPath, name: 'MyGame', engineVersion: '5.4' });
 

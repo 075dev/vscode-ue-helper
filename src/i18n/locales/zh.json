@@ -55,9 +55,7 @@
   "showInfo.openOutput": "打开输出",
   "showInfo.noEnginesWithWs": "VSCodeUEHelper — 未检测到 Unreal 引擎。\n\n项目: {project}\n工作区: {workspace}\n\n引擎从 .code-workspace 的 folders[] 读取。\n打开该文件并核对 UE 安装路径。",
   "showInfo.noEnginesNoWsWithUE": "VSCodeUEHelper — 缺少 .code-workspace 文件。\n\n项目: {project}\n工作区: {workspace}\n\nUE 已安装(检测到系统关联),但 .code-workspace 文件不存在。\n根据 .uproject 的 EngineAssociation 生成一个。",
-  "showInfo.noEnginesNoWsNoUE": "VSCodeUEHelper — Unreal Engine 未安装。\n\n项目: {project}\n未找到 .code-workspace 文件。\n系统级 .uproject 关联不存在(reg query \"HKCR\\.uproject\" 无结果)。\n\n请先通过 Epic Launcher 安装 UE,然后返回。",
   "showInfo.btn.openWs": "打开 .code-workspace",
-  "showInfo.btn.downloadUE": "下载 UE",
 
   "systemIncludes.placeholder": "设置系统包含路径 — Phase 6 实现(仅 Windows)。",
 

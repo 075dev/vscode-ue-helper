@@ -206,7 +206,14 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         setEngine: vi.fn(() => Promise.resolve(undefined)),
       },
       ready: Promise.resolve({
-        projects: [],
+        projects: [{
+          path: projectPath,
+          name: 'MyProj',
+          directory: projectDir,
+          modules: [],
+          enginePath: 'C:\\UE_5.4',
+          engineVersion: '5.4.0',
+        }],
         engines: [],
         workspaceFile: null,
         workspaceRoot: projectDir,
@@ -289,7 +296,14 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         setEngine: vi.fn(() => Promise.resolve(undefined)),
       },
       ready: Promise.resolve({
-        projects: [],
+        projects: [{
+          path: projectPath,
+          name: 'MyProj',
+          directory: projectDir,
+          modules: [],
+          enginePath: 'C:\\UE_5.4',
+          engineVersion: '5.4.0',
+        }],
         engines: [],
         workspaceFile: null,
         workspaceRoot: projectDir,

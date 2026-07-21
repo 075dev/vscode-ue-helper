@@ -55,9 +55,7 @@
   "showInfo.openOutput": "Open Output",
   "showInfo.noEnginesWithWs": "VSCodeUEHelper — No Unreal Engine detected.\n\nProject: {project}\nWorkspace: {workspace}\n\nEngines are read from .code-workspace folders[].\nOpen the file and verify the UE install paths.",
   "showInfo.noEnginesNoWsWithUE": "VSCodeUEHelper — .code-workspace missing.\n\nProject: {project}\nWorkspace: {workspace}\n\nUE is installed (system association detected) but no .code-workspace file exists.\nGenerate one from the .uproject's EngineAssociation.",
-  "showInfo.noEnginesNoWsNoUE": "VSCodeUEHelper — Unreal Engine not installed.\n\nProject: {project}\nNo .code-workspace found.\nNo OS-level .uproject association (reg query \"HKCR\\.uproject\" returned nothing).\n\nInstall UE from Epic Launcher, then return.",
   "showInfo.btn.openWs": "Open .code-workspace",
-  "showInfo.btn.downloadUE": "Download UE",
 
   "systemIncludes.placeholder": "Set System Includes — coming in Phase 6 (Windows-only feature).",
 

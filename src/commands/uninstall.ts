@@ -27,7 +27,8 @@ interface CleanupTarget {
 }
 
 export async function executeUninstall(logger: Logger, detection: DetectionHandles): Promise<void> {
-  const project = await detection.scanner.findSingle();
+  const { projects } = await detection.ready;
+  const project = projects[0];
   const root = project
     ? path.dirname(project.path)
     : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
