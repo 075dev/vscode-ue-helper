@@ -27,6 +27,7 @@ const disposables: vscode.Disposable[] = [];
 
 export function activate(context: vscode.ExtensionContext): Promise<void> {
   initI18n();
+  // eslint-disable-next-line no-restricted-syntax -- [Phase 11 SSoT] 主入口允许 new Logger()
   logger = new Logger('VSCodeUEHelper');
   const config = new Config();
   const activationStart = Date.now();

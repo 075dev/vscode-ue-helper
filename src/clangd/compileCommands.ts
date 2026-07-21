@@ -23,7 +23,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { Logger, sharedLogger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { getUbtPath } from './ueHelpers';
 import { computeFingerprint } from './fingerprint';
@@ -117,7 +117,7 @@ export interface GenerateOptions {
 export async function generateCompileCommands(opts: GenerateOptions): Promise<string> {
   // [Phase 7 PLAN B / per D-03] 阶段 1：函数入口 — 记录整体起点 + entry 埋点
   const entryStart = performance.now();
-  const log = opts.logger ?? new Logger('compileCommands');
+  const log = opts.logger ?? sharedLogger;
   const projectName = path.basename(opts.project, '.uproject');
   const engineUri = vscode.Uri.file(opts.engineRoot);
 

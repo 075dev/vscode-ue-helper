@@ -45,6 +45,10 @@
       {
         "selector": "CallExpression[callee.type='MemberExpression'][callee.object.type='MemberExpression'][callee.object.object.name='vscode'][callee.object.property.name='workspace'][callee.property.name='getWorkspaceFolder']",
         "message": "[SSoT] vscode.workspace.getWorkspaceFolder 直读被禁止——只在 src/clangd/compileCommands/task.ts 这种需要原生 vscode.WorkspaceFolder 类型构造 vscode.Task 时保留（带注释豁免）。其他场景必须走 WorkspaceState.workspaceFolders."
+      },
+      {
+        "selector": "NewExpression[callee.name='Logger']",
+        "message": "[SSoT] 模块内部禁止 new Logger() —— 用 sharedLogger (src/core/logger.ts)。主入口 src/extension.ts:30 与测试文件例外。"
       }
     ],
     "no-restricted-imports": [
@@ -59,5 +63,13 @@
       }
     ]
   },
-  "ignorePatterns": ["out/", "dist/", "node_modules/", "*.js", "*.mjs", "coverage/"]
+  "ignorePatterns": ["out/", "dist/", "node_modules/", "*.js", "*.mjs", "coverage/"],
+  "overrides": [
+    {
+      "files": ["test/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
 }

@@ -26,7 +26,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { Logger } from '@core/logger';
+import { Logger, sharedLogger } from '@core/logger';
 
 /** LSP 帧方向 */
 export type LspFrameDirection = 'in' | 'out';
@@ -104,7 +104,7 @@ export class ProxyOverheadMeter {
     logger?: Logger,
     windowSize: number = DEFAULT_FRAME_WINDOW,
   ) {
-    this.logger = logger ?? new Logger('perfProxy');
+    this.logger = logger ?? sharedLogger;
     this.windowSize = windowSize;
     // 启动时立即采样一次 baseline
     this.sampleMemory();

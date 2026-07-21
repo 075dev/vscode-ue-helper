@@ -21,7 +21,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { Logger, sharedLogger } from '@core/logger';
 import type {
   PerfEvent,
   PerfMetricSnapshot,
@@ -132,7 +132,7 @@ class PerfSessionImpl implements PerfSession {
     if (this.logger) {
       return this.logger;
     }
-    return new Logger('VSCodeUEHelper');
+    return sharedLogger;
   }
 
   /* ===== public API ===== */

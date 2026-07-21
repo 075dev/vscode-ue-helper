@@ -131,3 +131,8 @@ export class Logger {
     this.channel.dispose();
   }
 }
+
+// [Phase 11 SSoT] sharedLogger 单例——模块内部统一用这个,不要 new Logger()
+// 主入口 src/extension.ts:30 仍可 new Logger()(独立 OutputChannel),test 可 new Logger mock
+// eslint-disable-next-line no-restricted-syntax -- [Phase 11 SSoT] 本文件就是 SSoT 定义点
+export const sharedLogger = new Logger('VSCodeUEHelper');

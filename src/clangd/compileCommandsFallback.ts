@@ -21,7 +21,7 @@
 import * as fs from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import * as path from 'node:path';
-import { Logger } from '@core/logger';
+import { Logger, sharedLogger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { getUeClangdCompatPath, getUeClangdCompatContent } from './ueClangdCompat';
 import { collectIntermediateUhtDirs } from './intermediateUhtCollector';
@@ -483,7 +483,7 @@ async function filterExistingDirs(candidates: Iterable<string>, existing: Set<st
  * @returns 写入路径与统计；无 .cpp 文件或写入失败时返回 undefined
  */
 export async function generateFallbackCompileCommands(opts: FallbackOptions): Promise<FallbackResult | undefined> {
-  const log = opts.logger ?? new Logger('fallback');
+  const log = opts.logger ?? sharedLogger;
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
 
   log.warn(`[fallback] generating FALLBACK compile_commands.json (UBT failed) for ${projectDir}`);
