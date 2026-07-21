@@ -20,6 +20,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { EngineInstall } from './types';
 
 export interface EngineDiscoveryOptions {
   /**
@@ -32,12 +33,6 @@ export interface EngineDiscoveryOptions {
 export interface DiscoveryResult {
   valid: EngineInstall[];
   invalid: string[];
-}
-
-export interface EngineInstall {
-  path: string;
-  version: string;
-  isLauncherInstall: boolean;
 }
 
 interface BuildVersion {

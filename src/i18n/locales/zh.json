@@ -215,6 +215,8 @@
   "openWorkspaceFile.notFound": "在工作区根目录中未找到 .code-workspace 文件。 / No .code-workspace file found in workspace roots.",
 
   "cmd.noEngineSelected": "未选择 Unreal Engine 安装。 / No Unreal Engine installation selected.",
+  "cmd.noUprojectSelected": "未选择 .uproject 项目。 / No .uproject selected.",
+  "cmd.noUnrealEngineSelected": "未选择 Unreal Engine 安装。 / No Unreal Engine installation selected.",
   "cmd.noWorkspaceRoot": "未找到工作区根目录。 / No workspace root found.",
 
   "liveCoding.windowsOnly": "Live Coding 当前仅支持 Windows。请改用 Rebuild。 / Live Coding is currently Windows-only. Use Rebuild instead.",

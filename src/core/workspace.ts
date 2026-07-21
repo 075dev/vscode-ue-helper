@@ -31,14 +31,8 @@ import * as vscode from 'vscode';
 import { Logger } from './logger';
 import type { WorkspaceContext } from '@detection/workspaceContext';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
-
-/** 从 .code-workspace folders[] 派生的 folder 元信息（detection 层标记 role） */
-export interface WorkspaceFolderInfo {
-  name: string;
-  path: string;
-  role: 'project' | 'engine' | 'unknown';
-  absPath: string;
-}
+import type { WorkspaceFolderInfo } from '@detection';
+export type { WorkspaceFolderInfo };
 
 /** get 函数访问的字段标识符（用于去重 notify） */
 export type WorkspaceField =

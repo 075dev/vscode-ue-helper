@@ -28,33 +28,13 @@ import { EngineDiscovery } from './engineDiscovery';
 import { VsBuildTools } from './vsBuildTools';
 import { WorkspaceContext } from './workspaceContext';
 import { readBuildVersion } from './workspaceFolders';
-import type { ProjectInfo, EngineInstall } from './types';
+import type { ProjectInfo, EngineInstall, WorkspaceFolderInfo } from './types';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 export { UprojectScanner, EngineDiscovery, VsBuildTools, WorkspaceContext };
-export type { ProjectInfo, EngineInstall, VSInstallation, WorkspaceSelection } from './types';
+export type { ProjectInfo, EngineInstall, VSInstallation, WorkspaceSelection, WorkspaceFolderInfo } from './types';
 export { readBuildVersion, type ClassifiedFolder } from './workspaceFolders';
-
-/**
- * [Phase 8] 来自 .code-workspace folders[] 的单个 folder 条目。
- *
- * 这是根源信息——WorkspaceState 派生全部路径都从这里出发。
- * 规则（硬规则，用户不允许自定义）：
- *   - `role === 'project'` 当且仅当 `path === '.'`
- *   - `role === 'engine'` 当且仅当 `name === 'UE5'`
- *   - 其余 `role === 'unknown'`
- */
-export interface WorkspaceFolderInfo {
-  /** folder 在 .code-workspace 中的 name 字段 */
-  name: string;
-  /** folder 在 .code-workspace 中的 path 字段（可能是 "." 或绝对/相对路径） */
-  path: string;
-  /** 识别后的角色（project / engine / unknown） */
-  role: 'project' | 'engine' | 'unknown';
-  /** 解析后的绝对路径（path === '.' 时 = workspaceRoot） */
-  absPath: string;
-}
 
 export interface DetectionHandles {
   scanner: UprojectScanner;

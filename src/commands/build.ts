@@ -23,6 +23,7 @@ import { pickProject, pickEngine } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
 import type { WorkspaceState } from '@core/workspace';
+import { t } from '@i18n';
 
 type Mode = 'build' | 'rebuild' | 'clean';
 
@@ -50,7 +51,7 @@ export async function executeBuild(
   if (!project && projects.length === 1) {project = projects[0];}
   if (!project) {project = await pickProject(projects);}
   if (!project) {
-    void vscode.window.showWarningMessage('No .uproject selected.');
+    void vscode.window.showWarningMessage(t('cmd.noUprojectSelected'));
     return;
   }
   await (workspace ? workspace.setSelectedProject(project) : detection.workspaceContext.setProject(project));
@@ -61,7 +62,7 @@ export async function executeBuild(
   if (!engine && engines.length === 1) {engine = engines[0];}
   if (!engine) {engine = await pickEngine(engines);}
   if (!engine) {
-    void vscode.window.showWarningMessage('No Unreal Engine installation selected.');
+    void vscode.window.showWarningMessage(t('cmd.noUnrealEngineSelected'));
     return;
   }
   await (workspace ? workspace.setSelectedEngine(engine) : detection.workspaceContext.setEngine(engine));

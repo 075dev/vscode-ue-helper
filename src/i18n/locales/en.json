@@ -215,6 +215,8 @@
   "openWorkspaceFile.notFound": "No .code-workspace file found in workspace roots.",
 
   "cmd.noEngineSelected": "No Unreal Engine installation selected.",
+  "cmd.noUprojectSelected": "No .uproject selected.",
+  "cmd.noUnrealEngineSelected": "No Unreal Engine installation selected.",
   "cmd.noWorkspaceRoot": "No workspace root found.",
 
   "liveCoding.windowsOnly": "Live Coding is currently Windows-only. Use Rebuild instead.",
