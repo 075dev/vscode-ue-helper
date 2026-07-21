@@ -37,11 +37,10 @@ import {
 } from '@clangd';
 import type { FillResult } from '@clangd/compileCommands';
 import type { ClangdOps } from '@clangd/clangdOps';
-import { pickProject, pickEngine } from '@ui/quickPicks';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
-import type { ProjectInfo, EngineInstall } from '@detection/types';
 import type { WorkspaceState } from '@core/workspace';
+import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from '@commands/_resolve';
 
 /**
  * 将 fillMissingCompileCommands 的结构化结果格式化为人类可读的摘要文本
@@ -73,30 +72,14 @@ export async function executeCreateProject(
 ): Promise<void> {
   logger.info('[createProject] invoked');
 
-  // [Phase 9 SSoT] 收敛 selected* 访问
-  function legacyFindProject(): ProjectInfo | undefined {
-    const sp = detection.workspaceContext.getSelectedProject();
-    return sp ? projects.find((p) => p.path === sp) : undefined;
-  }
-  function legacyFindEngine(): EngineInstall | undefined {
-    const se = detection.workspaceContext.getSelectedEngine();
-    return se ? engines.find((e) => e.path === se) : undefined;
-  }
-
-  // === Project + engine resolution ===
-  const { projects } = await detection.ready;
-  let project = workspace?.resolveSelectedProject(projects) ?? legacyFindProject();
-  if (!project && projects.length === 1) {project = projects[0];}
-  if (!project) {project = await pickProject(projects);}
+  // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
+  const project = await resolveProjectOrPick({ detection, workspace });
   if (!project) {return;}
-  await (workspace ? workspace.setSelectedProject(project) : detection.workspaceContext.setProject(project));
+  await persistSelection(workspace, detection, project, undefined);
 
-  const engines = await detection.discovery.discover();
-  let engine = workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine();
-  if (!engine && engines.length === 1) {engine = engines[0];}
-  if (!engine) {engine = await pickEngine(engines);}
+  const engine = await resolveEngineOrPick({ detection, workspace });
   if (!engine) {return;}
-  await (workspace ? workspace.setSelectedEngine(engine) : detection.workspaceContext.setEngine(engine));
+  await persistSelection(workspace, detection, undefined, engine);
 
   const projectDir = path.dirname(project.path);
 

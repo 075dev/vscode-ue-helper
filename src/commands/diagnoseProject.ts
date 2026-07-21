@@ -7,12 +7,11 @@
 import * as vscode from 'vscode';
 import type { Logger } from '@core/logger';
 import type { DetectionHandles } from '@detection';
-import type { ProjectInfo } from '@detection/types';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
 import { diagnoseProject, formatDiagnosticReport } from '@clangd/diagnoseProject';
-import { pickProject } from '@ui/quickPicks';
 import { t } from '@i18n';
+import { resolveProjectOrPick } from '@commands/_resolve';
 
 export async function executeDiagnoseProject(
   logger: Logger,
@@ -24,23 +23,13 @@ export async function executeDiagnoseProject(
 ): Promise<void> {
   logger.info('[diagnoseProject] invoked');
 
-  const { projects } = await detection.ready;
-  // [Phase 9 SSoT] 收敛 selected* 访问
-  function legacyFind(): ProjectInfo | undefined {
-    const sp = detection.workspaceContext.getSelectedProject();
-    return sp ? projects.find((p) => p.path === sp) : undefined;
-  }
-  let project = workspace?.resolveSelectedProject(projects) ?? legacyFind();
-  if (!project && projects.length === 1) {
-    project = projects[0];
-  }
-  if (!project) {
-    project = await pickProject(projects);
-  }
-  if (!project) {
-    void vscode.window.showWarningMessage(t('diagnoseProject.noProject'));
-    return;
-  }
+  // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅解析不持久化）
+  const project = await resolveProjectOrPick({
+    detection,
+    workspace,
+    warningKey: 'diagnoseProject.noProject',
+  });
+  if (!project) {return;}
 
   const report = await diagnoseProject(project.path, workspace, clangdOps);
   const formatted = formatDiagnosticReport(report);

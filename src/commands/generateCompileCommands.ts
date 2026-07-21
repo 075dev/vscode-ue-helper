@@ -30,7 +30,6 @@ import {
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
-import type { EngineInstall } from '@detection/types';
 import type { WorkspaceState } from '@core/workspace';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
@@ -43,6 +42,8 @@ export async function executeGenerateCompileCommands(
 ): Promise<void> {
   // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
+  // [Phase 11 SSoT] generateCompileCommands 是「显式重生成」语义，picker 优先于 selection，
+  // 与其他命令 selection-first 不同——保留原 picker ?? selection ?? legacy 顺序。
   const { projects } = await detection.ready;
   const project = (await pickProject(projects)) ?? projects[0];
   if (!project) {
@@ -51,15 +52,11 @@ export async function executeGenerateCompileCommands(
   }
 
   const engines = await detection.discovery.discover();
-  // [Phase 9 SSoT] 收敛 selected* 访问
-  function legacyFind(): EngineInstall | undefined {
-    const se = detection.workspaceContext.getSelectedEngine();
-    return se ? engines.find((e) => e.path === se) : undefined;
-  }
+  const se = detection.workspaceContext.getSelectedEngine();
   const engine =
     (await pickEngine(engines)) ??
     workspace?.resolveSelectedEngine(engines) ??
-    legacyFind();
+    (se ? engines.find((e) => e.path === se) : undefined);
   if (!engine) {
     void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;

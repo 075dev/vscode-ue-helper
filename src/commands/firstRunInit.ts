@@ -223,7 +223,7 @@ export async function runFirstTimeInit(
 
   // 第一步：Create Unreal Clangd Project（AC-4）
   try {
-    await executeCreateProject(config, logger, detection, deps.clangdOps);
+    await executeCreateProject(config, logger, detection, deps.clangdOps, workspace);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error('[firstRunInit] createProject failed:', msg);

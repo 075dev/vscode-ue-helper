@@ -27,9 +27,8 @@ import {
   selectSdkVersion,
 } from '@clangd/windowsSdk';
 import { resolveFlags } from '@clangd/flagGlossary';
-import { pickProject } from '@ui/quickPicks';
 import type { DetectionHandles } from '@detection';
-import type { ProjectInfo } from '@detection/types';
+import { resolveProjectOrPick, persistSelection } from '@commands/_resolve';
 
 export async function executeSetSystemIncludes(
   config: Config,
@@ -46,17 +45,10 @@ export async function executeSetSystemIncludes(
     return;
   }
 
-  // [Phase 9 SSoT] 收敛 selected* 访问
-  const { projects } = await detection.ready;
-  function legacyFindProject(): ProjectInfo | undefined {
-    const sp = detection.workspaceContext.getSelectedProject();
-    return sp ? projects.find((p) => p.path === sp) : undefined;
-  }
-  let project = workspace?.resolveSelectedProject(projects) ?? legacyFindProject();
-  if (!project && projects.length === 1) {project = projects[0];}
-  if (!project) {project = await pickProject(projects);}
+  // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅 project,engine 路径直接读缓存）
+  const project = await resolveProjectOrPick({ detection, workspace });
   if (!project) {return;}
-  await (workspace ? workspace.setSelectedProject(project) : detection.workspaceContext.setProject(project));
+  await persistSelection(workspace, detection, project, undefined);
 
   // 引擎已经在工作区中选择过，直接读取
   const enginePath = workspace?.selectedEngine ?? detection.workspaceContext.getSelectedEngine();
