@@ -20,6 +20,8 @@ export async function executeLiveCoding(
   detection: DetectionHandles,
   // [Phase 9 SSoT] 可选——为老调用方/test 留 fallback；生产 index.ts 必传
   workspace?: WorkspaceState,
+  // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
+  silent: boolean = false,
 ): Promise<void> {
   if (!isLiveCodingSupported(config.platform)) {
     void vscode.window.showWarningMessage(t('liveCoding.windowsOnly'));
@@ -30,6 +32,7 @@ export async function executeLiveCoding(
   const project = await resolveProjectOrPick({
     detection,
     workspace,
+    silent,
     warningKey: 'liveCoding.noProject',
   });
   if (!project) {return;}
@@ -38,6 +41,7 @@ export async function executeLiveCoding(
   const engine = await resolveEngineOrPick({
     detection,
     workspace,
+    silent,
     warningKey: 'cmd.noEngineSelected',
   });
   if (!engine) {return;}

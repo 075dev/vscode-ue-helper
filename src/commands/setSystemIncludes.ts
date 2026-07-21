@@ -37,6 +37,8 @@ export async function executeSetSystemIncludes(
   // [Phase 9 SSoT] 已存在的参数——开始真正使用
   workspace?: WorkspaceState,
   clangdOps?: ClangdOps,
+  // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
+  silent: boolean = false,
 ): Promise<void> {
   if (process.platform !== 'win32') {
     void vscode.window.showInformationMessage(
@@ -46,7 +48,7 @@ export async function executeSetSystemIncludes(
   }
 
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅 project,engine 路径直接读缓存）
-  const project = await resolveProjectOrPick({ detection, workspace });
+  const project = await resolveProjectOrPick({ detection, workspace, silent });
   if (!project) {return;}
   await persistSelection(workspace, detection, project, undefined);
 

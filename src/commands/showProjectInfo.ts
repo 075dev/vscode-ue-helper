@@ -24,6 +24,8 @@ export async function showProjectInfo(
   detection?: DetectionHandles,
   // [Phase 9 SSoT] 可选——为老调用方留 fallback；production 走 workspace
   workspace?: WorkspaceState,
+  // [Phase 11 SSoT] silent = true 时跳过 information/warning 弹窗（MCP 工具调用场景）
+  silent: boolean = false,
 ): Promise<void> {
   logger.info('showProjectInfo invoked');
   logger.show();
@@ -121,16 +123,22 @@ export async function showProjectInfo(
 
     // 未打开 .code-workspace：准则要求不调 OS 扫描，统一提示用户从 .uproject
     // 手动创建 .code-workspace（与 WorkspaceState 缺失提示一致）。
-    void vscode.window.showWarningMessage(t('showInfo.noEnginesNoWsWithUE'));
+    // [Phase 11 SSoT] silent = true 时 (MCP 工具调用) 不弹模态 warning,直接 logger 输出。
+    if (!silent) {
+      void vscode.window.showWarningMessage(t('showInfo.noEnginesNoWsWithUE'));
+    }
     logger.show();
     return;
   }
 
   const summary = lines.slice(0, 8).join('\n');
-  const choice = await vscode.window.showInformationMessage(
-    summary,
-    t('showInfo.openOutput'),
-  );
+  // [Phase 11 SSoT] silent = true 时 (MCP 工具调用) 不弹 information modal。
+  const choice = silent
+    ? undefined
+    : await vscode.window.showInformationMessage(
+        summary,
+        t('showInfo.openOutput'),
+      );
   if (choice === t('showInfo.openOutput')) {
     logger.show();
   }

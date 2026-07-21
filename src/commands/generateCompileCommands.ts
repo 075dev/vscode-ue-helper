@@ -30,6 +30,7 @@ import {
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
+import type { ProjectInfo } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
@@ -39,13 +40,25 @@ export async function executeGenerateCompileCommands(
   detection: DetectionHandles,
   // [Phase 9 SSoT] 可选——为老调用方/test 留 fallback；生产 index.ts 必传
   workspace?: WorkspaceState,
+  // [Phase 11 SSoT] silent = true 时跳过 picker，从 workspace selection 读取，供 MCP tools 调用
+  silent: boolean = false,
 ): Promise<void> {
   // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
   // [Phase 11 SSoT] generateCompileCommands 是「显式重生成」语义，picker 优先于 selection，
   // 与其他命令 selection-first 不同——保留原 picker ?? selection ?? legacy 顺序。
+  // silent = true 时跳过 picker，仅读 workspace selection（与 MCP tools 集成）。
   const { projects } = await detection.ready;
-  const project = (await pickProject(projects)) ?? projects[0];
+  let project;
+  if (!silent) {
+    project = (await pickProject(projects)) ?? projects[0];
+  } else {
+    project = workspace?.resolveSelectedProject(projects) ??
+      ((): ProjectInfo | undefined => {
+        const sp = detection.workspaceContext.getSelectedProject();
+        return sp ? projects.find((p) => p.path === sp) : undefined;
+      })();
+  }
   if (!project) {
     void vscode.window.showWarningMessage(t('generateCompileCommands.noProject'));
     return;
@@ -53,10 +66,17 @@ export async function executeGenerateCompileCommands(
 
   const engines = await detection.discovery.discover();
   const se = detection.workspaceContext.getSelectedEngine();
-  const engine =
-    (await pickEngine(engines)) ??
-    workspace?.resolveSelectedEngine(engines) ??
-    (se ? engines.find((e) => e.path === se) : undefined);
+  let engine;
+  if (!silent) {
+    engine =
+      (await pickEngine(engines)) ??
+      workspace?.resolveSelectedEngine(engines) ??
+      (se ? engines.find((e) => e.path === se) : undefined);
+  } else {
+    engine =
+      workspace?.resolveSelectedEngine(engines) ??
+      (se ? engines.find((e) => e.path === se) : undefined);
+  }
   if (!engine) {
     void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
     return;
