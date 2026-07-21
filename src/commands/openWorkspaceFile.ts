@@ -12,10 +12,8 @@ import { t } from '@i18n';
 import type { WorkspaceState } from '@core/workspace';
 
 export async function executeOpenWorkspaceFile(workspace?: WorkspaceState): Promise<void> {
-  // [Phase 9 SSoT] 优先 workspace.workspaceFolders（检测已 ready 时）
-  // 未传时（如单仓库场景 fallback）回落到 vscode.workspace.workspaceFolders
-  // eslint-disable-next-line no-restricted-syntax -- 单仓库/测试兼容 fallback
-  const folders = workspace?.workspaceFolders ?? vscode.workspace.workspaceFolders ?? [];
+  // [Phase 11 SSoT 包 6] workspace.workspaceFolders 是单一真相源——删除 vscode.workspace.workspaceFolders fallback
+  const folders = workspace?.workspaceFolders ?? [];
   if (folders.length === 0) {
     void vscode.window.showWarningMessage(t('openWorkspaceFile.noWorkspace'));
     return;
