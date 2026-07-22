@@ -7,7 +7,7 @@
  * ## 用法
  *
  * ```ts
- * const logger = new Logger('MyModule');  // 创建独立 channel
+ * const logger = new Logger('MyModule');  // 使用对应名称的共享 channel
  * logger.info('something happened');
  * logger.warn('careful!', { extra: 'data' });
  * logger.error('oops', err);
@@ -39,12 +39,30 @@
 
 import * as vscode from 'vscode';
 
+/** 按通道名称复用 OutputChannel，避免同名通道被重复创建。 */
+const channels = new Map<string, vscode.OutputChannel>();
+
+export function getLoggerOutputChannel(name: string = 'VSCodeUEHelper'): vscode.OutputChannel {
+  let channel = channels.get(name);
+  if (!channel) {
+    channel = vscode.window.createOutputChannel(name);
+    channels.set(name, channel);
+  }
+  return channel;
+}
+
+export function disposeLoggerOutputChannel(name: string = 'VSCodeUEHelper'): void {
+  const channel = channels.get(name);
+  channel?.dispose();
+  channels.delete(name);
+}
+
 /** 日志级别，按严重程度从低到高排序 */
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 export class Logger {
-  /** VS Code Output 通道引用 */
-  private channel: vscode.OutputChannel;
+  /** Output 通道名称，用于在 dispose 后重新获取共享通道。 */
+  private readonly channelName: string;
   /** 日志前缀，构造时指定，如 '[VSCodeUEHelper]' */
   private prefix: string;
   /** 当前日志级别（'info' 及以上会被记录） */
@@ -55,9 +73,14 @@ export class Logger {
    *                习惯上每个模块用模块名（如 'detection'、'clangd'）
    */
   constructor(prefix: string = 'VSCodeUEHelper') {
-    // createOutputChannel 注册一个新的 Output 面板 tab
-    this.channel = vscode.window.createOutputChannel(prefix);
+    this.channelName = prefix;
     this.prefix = `[${prefix}]`;
+  }
+
+  /** 获取当前共享通道；通道被释放后自动创建新的实例。 */
+  private ensureChannel(): vscode.OutputChannel {
+    const channel = getLoggerOutputChannel(this.channelName);
+    return channel;
   }
 
   /**
@@ -96,7 +119,7 @@ export class Logger {
       return;
     }
     const line = this.format('info', args);
-    this.channel.appendLine(line);
+    this.ensureChannel().appendLine(line);
     console.log(line);
   }
 
@@ -106,7 +129,7 @@ export class Logger {
       return;
     }
     const line = this.format('warn', args);
-    this.channel.appendLine(line);
+    this.ensureChannel().appendLine(line);
     console.warn(line);
   }
 
@@ -116,7 +139,7 @@ export class Logger {
       return;
     }
     const line = this.format('error', args);
-    this.channel.appendLine(line);
+    this.ensureChannel().appendLine(line);
     console.error(line);
   }
 
@@ -126,21 +149,21 @@ export class Logger {
       return;
     }
     const line = this.format('debug', args);
-    this.channel.appendLine(line);
+    this.ensureChannel().appendLine(line);
   }
 
   /** 把 Output 面板显示给用户。参数 `preserveFocus=true` 不会抢焦点 */
   show(): void {
-    this.channel.show(true);
+    this.ensureChannel().show(true);
   }
 
   /** 释放 Output 通道（VS Code 卸载插件时调用） */
   dispose(): void {
-    this.channel.dispose();
+    disposeLoggerOutputChannel(this.channelName);
   }
 }
 
-// [Phase 11 SSoT] sharedLogger 单例——模块内部统一用这个,不要 new Logger()
-// 主入口 src/extension.ts:30 仍可 new Logger()(独立 OutputChannel),test 可 new Logger mock
+// [Phase 11 SSoT] sharedLogger 单例——模块内 logger 复用 VSCodeUEHelper channel
+// 主入口和模块都通过该单例写入同一 OutputChannel；test 可 new Logger mock
 // eslint-disable-next-line no-restricted-syntax -- [Phase 11 SSoT] 本文件就是 SSoT 定义点
 export const sharedLogger = new Logger('VSCodeUEHelper');

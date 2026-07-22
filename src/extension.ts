@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { Logger, sharedLogger } from '@core/logger';
 import { Config } from '@core/config';
 import { WorkspaceState } from '@core/workspace';
 import { ClangdOps } from '@clangd/clangdOps';
@@ -27,8 +27,7 @@ const disposables: vscode.Disposable[] = [];
 
 export function activate(context: vscode.ExtensionContext): Promise<void> {
   initI18n();
-  // eslint-disable-next-line no-restricted-syntax -- [Phase 11 SSoT] 主入口允许 new Logger()
-  logger = new Logger('VSCodeUEHelper');
+  logger = sharedLogger;
   const config = new Config();
   const activationStart = Date.now();
   logger.info('Activating VSCodeUEHelper...');
