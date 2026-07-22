@@ -42,7 +42,9 @@ export async function executeBuild(
     silent,
     warningKey: 'cmd.noUprojectSelected',
   });
-  if (!project) {return;}
+  if (!project) {
+    return;
+  }
   await persistSelection(workspace, detection, project, undefined);
 
   const engine = await resolveEngineOrPick({
@@ -51,7 +53,9 @@ export async function executeBuild(
     silent,
     warningKey: 'cmd.noUnrealEngineSelected',
   });
-  if (!engine) {return;}
+  if (!engine) {
+    return;
+  }
   await persistSelection(workspace, detection, undefined, engine);
 
   const ubtPath = resolveUBTPath(engine.path);
@@ -64,8 +68,12 @@ export async function executeBuild(
   });
 
   // Adjust args for rebuild/clean modes.
-  if (mode === 'rebuild') {cmd.args.push('-Rebuild');}
-  if (mode === 'clean') {cmd.args.push('-Clean');}
+  if (mode === 'rebuild') {
+    cmd.args.push('-Rebuild');
+  }
+  if (mode === 'clean') {
+    cmd.args.push('-Clean');
+  }
 
   const titleMap: Record<Mode, string> = {
     build: 'Building UE project',
@@ -84,9 +92,12 @@ export async function executeBuild(
     // Bridge VS Code's CancellationToken to a Web AbortSignal so runBuild
     // can kill the child process when the user clicks Cancel.
     const controller = new AbortController();
-    const onCancel = () => controller.abort();
-    if (token.isCancellationRequested) { void onCancel(); }
-    else { token.onCancellationRequested(onCancel); }
+    const onCancel = (): void => controller.abort();
+    if (token.isCancellationRequested) {
+      void onCancel();
+    } else {
+      token.onCancellationRequested(onCancel);
+    }
 
     const r = await runBuild(
       { file: cmd.file, args: cmd.args },

@@ -106,7 +106,7 @@ export function buildTaskArgs(opts: {
   target: BuildTarget;
   platform: BuildPlatform;
   configuration: BuildConfiguration;
-}) {
+}): ReturnType<typeof buildUBTCommand> {
   const ubtPath = resolveUBTPath(opts.engine);
   return buildUBTCommand({
     project: opts.project,

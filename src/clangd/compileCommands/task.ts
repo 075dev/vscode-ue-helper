@@ -181,7 +181,7 @@ export function executeShellTask(
 
         // AbortSignal：参数化（per 拆分清理，去掉模块级全局变量）
         if (signal) {
-          const onAbort = () => {
+          const onAbort = (): void => {
             disposable.dispose();
             reject(new Error('Task cancelled'));
           };
@@ -223,7 +223,10 @@ export async function buildNonNativeArgs(opts: BuildArgsOptions): Promise<string
   }
 
   // 取第一个（已按 Editor 后缀优先排序）
-  const buildTargetName = targetNames[0]!;
+  const buildTargetName = targetNames[0];
+  if (!buildTargetName) {
+    throw new Error('未找到可用的构建目标');
+  }
 
   // 2. Unreal platform
   const unrealPlatform = opts.platform ?? getUnrealPlatform(process.platform);
@@ -266,13 +269,7 @@ export async function buildNonNativeArgs(opts: BuildArgsOptions): Promise<string
  *   -projectfiles -project=<uprojectPath> -game -engine -dotnet
  */
 export function buildNativeArgs(opts: Pick<BuildArgsOptions, 'project'>): string[] {
-  return [
-    '-projectfiles',
-    `-project=${opts.project}`,
-    '-game',
-    '-engine',
-    '-dotnet',
-  ];
+  return ['-projectfiles', `-project=${opts.project}`, '-game', '-engine', '-dotnet'];
 }
 
 /* ------------------------------------------------------------------ */

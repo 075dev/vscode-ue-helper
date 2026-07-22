@@ -56,10 +56,10 @@ export type RuntimeHost = 'cursor' | 'claude-code' | null;
  * ```
  */
 export function detectHost(): RuntimeHost {
-  if (process.env.CURSOR_TRACE_ID || process.env.CURSOR_USER_DATA_DIR) {
+  if ([process.env.CURSOR_TRACE_ID, process.env.CURSOR_USER_DATA_DIR].some(Boolean)) {
     return 'cursor';
   }
-  if (process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SSE_PORT) {
+  if ([process.env.CLAUDE_CODE_ENTRYPOINT, process.env.CLAUDE_CODE_SSE_PORT].some(Boolean)) {
     return 'claude-code';
   }
   return null;

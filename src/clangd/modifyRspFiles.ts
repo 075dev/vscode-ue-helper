@@ -61,7 +61,9 @@ export async function startModifyResponseFiles(
       const fullPath = path.join(rspDir, name);
       try {
         const stat = await fs.stat(fullPath);
-        if (stat.isFile()) {rspFiles.push(fullPath);}
+        if (stat.isFile()) {
+          rspFiles.push(fullPath);
+        }
       } catch {
         // 无法 stat，跳过
       }
@@ -89,10 +91,7 @@ export async function startModifyResponseFiles(
       const filtered = lines.filter((line) => {
         const trimmed = line.trim();
         // 检查是否是 /FI 或 -include 且包含 PCH
-        if (
-          /^\s*(\/FI|-include)\s/.test(trimmed) &&
-          /PCH/i.test(trimmed)
-        ) {
+        if (/^\s*(\/FI|-include)\s/.test(trimmed) && /PCH/i.test(trimmed)) {
           return false; // 移除
         }
         return true;
@@ -112,9 +111,7 @@ export async function startModifyResponseFiles(
     }
   }
 
-  logger?.info(
-    `[modifyRspFiles] 完成: ${replaced} 个文件已修改, ${unchanged} 个未变化`,
-  );
+  logger?.info(`[modifyRspFiles] 完成: ${replaced} 个文件已修改, ${unchanged} 个未变化`);
   return { replaced, unchanged };
 }
 
@@ -140,11 +137,17 @@ async function findRspDirectory(projectDir: string): Promise<string | null> {
   const ccPath = path.join(projectDir, 'compile_commands.json');
   try {
     const text = await fs.readFile(ccPath, 'utf-8');
-    const entries = JSON.parse(text) as Array<{ arguments?: string[]; command?: string; directory?: string }>;
+    const entries = JSON.parse(text) as Array<{
+      arguments?: string[];
+      command?: string;
+      directory?: string;
+    }>;
     if (Array.isArray(entries) && entries.length > 0) {
-      const first = entries[0]!;
-      const args: string[] =
-        first.arguments ?? (first.command ? first.command.split(/\s+/) : []);
+      const first = entries[0];
+      if (!first) {
+        return null;
+      }
+      const args: string[] = first.arguments ?? (first.command ? first.command.split(/\s+/) : []);
       // 在 arguments 中查找 .rsp 文件路径
       for (const arg of args) {
         if (arg.startsWith('@') && arg.endsWith('.rsp')) {
@@ -168,7 +171,9 @@ async function findRspDirectory(projectDir: string): Promise<string | null> {
   try {
     const vscodeEntries = await fs.readdir(vscodeDir, { withFileTypes: true });
     for (const entry of vscodeEntries) {
-      if (!entry.isDirectory()) {continue;}
+      if (!entry.isDirectory()) {
+        continue;
+      }
       const subDir = path.join(vscodeDir, entry.name);
       try {
         const subEntries = await fs.readdir(subDir);

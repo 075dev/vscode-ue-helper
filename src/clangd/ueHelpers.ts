@@ -13,7 +13,12 @@ import * as vscode from 'vscode';
 
 const END_UBT_SCRIPT_FILE_NAMES_UNIX = ['Engine', 'Build', 'BatchFiles', 'RunUBT.sh'];
 const END_UBT_SCRIPT_FILE_NAMES_WIN = ['Engine', 'Build', 'BatchFiles', 'RunUBT.bat'];
-const END_DIRECTORY_NAMES_TO_UNREAL_BUILD_TOOL = ['Engine', 'Binaries', 'DotNET', 'UnrealBuildTool'];
+const END_DIRECTORY_NAMES_TO_UNREAL_BUILD_TOOL = [
+  'Engine',
+  'Binaries',
+  'DotNET',
+  'UnrealBuildTool',
+];
 const UNREAL_BUILD_TOOL_APP_NAME = 'UnrealBuildTool';
 const UNREAL_BUILD_TOOL_EXE_NAME = 'UnrealBuildTool.exe';
 
@@ -67,7 +72,8 @@ export async function getUbtPath(ueUri: vscode.Uri): Promise<string | null> {
     return null;
   }
   // Windows: .exe; 其他平台: 无扩展名
-  const exeName = process.platform === 'win32' ? UNREAL_BUILD_TOOL_EXE_NAME : UNREAL_BUILD_TOOL_APP_NAME;
+  const exeName =
+    process.platform === 'win32' ? UNREAL_BUILD_TOOL_EXE_NAME : UNREAL_BUILD_TOOL_APP_NAME;
   const ubtExeUri = vscode.Uri.joinPath(ubtDirUri, exeName);
   if (await doesUriExist(ubtExeUri)) {
     return ubtExeUri.fsPath;
@@ -119,16 +125,22 @@ export async function getBuildTargetNames(projectDir: string): Promise<string[]>
 
   const targets: string[] = [];
   for (const [name, fileType] of entries) {
-    if (fileType !== vscode.FileType.File) {continue;}
-    if (!name.endsWith('.Target.cs')) {continue;}
+    if (fileType !== vscode.FileType.File) {
+      continue;
+    }
+    if (!name.endsWith('.Target.cs')) {
+      continue;
+    }
     targets.push(name.slice(0, -'.Target.cs'.length));
   }
 
   // 将带 "Editor" 后缀的 target 移到首位（对齐原版逻辑）
   const editorIdx = targets.findIndex((t) => t.includes('Editor'));
   if (editorIdx > 0) {
-    const editor = targets.splice(editorIdx, 1)[0]!;
-    targets.unshift(editor);
+    const editor = targets.splice(editorIdx, 1)[0];
+    if (editor !== undefined) {
+      targets.unshift(editor);
+    }
   }
 
   return targets;

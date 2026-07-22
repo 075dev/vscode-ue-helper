@@ -37,16 +37,19 @@ function makeFakeMemento(): vscode.Memento {
   return {
     keys: () => Array.from(store.keys()),
     get: <T>(key: string): T | undefined => store.get(key) as T | undefined,
-    update: async (key: string, value: unknown): Promise<void> => {
+    update: (key: string, value: unknown): Promise<void> => {
       store.set(key, value);
+      return Promise.resolve();
     },
   };
 }
 
 /** 构造最小可用 detection.handle（mock Memento + scanner + discovery） */
-function makeFakeDetection(opts: {
-  workspaceContext?: WorkspaceContext;
-} = {}) {
+function makeFakeDetection(
+  opts: {
+    workspaceContext?: WorkspaceContext;
+  } = {},
+) {
   const memento = makeFakeMemento();
   const workspaceContext = opts.workspaceContext ?? new WorkspaceContext(memento);
   return {
@@ -77,8 +80,9 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       memento = {
         keys: () => Array.from(mementoStore.keys()),
         get: <T>(key: string): T | undefined => mementoStore.get(key) as T | undefined,
-        update: async (key: string, value: unknown): Promise<void> => {
+        update: (key: string, value: unknown): Promise<void> => {
           mementoStore.set(key, value);
+          return Promise.resolve();
         },
       };
       workspaceContext = new WorkspaceContext(memento);
@@ -152,12 +156,8 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       } as unknown as ConstructorParameters<typeof WorkspaceState>[0]['detection'];
       const workspace = new WorkspaceState({ detection: stubDetection, logger: noopLogger });
 
-      await expect(
-        workspace.setSelectedProject(fakeProject),
-      ).resolves.toBeUndefined();
-      await expect(
-        workspace.setSelectedEngine(fakeEngine),
-      ).resolves.toBeUndefined();
+      await expect(workspace.setSelectedProject(fakeProject)).resolves.toBeUndefined();
+      await expect(workspace.setSelectedEngine(fakeEngine)).resolves.toBeUndefined();
 
       expect(workspace.selectedProject).toBeNull();
       expect(workspace.selectedEngine).toBeNull();
@@ -185,15 +185,11 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       const workspace = new WorkspaceState({ detection: stubDetection, logger: stubLogger });
 
       await workspace.setSelectedProject(fakeProject);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('setSelectedProject'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('setSelectedProject'));
 
       warnSpy.mockClear();
       await workspace.setSelectedEngine(fakeEngine);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('setSelectedEngine'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('setSelectedEngine'));
     });
   });
 
@@ -217,9 +213,7 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       const { detection } = makeFakeDetection();
       const workspace = new WorkspaceState({ detection, logger: noopLogger });
       workspace.dispose();
-      await expect(
-        workspace.setSelectedProject(fakeProject),
-      ).resolves.toBeUndefined();
+      await expect(workspace.setSelectedProject(fakeProject)).resolves.toBeUndefined();
     });
   });
 });

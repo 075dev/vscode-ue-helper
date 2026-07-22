@@ -83,21 +83,15 @@ export function registerUeReflectionLinter(): vscode.Disposable {
     collection.delete(document.uri);
   });
 
-  return vscode.Disposable.from(
-    collection,
-    changeSub,
-    saveSub,
-    closeSub,
-    {
-      dispose: () => {
-        for (const timer of pending.values()) {
-          clearTimeout(timer);
-        }
-        pending.clear();
-        documents.clear();
-      },
+  return vscode.Disposable.from(collection, changeSub, saveSub, closeSub, {
+    dispose: () => {
+      for (const timer of pending.values()) {
+        clearTimeout(timer);
+      }
+      pending.clear();
+      documents.clear();
     },
-  );
+  });
 }
 
 function isCxxLanguage(languageId: string): boolean {
@@ -184,11 +178,9 @@ export function analyzeReflection(text: string): RawDiagnostic[] {
     // specifier 形如 "Server, reliable, withValidation" 或 "Category="xxx""，取等号前的标识符
     const specs = specStr
       .split(',')
-      .map((s) => s.trim().split('=')[0]!.trim())
+      .map((s) => s.trim().split('=')[0]?.trim() ?? '')
       .filter(Boolean);
-    const rpcs = specs.filter((s) =>
-      (UFUNCTION_RPC_SPECIFIERS as readonly string[]).includes(s),
-    );
+    const rpcs = specs.filter((s) => (UFUNCTION_RPC_SPECIFIERS as readonly string[]).includes(s));
     if (rpcs.length > 1) {
       diagnostics.push({
         startOffset: m.index,
@@ -224,9 +216,7 @@ function lint(document: vscode.TextDocument, collection: vscode.DiagnosticCollec
     const d = new vscode.Diagnostic(
       range,
       r.message,
-      r.severity === 'error'
-        ? vscode.DiagnosticSeverity.Error
-        : vscode.DiagnosticSeverity.Warning,
+      r.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
     );
     d.source = DIAGNOSTIC_SOURCE;
     d.code = r.code;
@@ -236,7 +226,11 @@ function lint(document: vscode.TextDocument, collection: vscode.DiagnosticCollec
   collection.set(document.uri, diagnostics);
 }
 
-function rangeFor(document: vscode.TextDocument, startOffset: number, length: number): vscode.Range {
+function rangeFor(
+  document: vscode.TextDocument,
+  startOffset: number,
+  length: number,
+): vscode.Range {
   const start = document.positionAt(startOffset);
   const end = document.positionAt(startOffset + length);
   return new vscode.Range(start, end);

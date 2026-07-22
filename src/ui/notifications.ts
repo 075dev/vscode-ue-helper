@@ -31,7 +31,7 @@ export async function withProgress<T>(
       cancellable: true,
     },
     async (progress, token) => {
-      const report = (msg: string, increment?: number) => {
+      const report = (msg: string, increment?: number): void => {
         progress.report({ message: msg, increment });
       };
       return task(report, token);

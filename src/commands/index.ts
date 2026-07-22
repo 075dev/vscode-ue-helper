@@ -44,20 +44,28 @@ export function activateCommands(
   }
   // 用本地计数器替代硬编码 20,避免后续增删命令时日志与实际不一致
   let commandCount = 0;
-  const track = (label: string, fn: (...args: unknown[]) => unknown) => {
+  const track = (label: string, fn: (...args: unknown[]) => unknown): void => {
     commandCount += 1;
     registerCommand(context, label, fn);
   };
-  track('vscodeUEHelper.showProjectInfo', () => showProjectInfo(config, logger, detection, workspace));
+  track('vscodeUEHelper.showProjectInfo', () =>
+    showProjectInfo(config, logger, detection, workspace),
+  );
   track('vscodeUEHelper.build', () => executeBuild('build', config, logger, detection, workspace));
-  track('vscodeUEHelper.rebuild', () => executeBuild('rebuild', config, logger, detection, workspace));
+  track('vscodeUEHelper.rebuild', () =>
+    executeBuild('rebuild', config, logger, detection, workspace),
+  );
   track('vscodeUEHelper.clean', () => executeBuild('clean', config, logger, detection, workspace));
-  track('vscodeUEHelper.launchEditor', () => executeLaunchEditor(config, logger, detection, workspace));
+  track('vscodeUEHelper.launchEditor', () =>
+    executeLaunchEditor(config, logger, detection, workspace),
+  );
   track('vscodeUEHelper.liveCoding', () => executeLiveCoding(config, logger, detection, workspace));
   track('vscodeUEHelper.generateCompileCommands', () =>
     executeGenerateCompileCommands(config, logger, detection, workspace),
   );
-  track('vscodeUEHelper.diagnoseProject', () => executeDiagnoseProject(logger, detection, workspace, clangdOps));
+  track('vscodeUEHelper.diagnoseProject', () =>
+    executeDiagnoseProject(logger, detection, workspace, clangdOps),
+  );
   track('vscodeUEHelper.createProject', () =>
     executeCreateProject(config, logger, detection, clangdOps, workspace),
   );
@@ -69,9 +77,7 @@ export function activateCommands(
   track('vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile(workspace));
   track('vscodeUEHelper.selectConfig', () => executeSelectConfig(config, logger));
   track('vscodeUEHelper.selectTarget', () => executeSelectTarget(config, logger));
-  track('vscodeUEHelper.enableClangdProxy', () =>
-    executeEnableClangdProxy(config, logger, clangd),
-  );
+  track('vscodeUEHelper.enableClangdProxy', () => executeEnableClangdProxy(config, logger, clangd));
   track('vscodeUEHelper.disableClangdProxy', () =>
     executeDisableClangdProxy(config, logger, clangd),
   );

@@ -81,37 +81,26 @@ export function activateUI(
       }
 
       // [Phase 9 SSoT] 收敛 selected* 访问
-      function legacyFindProject(): ProjectInfo | undefined {
+      const legacyFindProject = (): ProjectInfo | undefined => {
         const sp = detection.workspaceContext.getSelectedProject();
         return sp ? result.projects.find((p) => p.path === sp) : undefined;
-      }
-      function legacyFindEngine(): EngineInstall | undefined {
+      };
+      const legacyFindEngine = (): EngineInstall | undefined => {
         const se = detection.workspaceContext.getSelectedEngine();
         return se ? result.engines.find((e) => e.path === se) : undefined;
-      }
-      const selectedProject = workspace?.resolveSelectedProject(result.projects) ?? legacyFindProject();
+      };
+      const selectedProject =
+        workspace?.resolveSelectedProject(result.projects) ?? legacyFindProject();
       const selectedEngine = workspace?.resolveSelectedEngine(result.engines) ?? legacyFindEngine();
       logger.info(
         `[ui] selection: selectedProject=${selectedProject?.path ?? '(none)'} selectedEngine=${selectedEngine?.path ?? '(none)'}`,
       );
 
-      const head = result.projects[0];
-      const headEngine = result.engines[0];
+      const project = selectedProject ?? result.projects[0];
+      const engine = selectedEngine ?? result.engines[0];
       const ctx: StatusBarContext = {
-        project:
-          (selectedProject ?? head)
-            ? {
-                name: (selectedProject ?? head)!.name,
-                path: (selectedProject ?? head)!.path,
-              }
-            : null,
-        engine:
-          (selectedEngine ?? headEngine)
-            ? {
-                version: (selectedEngine ?? headEngine)!.version,
-                path: (selectedEngine ?? headEngine)!.path,
-              }
-            : null,
+        project: project ? { name: project.name, path: project.path } : null,
+        engine: engine ? { version: engine.version, path: engine.path } : null,
       };
 
       const settings: StatusBarSettings = settingsFromConfig(config);

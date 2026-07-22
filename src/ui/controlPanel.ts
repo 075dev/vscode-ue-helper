@@ -46,7 +46,10 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     if (!ControlPanelProvider.instance && deps) {
       ControlPanelProvider.instance = new ControlPanelProvider(deps);
     }
-    return ControlPanelProvider.instance!;
+    if (!ControlPanelProvider.instance) {
+      throw new Error('ControlPanelProvider 尚未初始化');
+    }
+    return ControlPanelProvider.instance;
   }
 
   static resetInstance(): void {
@@ -146,15 +149,16 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     try {
       const { projects, engines } = await detection.ready;
       // [Phase 9 SSoT] 收敛 selected* 访问
-      function legacyFindProject(): ProjectInfo | undefined {
+      const legacyFindProject = (): ProjectInfo | undefined => {
         const sp = detection.workspaceContext.getSelectedProject();
         return sp ? projects.find((p) => p.path === sp) : undefined;
-      }
-      function legacyFindEngine(): EngineInstall | undefined {
+      };
+      const legacyFindEngine = (): EngineInstall | undefined => {
         const se = detection.workspaceContext.getSelectedEngine();
         return se ? engines.find((e) => e.path === se) : undefined;
-      }
-      const project = workspace?.resolveSelectedProject(projects) ?? legacyFindProject() ?? projects[0];
+      };
+      const project =
+        workspace?.resolveSelectedProject(projects) ?? legacyFindProject() ?? projects[0];
       this.projectName = project?.name ?? '';
       const engine = workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine() ?? engines[0];
       this.engineVersion = engine?.version ?? '';
@@ -162,7 +166,11 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       this.projectName = '';
       this.engineVersion = '';
     }
-    this.postMessage({ type: 'updateTitle', projectName: this.projectName, engineVersion: this.engineVersion });
+    this.postMessage({
+      type: 'updateTitle',
+      projectName: this.projectName,
+      engineVersion: this.engineVersion,
+    });
   }
 
   private async handleMessage(msg: WebViewMessage): Promise<void> {
@@ -177,17 +185,32 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         const cmdId = COMMAND_MAP[msg.command];
         if (!cmdId) {
           logger.warn(`[controlPanel] unknown command: ${msg.command}`);
-          this.postMessage({ type: 'commandResult', command: msg.command, success: false, message: `Unknown command: ${msg.command}` });
+          this.postMessage({
+            type: 'commandResult',
+            command: msg.command,
+            success: false,
+            message: `Unknown command: ${msg.command}`,
+          });
           return;
         }
         logger.info(`[controlPanel] executing command: ${cmdId}`);
         try {
           await vscode.commands.executeCommand(cmdId);
-          this.postMessage({ type: 'commandResult', command: msg.command, success: true, message: `${cmdId} completed` });
+          this.postMessage({
+            type: 'commandResult',
+            command: msg.command,
+            success: true,
+            message: `${cmdId} completed`,
+          });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] command failed: ${cmdId}`, errMsg);
-          this.postMessage({ type: 'commandResult', command: msg.command, success: false, message: errMsg });
+          this.postMessage({
+            type: 'commandResult',
+            command: msg.command,
+            success: false,
+            message: errMsg,
+          });
         }
         break;
       }
@@ -213,7 +236,9 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
       case 'updateConfig':
         logger.info(`[controlPanel] update config: ${msg.key}=${String(msg.value)}`);
-        try { await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value); } catch (err) {
+        try {
+          await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value);
+        } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] update config failed: ${msg.key}`, errMsg);
         }
@@ -221,14 +246,20 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
       case 'updateProxyConfig':
         logger.info(`[controlPanel] update proxy config: ${msg.key}=${String(msg.value)}`);
-        try { await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value); } catch (err) {
+        try {
+          await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value);
+        } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] update proxy config failed: ${msg.key}`, errMsg);
         }
         break;
 
       case 'saveConfig':
-        this.postMessage({ type: 'saveResult', scope: 'config', result: await this.batchSave(msg.updates) });
+        this.postMessage({
+          type: 'saveResult',
+          scope: 'config',
+          result: await this.batchSave(msg.updates),
+        });
         // [Status 同步 bug 修复] 保存顶层配置后也推一次 statusValues，Status Tab 上的
         // configuration / target / clangdPath / lspLoggingLevel 等字段才能即时反映。
         // config.onDidChange 监听器也会触发（异步），这里显式同步先推一份保证 webview
@@ -237,7 +268,11 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'saveProxyConfig':
-        this.postMessage({ type: 'saveResult', scope: 'proxy', result: await this.batchSave(msg.updates) });
+        this.postMessage({
+          type: 'saveResult',
+          scope: 'proxy',
+          result: await this.batchSave(msg.updates),
+        });
         // [Status 同步 bug 修复] 保存 Proxy 配置后必须再推一次 statusValues。原代码只
         // 回 saveResult，导致用户在 Status Tab 上看到的 proxyEnabled / keepalive /
         // localization / logPath / backup 等状态一直停留在旧值，要切走/刷新按钮才更新。
@@ -308,7 +343,9 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
       default:
         ((_exhaustive: never) => {
-          logger.warn(`[controlPanel] unhandled message type: ${(_exhaustive as { type: string }).type}`);
+          logger.warn(
+            `[controlPanel] unhandled message type: ${(_exhaustive as { type: string }).type}`,
+          );
         })(msg);
     }
   }
@@ -317,8 +354,10 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     updates: import('./controlPanelMessages').ConfigUpdate[],
   ): Promise<import('./controlPanelMessages').SaveResult> {
     const { logger, config } = this.deps;
-    let saved = 0, failed = 0, firstError: string | undefined;
-    const localizationModeChanged = updates.some(u => u.key === 'localizationMode');
+    let saved = 0,
+      failed = 0,
+      firstError: string | undefined;
+    const localizationModeChanged = updates.some((u) => u.key === 'localizationMode');
     for (const u of updates) {
       const configKey = CONFIG_KEY_MAP[u.key] ?? u.key;
       try {
@@ -351,23 +390,32 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
   private buildStatusValues(): import('./controlPanelMessages').StatusValues {
     const { config, detection, clangd, workspace } = this.deps;
-    let projectPath = '', enginePath = '', workspaceFilePath = '', hasWorkspaceFile = false;
+    let projectPath = '',
+      enginePath = '',
+      workspaceFilePath = '',
+      hasWorkspaceFile = false;
     const mcpHost = '';
 
     try {
       // [Phase 9 SSoT] 收敛 selected* 访问
       // status 字段只展示用——单一真源是 workspace，但 workspaceContext 在 production 是 backing store
       const sp = workspace?.selectedProject ?? detection.workspaceContext.getSelectedProject();
-      if (sp) {projectPath = sp;}
+      if (sp) {
+        projectPath = sp;
+      }
       const se = workspace?.selectedEngine ?? detection.workspaceContext.getSelectedEngine();
-      if (se) {enginePath = se;}
+      if (se) {
+        enginePath = se;
+      }
       // [Phase 9 SSoT] workspaceFile 走 workspace.workspaceFile（单一真相源；无 fallback）
       const wsFile = workspace?.workspaceFile;
       if (wsFile) {
         workspaceFilePath = wsFile;
         hasWorkspaceFile = true;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     const ps = clangd.proxyManager.getStatus();
 

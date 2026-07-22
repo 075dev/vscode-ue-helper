@@ -38,7 +38,9 @@ export class WorkspaceBackup {
     const dir = path.dirname(this.projectPath);
     const entries = await fs.readdir(dir).catch(() => []);
     const workspaceFile = entries.find((e) => e.endsWith('.code-workspace'));
-    if (!workspaceFile) {return;}
+    if (!workspaceFile) {
+      return;
+    }
 
     const src = path.join(dir, workspaceFile);
     const dst = path.join(dir, BACKUP_DIR, BACKUP_FILE);
@@ -54,7 +56,9 @@ export class WorkspaceBackup {
     const dir = path.dirname(this.projectPath);
     const entries = await fs.readdir(dir).catch(() => []);
     const workspaceFile = entries.find((e) => e.endsWith('.code-workspace'));
-    if (!workspaceFile) {return;}
+    if (!workspaceFile) {
+      return;
+    }
 
     const src = path.join(dir, BACKUP_DIR, BACKUP_FILE);
     const dst = path.join(dir, workspaceFile);
@@ -76,7 +80,7 @@ export class WorkspaceBackup {
     const pattern = new vscode.RelativePattern(dir, '*.code-workspace');
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-    const onChange = async () => {
+    const onChange = async (): Promise<void> => {
       await this.restore();
     };
     this.watcher.onDidChange(onChange);
