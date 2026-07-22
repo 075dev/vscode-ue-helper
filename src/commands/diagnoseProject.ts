@@ -29,17 +29,20 @@ export async function executeDiagnoseProject(
     workspace,
     warningKey: 'diagnoseProject.noProject',
   });
-  if (!project) {return;}
+  if (!project) {
+    return;
+  }
 
   const report = await diagnoseProject(project.path, workspace, clangdOps);
   const formatted = formatDiagnosticReport(report);
   logger.info(formatted);
   logger.show();
 
-  const message = report.overallStatus === 'ok'
-    ? t('diagnoseProject.summary.ok')
-    : t('diagnoseProject.summary.failed', {
-        count: String(report.checks.filter((check) => check.status === 'fail').length),
-      });
+  const message =
+    report.overallStatus === 'ok'
+      ? t('diagnoseProject.summary.ok')
+      : t('diagnoseProject.summary.failed', {
+          count: String(report.checks.filter((check) => check.status === 'fail').length),
+        });
   void vscode.window.showInformationMessage(message, t('showInfo.openOutput'));
 }

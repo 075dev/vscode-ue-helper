@@ -66,9 +66,11 @@ const chokidarMock = vi.hoisted(() => {
 
 vi.mock('chokidar', () => ({
   default: {
-    watch: (patterns: string | string[], options?: unknown) => chokidarMock.watchMock(patterns, options),
+    watch: (patterns: string | string[], options?: unknown) =>
+      chokidarMock.watchMock(patterns, options),
   },
-  watch: (patterns: string | string[], options?: unknown) => chokidarMock.watchMock(patterns, options),
+  watch: (patterns: string | string[], options?: unknown) =>
+    chokidarMock.watchMock(patterns, options),
 }));
 
 /** 捕获所有 perfLog 调用 */

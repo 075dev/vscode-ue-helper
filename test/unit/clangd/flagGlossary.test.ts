@@ -135,11 +135,7 @@ describe('resolveFlags', () => {
       const flags = resolveFlags(['system-include-windows'], {
         systemIncludeFlags: ['/X', '/imsvcD:/sdk/ucrt', '-fms-compatibility-version=19.30'],
       });
-      expect(flags).toEqual([
-        '/X',
-        '/imsvcD:/sdk/ucrt',
-        '-fms-compatibility-version=19.30',
-      ]);
+      expect(flags).toEqual(['/X', '/imsvcD:/sdk/ucrt', '-fms-compatibility-version=19.30']);
     });
 
     it('emits nothing when systemIncludeFlags missing', () => {

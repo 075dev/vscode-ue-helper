@@ -79,10 +79,14 @@ export class VsBuildTools {
   }
 
   async findAll(): Promise<VSInstallation[]> {
-    if (process.platform !== 'win32') {return [];}
+    if (process.platform !== 'win32') {
+      return [];
+    }
 
     const vswhere = await this.locateVswhere();
-    if (!vswhere) {return [];}
+    if (!vswhere) {
+      return [];
+    }
 
     try {
       const { stdout } = await runExeca(
@@ -97,11 +101,15 @@ export class VsBuildTools {
         ],
         { reject: false, timeout: 10_000 },
       );
-      if (!stdout || !stdout.trim()) {return [];}
+      if (!stdout || !stdout.trim()) {
+        return [];
+      }
       const parsed = JSON.parse(stdout) as VsWhereOutput[];
       const installations: VSInstallation[] = [];
       for (const inst of parsed) {
-        if (!inst.installationPath || !inst.displayName) {continue;}
+        if (!inst.installationPath || !inst.displayName) {
+          continue;
+        }
         const vcToolsPath = await this.findVcToolsPath(inst.installationPath);
         installations.push({
           displayName: inst.displayName,
@@ -119,18 +127,24 @@ export class VsBuildTools {
 
   private async locateVswhere(): Promise<string | null> {
     if (this.vswherePathOverride) {
-      if (await this.fileExists(this.vswherePathOverride)) {return this.vswherePathOverride;}
+      if (await this.fileExists(this.vswherePathOverride)) {
+        return this.vswherePathOverride;
+      }
       return null;
     }
     for (const candidate of DEFAULT_VSWHERE_PATHS) {
-      if (await this.fileExists(candidate)) {return candidate;}
+      if (await this.fileExists(candidate)) {
+        return candidate;
+      }
     }
     // Last resort: ask PATH via `where`. Most Windows installs don't put
     // vswhere on PATH, but it doesn't hurt to check.
     try {
       const { stdout } = await runExeca('where', ['vswhere'], { reject: false, timeout: 3000 });
       const first = stdout.split(/\r?\n/)[0]?.trim();
-      if (first && (await this.fileExists(first))) {return first;}
+      if (first && (await this.fileExists(first))) {
+        return first;
+      }
     } catch {
       // ignore
     }

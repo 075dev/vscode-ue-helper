@@ -98,7 +98,6 @@ export interface ClangdConfig {
      */
     StandardIndexCapacity?: number;
   };
-
 }
 
 /**

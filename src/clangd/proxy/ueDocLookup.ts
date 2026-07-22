@@ -91,13 +91,19 @@ export class UeDocLookup {
 
     // 从第一行提取名称
     const firstLine = hoverContent.split('\n')[0]?.trim();
-    if (!firstLine) {return null;}
+    if (!firstLine) {
+      return null;
+    }
 
     const name = this.extractName(firstLine);
-    if (!name) {return null;}
+    if (!name) {
+      return null;
+    }
 
     const entry = this.index.get(name);
-    if (!entry) {return null;}
+    if (!entry) {
+      return null;
+    }
 
     // 替换整个 hover 内容中的文档部分
     return this.replaceDocInHover(hoverContent, entry);
@@ -114,19 +120,17 @@ export class UeDocLookup {
 
     // 去掉 markdown 标题标记（###）和反引号
     let clean = line
-      .replace(/^#+\s*/, '')   // 去掉 markdown 标题 ###
+      .replace(/^#+\s*/, '') // 去掉 markdown 标题 ###
       .replace(/`([^`]+)`/g, '$1') // 反引号内的内容去反引号
       .replace(/<[^>]*>/g, '') // 去掉模板参数
       .replace(/\s*\{.*$/, '') // 去掉 { 及之后
-      .replace(/\s*;.*$/, '')  // 去掉 ; 及之后
-      .replace(/\s*:.*$/, '')  // 去掉 : 及之后（继承）
-      .replace(/\(.*\)/, '')   // 去掉参数列表
+      .replace(/\s*;.*$/, '') // 去掉 ; 及之后
+      .replace(/\s*:.*$/, '') // 去掉 : 及之后（继承）
+      .replace(/\(.*\)/, '') // 去掉参数列表
       .trim();
 
     // "struct TObjectPtr" → "TObjectPtr"
-    const keywords = [
-      'class', 'struct', 'enum', 'union', 'using', 'namespace',
-    ];
+    const keywords = ['class', 'struct', 'enum', 'union', 'using', 'namespace'];
     for (const kw of keywords) {
       if (clean.startsWith(kw + ' ')) {
         clean = clean.slice(kw.length).trim();
@@ -141,7 +145,9 @@ export class UeDocLookup {
 
     // 取第一个单词
     const name = clean.split(/\s+/)[0];
-    if (!name || name.length < 2) {return null;}
+    if (!name || name.length < 2) {
+      return null;
+    }
 
     return name;
   }

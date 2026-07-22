@@ -136,17 +136,32 @@ describe('getUeMacroCompletionContext (T5: UE 反射宏上下文解析)', () => 
     // Then
     expect(metaContext).toEqual({ kind: 'meta', macro: 'UFUNCTION', prefix: '' });
     expect(metaLabels).toEqual(expect.arrayContaining(['ClampMin', 'DisplayName']));
-    expect(parameterContext).toEqual({ kind: 'parameters', macro: 'UPROPERTY', prefix: 'Inventory' });
-    expect(parameterLabels).toEqual(expect.arrayContaining(['EditDefaultsOnly', 'VisibleAnywhere']));
+    expect(parameterContext).toEqual({
+      kind: 'parameters',
+      macro: 'UPROPERTY',
+      prefix: 'Inventory',
+    });
+    expect(parameterLabels).toEqual(
+      expect.arrayContaining(['EditDefaultsOnly', 'VisibleAnywhere']),
+    );
   });
 });
 
 describe('UE 反射宏补全数据覆盖', () => {
   it('Given T5 覆盖范围 When 查询各宏参数 Then 包含 UCLASS/USTRUCT/UENUM/UMETA 常用项', () => {
     const contexts = [
-      { context: contextFor('UCLASS(|)\nclass UMyObject {};'), expected: ['Blueprintable', 'Config', 'meta'] },
-      { context: contextFor('USTRUCT(|)\nstruct FMyData {};'), expected: ['BlueprintType', 'Atomic', 'meta'] },
-      { context: contextFor('UENUM(|)\nenum class EState {};'), expected: ['BlueprintType', 'Flags', 'meta'] },
+      {
+        context: contextFor('UCLASS(|)\nclass UMyObject {};'),
+        expected: ['Blueprintable', 'Config', 'meta'],
+      },
+      {
+        context: contextFor('USTRUCT(|)\nstruct FMyData {};'),
+        expected: ['BlueprintType', 'Atomic', 'meta'],
+      },
+      {
+        context: contextFor('UENUM(|)\nenum class EState {};'),
+        expected: ['BlueprintType', 'Flags', 'meta'],
+      },
       { context: contextFor('UMETA(|)'), expected: ['DisplayName', 'Hidden', 'ToolTip'] },
     ];
 

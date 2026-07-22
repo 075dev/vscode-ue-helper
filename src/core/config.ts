@@ -54,11 +54,8 @@ export type BuildPlatform = 'Win64' | 'Mac' | 'Linux';
 /** MCP 服务器模式：auto = 仅在 Cursor/Claude Code 启用，always = 总是，never = 不启用 */
 export type MCPMode = 'auto' | 'always' | 'never';
 
-
-
-
 /** Clangd Proxy 本地化模式：append = 追加到 clangd 输出，zh-only = 仅中文替换 */
-export type ClangdProxyLocalizationMode = "append" | "zh-only";
+export type ClangdProxyLocalizationMode = 'append' | 'zh-only';
 
 /** Clangd Proxy keepaliveMax 安全默认值 */
 const DEFAULT_KEEPALIVE_MAX = 20;
@@ -88,11 +85,12 @@ export class Config {
     const inspected = this.root.inspect<boolean>('clangdProxy.enabled');
     return {
       key: 'clangdProxy.enabled',
-      value: inspected?.globalValue
-        ?? inspected?.workspaceValue
-        ?? inspected?.workspaceFolderValue
-        ?? inspected?.defaultValue
-        ?? undefined,
+      value:
+        inspected?.globalValue ??
+        inspected?.workspaceValue ??
+        inspected?.workspaceFolderValue ??
+        inspected?.defaultValue ??
+        undefined,
       defaultValue: inspected?.defaultValue,
     };
   }
@@ -160,18 +158,17 @@ export class Config {
     return false;
   }
 
-  
   // ===== Clangd Proxy 配置 =====
 
   /** 是否启用 clangd LSP Proxy，默认 false */
   get clangdProxyEnabled(): boolean {
-    return this.root.get<boolean>("clangdProxy.enabled") ?? false;
+    return this.root.get<boolean>('clangdProxy.enabled') ?? false;
   }
 
   /** clangd Proxy 最大 keepalive 连接数，无效值（<=0 / 非数值）clamp 到 20 */
   get clangdProxyKeepaliveMax(): number {
-    const raw = this.root.get<unknown>("clangdProxy.keepaliveMax");
-    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    const raw = this.root.get<unknown>('clangdProxy.keepaliveMax');
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
       return raw;
     }
     return DEFAULT_KEEPALIVE_MAX;
@@ -179,8 +176,8 @@ export class Config {
 
   /** clangd Proxy keepalive TTL（秒），无效值（<=0 / 非数值）clamp 到 900 */
   get clangdProxyKeepaliveTtlSec(): number {
-    const raw = this.root.get<unknown>("clangdProxy.keepaliveTtlSec");
-    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    const raw = this.root.get<unknown>('clangdProxy.keepaliveTtlSec');
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
       return raw;
     }
     return DEFAULT_KEEPALIVE_TTL_SEC;
@@ -188,31 +185,33 @@ export class Config {
 
   /** 真实 clangd 二进制路径，空字符串 = 自动检测 */
   get clangdProxyRealClangdPath(): string | undefined {
-    const v = this.root.get<string>("clangdProxy.realClangdPath");
+    const v = this.root.get<string>('clangdProxy.realClangdPath');
     return v && v.length > 0 ? v : undefined;
   }
 
   /** clangd Proxy 日志文件路径，空字符串 = 不输出日志文件 */
   get clangdProxyLogPath(): string | undefined {
-    const v = this.root.get<string>("clangdProxy.logPath");
+    const v = this.root.get<string>('clangdProxy.logPath');
     return v && v.length > 0 ? v : undefined;
   }
 
   /** 是否启用 clangd Proxy 本地化支持，默认 false */
   get clangdProxyLocalizationEnabled(): boolean {
-    return this.root.get<boolean>("clangdProxy.localization.enabled") ?? false;
+    return this.root.get<boolean>('clangdProxy.localization.enabled') ?? false;
   }
 
   /** clangd Proxy 本地化模式，默认 append（追加到 clangd 输出） */
   get clangdProxyLocalizationMode(): ClangdProxyLocalizationMode {
-    const raw = this.root.get<string>("clangdProxy.localization.mode");
-    if (raw === "override") { return "zh-only"; }
-    return (raw as ClangdProxyLocalizationMode) ?? "append";
+    const raw = this.root.get<string>('clangdProxy.localization.mode');
+    if (raw === 'override') {
+      return 'zh-only';
+    }
+    return (raw as ClangdProxyLocalizationMode) ?? 'append';
   }
 
   /** UE 文档词典 JSON 路径 */
   get clangdProxyDictionaryPath(): string | undefined {
-    const v = this.root.get<string>("clangdProxy.dictionaryPath");
+    const v = this.root.get<string>('clangdProxy.dictionaryPath');
     return v && v.length > 0 ? v : undefined;
   }
 
@@ -225,7 +224,7 @@ export class Config {
    * 如需开启，在设置中把 `vscodeUEHelper.showPerfInStatusBar` 改为 true。
    */
   get showPerfInStatusBar(): boolean {
-    return this.root.get<boolean>("showPerfInStatusBar") ?? false;
+    return this.root.get<boolean>('showPerfInStatusBar') ?? false;
   }
 
   /**
@@ -255,7 +254,7 @@ export class Config {
     }
     return raw.filter((v): v is string => typeof v === 'string');
   }
-// ===== 写入 / 监听 =====
+  // ===== 写入 / 监听 =====
 
   /**
    * 写入一个配置项。
@@ -282,17 +281,17 @@ export class Config {
     const inspected = this.root.inspect(key as never);
     if (inspected) {
       const resolvedAfter =
-        inspected.workspaceFolderValue
-        ?? inspected.workspaceValue
-        ?? inspected.globalValue
-        ?? inspected.defaultValue;
+        inspected.workspaceFolderValue ??
+        inspected.workspaceValue ??
+        inspected.globalValue ??
+        inspected.defaultValue;
       if (resolvedAfter !== value) {
         // 不抛错 —— 上层调用方已经 await 通了；但提示一下避免再踩坑。
         // eslint-disable-next-line no-console
         console.warn(
           `[Config.update] After update('${key}', ${JSON.stringify(value)}, ${target}), ` +
-          `inspect says resolved value is ${JSON.stringify(resolvedAfter)}. ` +
-          `Possible causes: target scope mismatch, no folder focused, or workspace state not initialized.`,
+            `inspect says resolved value is ${JSON.stringify(resolvedAfter)}. ` +
+            `Possible causes: target scope mismatch, no folder focused, or workspace state not initialized.`,
         );
       }
     }
@@ -312,8 +311,9 @@ export class Config {
     return vscode.workspace.onDidChangeConfiguration((e) => {
       // affectsConfiguration 检查给定 section 是否受变化影响
       // 注意只过滤 vscodeUEHelper 开头，避免收到无关配置变化
-      if (e.affectsConfiguration('vscodeUEHelper')) {listener(e);}
+      if (e.affectsConfiguration('vscodeUEHelper')) {
+        listener(e);
+      }
     });
   }
 }
-

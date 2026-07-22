@@ -78,7 +78,8 @@ describe('UeDocLookup', () => {
     const lookup = new UeDocLookup();
     lookup.loadFromData(SAMPLE_DICT);
 
-    const hover = 'class UClass : public UObject\nprovided by "UObject/Class.h"\n\nUClass is the base class for all UObject classes.';
+    const hover =
+      'class UClass : public UObject\nprovided by "UObject/Class.h"\n\nUClass is the base class for all UObject classes.';
     const result = lookup.lookup(hover);
     expect(result).not.toBeNull();
     expect(result).toContain('provided by');

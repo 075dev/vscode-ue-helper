@@ -109,9 +109,7 @@ export class ProxyOverheadMeter {
     // 启动时立即采样一次 baseline
     this.sampleMemory();
     // context.subscriptions 注册统一 dispose
-    this.context.subscriptions.push(
-      new vscode.Disposable(() => this.stopSampling()),
-    );
+    this.context.subscriptions.push(new vscode.Disposable(() => this.stopSampling()));
   }
 
   /**
@@ -237,11 +235,7 @@ export class ProxyOverheadMeter {
     try {
       await fs.writeFile(
         tmpPath,
-        JSON.stringify(
-          { ...snapshot, generatedAt: snapshot.timestamp },
-          null,
-          2,
-        ),
+        JSON.stringify({ ...snapshot, generatedAt: snapshot.timestamp }, null, 2),
         'utf-8',
       );
       await fs.rename(tmpPath, resolved);

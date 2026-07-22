@@ -242,24 +242,37 @@ export const CONFIG_BOOLEANS: string[] = ['autoBackupWorkspace'];
 export const PROXY_BOOLEANS: string[] = ['clangdProxyEnabled', 'localizationEnabled'];
 
 export const CONFIG_FIELDS: string[] = [
-  'configuration', 'target',
-  'useMCP', 'lspLoggingLevel', 'autoBackupWorkspace',
+  'configuration',
+  'target',
+  'useMCP',
+  'lspLoggingLevel',
+  'autoBackupWorkspace',
 ];
 
 export const PROXY_FIELDS: string[] = [
-  'clangdProxyEnabled', 'clangdProxyKeepaliveMax', 'clangdProxyKeepaliveTtlSec',
-  'clangdProxyRealClangdPath', 'clangdProxyLogPath',
-  'localizationEnabled', 'localizationMode',
+  'clangdProxyEnabled',
+  'clangdProxyKeepaliveMax',
+  'clangdProxyKeepaliveTtlSec',
+  'clangdProxyRealClangdPath',
+  'clangdProxyLogPath',
+  'localizationEnabled',
+  'localizationMode',
 ];
 
 export type FieldType = 'select' | 'boolean' | 'number' | 'text';
 
 export function getFieldType(field: string, isProxy: boolean): FieldType {
   const booleans = isProxy ? PROXY_BOOLEANS : CONFIG_BOOLEANS;
-  if (booleans.includes(field)) {return 'boolean';}
+  if (booleans.includes(field)) {
+    return 'boolean';
+  }
   const selects = isProxy ? PROXY_SELECTS : CONFIG_SELECTS;
-  if (field in selects) {return 'select';}
-  if (field.includes('Max') || field.includes('Ttl') || field.includes('Sec')) {return 'number';}
+  if (field in selects) {
+    return 'select';
+  }
+  if (field.includes('Max') || field.includes('Ttl') || field.includes('Sec')) {
+    return 'number';
+  }
   return 'text';
 }
 

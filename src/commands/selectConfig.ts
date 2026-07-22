@@ -12,7 +12,9 @@ import { t } from '@i18n';
 
 export async function executeSelectConfig(config: Config, logger: Logger): Promise<void> {
   const picked = await pickConfiguration();
-  if (!picked) {return;}
+  if (!picked) {
+    return;
+  }
   await config.update('configuration', picked);
   logger.info(`[selectConfig] configuration = ${picked}`);
   void vscode.window.showInformationMessage(t('picker.configChanged', { 0: picked }));

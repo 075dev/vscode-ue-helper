@@ -2,9 +2,7 @@
  * 通用翻译器集成测试
  */
 import { describe, it, expect } from 'vitest';
-import {
-  applyLocalizationToDiagnostic,
-} from '@clangd/proxy/localization';
+import { applyLocalizationToDiagnostic } from '@clangd/proxy/localization';
 
 describe('genericTranslator 集成测试', () => {
   it('通用翻译：cannot 句式', () => {

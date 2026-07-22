@@ -17,7 +17,7 @@ describe('ParsedDiagnostic', () => {
       severity: 'error',
       code: 'C2065',
       message: "'x': undeclared identifier",
-      raw: 'C:/proj/main.cpp(42,5): error C2065: \'x\': undeclared identifier',
+      raw: "C:/proj/main.cpp(42,5): error C2065: 'x': undeclared identifier",
     };
 
     expect(d.file).toBe('C:/proj/main.cpp');

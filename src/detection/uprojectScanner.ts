@@ -65,7 +65,9 @@ export class UprojectScanner {
     for (const filePath of files) {
       try {
         const info = await this.parseUProject(filePath);
-        if (info) {projects.push(info);}
+        if (info) {
+          projects.push(info);
+        }
       } catch (err) {
         console.warn(`[uprojectScanner] failed to parse ${filePath}:`, err);
       }
@@ -104,7 +106,9 @@ export class UprojectScanner {
     const modules: string[] = [];
     if (Array.isArray(raw.Modules)) {
       for (const m of raw.Modules) {
-        if (m?.Name && typeof m.Name === 'string') {modules.push(m.Name);}
+        if (m?.Name && typeof m.Name === 'string') {
+          modules.push(m.Name);
+        }
       }
     }
     if (Array.isArray(raw.Targets)) {

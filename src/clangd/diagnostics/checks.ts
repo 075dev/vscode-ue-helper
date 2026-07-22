@@ -16,7 +16,9 @@ import { stripQuotes, normalizePath, pathExists } from './io';
 
 // ---- 状态计算 ----
 
-export function computeOverallStatus(checks: readonly DiagnosticCheck[]): 'ok' | 'warning' | 'error' {
+export function computeOverallStatus(
+  checks: readonly DiagnosticCheck[],
+): 'ok' | 'warning' | 'error' {
   if (checks.some((check) => check.status === 'fail' && check.severity === 'error')) {
     return 'error';
   }

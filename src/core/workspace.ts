@@ -146,8 +146,8 @@ export class WorkspaceState implements vscode.Disposable {
     this._injected = true;
     this.logger.info(
       `[workspace] injected: project=${this._project?.name ?? '(none)'} ` +
-      `engine=${this._engine?.version ?? '(none)'} ` +
-      `folders=${this._workspaceFolders.length}`,
+        `engine=${this._engine?.version ?? '(none)'} ` +
+        `folders=${this._workspaceFolders.length}`,
     );
   }
 
@@ -161,7 +161,9 @@ export class WorkspaceState implements vscode.Disposable {
     return this._resolve<string>('workspaceFile', () => this._workspaceFile);
   }
   get workspaceFolders(): WorkspaceFolderInfo[] {
-    return this._resolve<WorkspaceFolderInfo[]>('workspaceFolders', () => this._workspaceFolders) ?? [];
+    return (
+      this._resolve<WorkspaceFolderInfo[]>('workspaceFolders', () => this._workspaceFolders) ?? []
+    );
   }
   get projectFolder(): WorkspaceFolderInfo | null {
     return this._resolve<WorkspaceFolderInfo>('projectFolder', () => this._projectFolder);
@@ -223,14 +225,18 @@ export class WorkspaceState implements vscode.Disposable {
    */
   resolveSelectedProject(projects: readonly ProjectInfo[]): ProjectInfo | undefined {
     const path = this.selectedProject;
-    if (!path) {return undefined;}
+    if (!path) {
+      return undefined;
+    }
     return projects.find((p) => p.path === path);
   }
 
   /** 同 resolveSelectedProject，引擎版。 */
   resolveSelectedEngine(engines: readonly EngineInstall[]): EngineInstall | undefined {
     const path = this.selectedEngine;
-    if (!path) {return undefined;}
+    if (!path) {
+      return undefined;
+    }
     return engines.find((e) => e.path === path);
   }
 
@@ -244,32 +250,44 @@ export class WorkspaceState implements vscode.Disposable {
   get projectDir(): string | null {
     return this._resolve<string>('projectDir', () => {
       // 优先用 projectFolder.absPath（detection 已解析），fallback 用 project.path 的 dirname
-      if (this._projectFolder) {return this._projectFolder.absPath;}
+      if (this._projectFolder) {
+        return this._projectFolder.absPath;
+      }
       const p = this._project;
       return p ? path.dirname(p.path) : null;
     });
   }
   get projectFile(): string | null {
     return this._resolve<string>('projectFile', () => {
-      if (this._project) {return this._project.path;}
+      if (this._project) {
+        return this._project.path;
+      }
       const dir = this.projectDir;
       const name = this._projectFolder?.name;
-      if (dir && name) {return path.join(dir, `${name}.uproject`);}
+      if (dir && name) {
+        return path.join(dir, `${name}.uproject`);
+      }
       return null;
     });
   }
   get projectName(): string | null {
     return this._resolve<string>('projectName', () => {
-      if (this._projectFolder) {return this._projectFolder.name;}
+      if (this._projectFolder) {
+        return this._projectFolder.name;
+      }
       const p = this._project;
-      if (!p) {return null;}
+      if (!p) {
+        return null;
+      }
       const base = path.basename(p.path);
       return base.endsWith('.uproject') ? base.slice(0, -'.uproject'.length) : base;
     });
   }
   get engineRoot(): string | null {
     return this._resolve<string>('engineRoot', () => {
-      if (this._engineFolder) {return this._engineFolder.absPath;}
+      if (this._engineFolder) {
+        return this._engineFolder.absPath;
+      }
       return this._engine?.path ?? null;
     });
   }
@@ -420,7 +438,9 @@ export class WorkspaceState implements vscode.Disposable {
    * 调用方负责把本实例 push 到 context.subscriptions，让 deactivate 时自动释放。
    */
   dispose(): void {
-    if (this._disposed) {return;}
+    if (this._disposed) {
+      return;
+    }
     this._disposed = true;
     this._notifiedFields.clear();
     this._injected = false;

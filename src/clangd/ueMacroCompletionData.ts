@@ -22,63 +22,78 @@ export type UeMacroCompletionItem = {
   readonly documentation: string;
 };
 
-export const META_COMPLETIONS = labels([
-  'DisplayName',
-  'ToolTip',
-  'ShortToolTip',
-  'AdvancedDisplay',
-  'AutoCreateRefTerm',
-  'BlueprintInternalUseOnly',
-  'WorldContext',
-  'DefaultToSelf',
-  'HidePin',
-  'DeterminesOutputType',
-  'ClampMin',
-  'ClampMax',
-  'UIMin',
-  'UIMax',
-  'AllowPrivateAccess',
-] as const, 'Metadata');
+export const META_COMPLETIONS = labels(
+  [
+    'DisplayName',
+    'ToolTip',
+    'ShortToolTip',
+    'AdvancedDisplay',
+    'AutoCreateRefTerm',
+    'BlueprintInternalUseOnly',
+    'WorldContext',
+    'DefaultToSelf',
+    'HidePin',
+    'DeterminesOutputType',
+    'ClampMin',
+    'ClampMax',
+    'UIMin',
+    'UIMax',
+    'AllowPrivateAccess',
+  ] as const,
+  'Metadata',
+);
 
 export const MACRO_COMPLETIONS = {
-  UFUNCTION: labels([
-    'BlueprintCallable',
-    'BlueprintPure',
-    'BlueprintImplementableEvent',
-    'BlueprintNativeEvent',
-    'CallInEditor',
-    'Category',
-    'Server',
-    'Client',
-    'NetMulticast',
-    'Reliable',
-    'meta',
-  ] as const, 'FunctionSpecifier'),
-  UPROPERTY: labels([
-    'EditAnywhere',
-    'EditDefaultsOnly',
-    'EditInstanceOnly',
-    'VisibleAnywhere',
-    'BlueprintReadOnly',
-    'BlueprintReadWrite',
-    'Category',
-    'Replicated',
-    'ReplicatedUsing',
-    'Transient',
-    'Config',
-    'meta',
-  ] as const, 'PropertySpecifier'),
-  UCLASS: labels([
-    'Blueprintable',
-    'BlueprintType',
-    'Abstract',
-    'Config',
-    'ClassGroup',
-    'EditInlineNew',
-    'MinimalAPI',
-    'meta',
-  ] as const, 'ClassSpecifier'),
-  USTRUCT: labels(['BlueprintType', 'Atomic', 'NoExport', 'Immutable', 'meta'] as const, 'StructSpecifier'),
+  UFUNCTION: labels(
+    [
+      'BlueprintCallable',
+      'BlueprintPure',
+      'BlueprintImplementableEvent',
+      'BlueprintNativeEvent',
+      'CallInEditor',
+      'Category',
+      'Server',
+      'Client',
+      'NetMulticast',
+      'Reliable',
+      'meta',
+    ] as const,
+    'FunctionSpecifier',
+  ),
+  UPROPERTY: labels(
+    [
+      'EditAnywhere',
+      'EditDefaultsOnly',
+      'EditInstanceOnly',
+      'VisibleAnywhere',
+      'BlueprintReadOnly',
+      'BlueprintReadWrite',
+      'Category',
+      'Replicated',
+      'ReplicatedUsing',
+      'Transient',
+      'Config',
+      'meta',
+    ] as const,
+    'PropertySpecifier',
+  ),
+  UCLASS: labels(
+    [
+      'Blueprintable',
+      'BlueprintType',
+      'Abstract',
+      'Config',
+      'ClassGroup',
+      'EditInlineNew',
+      'MinimalAPI',
+      'meta',
+    ] as const,
+    'ClassSpecifier',
+  ),
+  USTRUCT: labels(
+    ['BlueprintType', 'Atomic', 'NoExport', 'Immutable', 'meta'] as const,
+    'StructSpecifier',
+  ),
   UENUM: labels(['BlueprintType', 'Flags', 'ScriptName', 'meta'] as const, 'EnumSpecifier'),
   UMETA: labels(['DisplayName', 'Hidden', 'ToolTip', 'ShortToolTip'] as const, 'Metadata'),
 } as const satisfies Record<UeReflectionMacro, readonly UeMacroCompletionItem[]>;
@@ -95,7 +110,12 @@ function insertTextFor(label: string): string {
   if (label === 'meta') {
     return 'meta=($1)';
   }
-  if (label === 'Category' || label === 'DisplayName' || label === 'ToolTip' || label === 'ShortToolTip') {
+  if (
+    label === 'Category' ||
+    label === 'DisplayName' ||
+    label === 'ToolTip' ||
+    label === 'ShortToolTip'
+  ) {
     return `${label}="$1"`;
   }
   return label;

@@ -57,12 +57,18 @@ export class ProcessBridge implements ServerTransport {
   private dataHandler: ((data: Buffer) => void) | null = null;
   private readonly log: LogFn;
   private readonly spawnFn: typeof spawn;
-  private readonly onChildCloseCb: ((code: number | null, signal: string | null) => void) | undefined;
+  private readonly onChildCloseCb:
+    | ((code: number | null, signal: string | null) => void)
+    | undefined;
   private readonly onChildErrorCb: ((error: Error) => void) | undefined;
   private closed = false;
 
   constructor(options: ProcessBridgeOptions) {
-    this.log = options.log ?? (() => { /* 默认无日志 */ });
+    this.log =
+      options.log ??
+      (() => {
+        /* 默认无日志 */
+      });
     this.spawnFn = options.spawnFn ?? spawn;
     this.onChildCloseCb = options.onChildClose;
     this.onChildErrorCb = options.onChildError;
@@ -106,9 +112,7 @@ export class ProcessBridge implements ServerTransport {
 
     // 子进程关闭
     child.on('close', (code, signal) => {
-      this.log(
-        `[processBridge] child closed (code=${code}, signal=${signal ?? 'none'})`,
-      );
+      this.log(`[processBridge] child closed (code=${code}, signal=${signal ?? 'none'})`);
       this.onChildCloseCb?.(code, signal);
     });
   }
@@ -148,11 +152,15 @@ export class ProcessBridge implements ServerTransport {
    * 先尝试优雅关闭（SIGTERM），超时后强制杀死。
    */
   close(): void {
-    if (this.closed) {return;}
+    if (this.closed) {
+      return;
+    }
     this.closed = true;
 
     const child = this.child;
-    if (!child) {return;}
+    if (!child) {
+      return;
+    }
 
     // 关闭 stdin，让 clangd 知道没有更多输入
     try {

@@ -123,26 +123,40 @@ vi.mock('vscode', () => ({
   },
   SnippetString: class {
     value: string;
-    constructor(value: string) { this.value = value; }
+    constructor(value: string) {
+      this.value = value;
+    }
   },
   MarkdownString: class {
     value: string;
-    constructor(value: string) { this.value = value; }
+    constructor(value: string) {
+      this.value = value;
+    }
   },
   Range: class {
-    start: unknown; end: unknown;
-    constructor(start: unknown, end: unknown) { this.start = start; this.end = end; }
+    start: unknown;
+    end: unknown;
+    constructor(start: unknown, end: unknown) {
+      this.start = start;
+      this.end = end;
+    }
   },
   Position: class {
-    line: number; character: number;
-    constructor(line: number, character: number) { this.line = line; this.character = character; }
+    line: number;
+    character: number;
+    constructor(line: number, character: number) {
+      this.line = line;
+      this.character = character;
+    }
   },
   Uri: {
     file: vi.fn((p: string) => ({ fsPath: p, path: p, scheme: 'file' })),
-    joinPath: vi.fn((base: { fsPath?: string; path?: string } | undefined, ...segments: string[]) => {
-      const joined = [base?.fsPath ?? base?.path ?? '', ...segments].join('/');
-      return { fsPath: joined, path: joined, scheme: 'file' };
-    }),
+    joinPath: vi.fn(
+      (base: { fsPath?: string; path?: string } | undefined, ...segments: string[]) => {
+        const joined = [base?.fsPath ?? base?.path ?? '', ...segments].join('/');
+        return { fsPath: joined, path: joined, scheme: 'file' };
+      },
+    ),
   },
   EventEmitter: class {
     private listeners: Array<(e: unknown) => void> = [];
@@ -151,10 +165,15 @@ vi.mock('vscode', () => ({
       return { dispose: () => {} };
     };
     fire = (e: unknown) => this.listeners.forEach((l) => l(e));
-    dispose = () => { this.listeners = []; };
+    dispose = () => {
+      this.listeners = [];
+    };
   },
   RelativePattern: class {
-    constructor(public base: unknown, public pattern: string) {}
+    constructor(
+      public base: unknown,
+      public pattern: string,
+    ) {}
   },
   StatusBarAlignment: { Left: 1, Right: 2 },
   ProgressLocation: { Notification: 10, Window: 15 },

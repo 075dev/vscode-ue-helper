@@ -65,20 +65,27 @@ describe('encodeMessage (序列化器)', () => {
 
   it('支持 JSON-RPC 通知（无 id）', () => {
     const buf = encodeMessage({ jsonrpc: '2.0', method: 'test', params: {} });
-    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as { method?: string; id?: unknown };
+    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as {
+      method?: string;
+      id?: unknown;
+    };
     expect(parsed.method).toBe('test');
     expect(parsed.id).toBeUndefined();
   });
 
   it('支持 JSON-RPC 请求（有 id）', () => {
     const buf = encodeMessage({ jsonrpc: '2.0', id: 1, method: 'test' });
-    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as { id?: number };
+    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as {
+      id?: number;
+    };
     expect(parsed.id).toBe(1);
   });
 
   it('支持 JSON-RPC 响应（有 result）', () => {
     const buf = encodeMessage({ jsonrpc: '2.0', id: 1, result: { uri: 'file:///test' } });
-    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as { result?: { uri?: string } };
+    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as {
+      result?: { uri?: string };
+    };
     expect(parsed.result?.uri).toBe('file:///test');
   });
 
@@ -88,7 +95,9 @@ describe('encodeMessage (序列化器)', () => {
       id: 1,
       error: { code: -32601, message: 'Method not found' },
     });
-    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as { error?: { code?: number } };
+    const parsed = JSON.parse(buf.subarray(buf.indexOf('\r\n\r\n') + 4).toString('utf-8')) as {
+      error?: { code?: number };
+    };
     expect(parsed.error?.code).toBe(-32601);
   });
 });

@@ -31,7 +31,7 @@ describe('buildStatus — 状态构建', () => {
     keepaliveTtlSec: 900,
     localizationEnabled: false,
     localizationMode: 'append',
-        logPath: undefined,
+    logPath: undefined,
     hasBackup: false,
   };
 
@@ -94,7 +94,7 @@ describe('buildStatus — 状态构建', () => {
       ...defaultDeps,
       localizationEnabled: true,
       localizationMode: 'zh-only',
-          });
+    });
     expect(status.localizationEnabled).toBe(true);
     expect(status.localizationMode).toBe('zh-only');
   });
@@ -153,9 +153,21 @@ describe('CLI 日志行为 — 日志写入文件或 stderr，绝不写入 stdou
   });
 
   afterEach(() => {
-    try { unlinkSync(logFilePath); } catch { /* ignore */ }
-    try { unlinkSync(join(tmpDir, 'proxy-unwritable.log')); } catch { /* ignore */ }
-    try { unlinkSync(join(tmpDir, 'proxy-readonly.log')); } catch { /* ignore */ }
+    try {
+      unlinkSync(logFilePath);
+    } catch {
+      /* ignore */
+    }
+    try {
+      unlinkSync(join(tmpDir, 'proxy-unwritable.log'));
+    } catch {
+      /* ignore */
+    }
+    try {
+      unlinkSync(join(tmpDir, 'proxy-readonly.log'));
+    } catch {
+      /* ignore */
+    }
   });
 
   // ─── FakeChild ──────────────────────────────────────────────
@@ -204,16 +216,16 @@ describe('CLI 日志行为 — 日志写入文件或 stderr，绝不写入 stdou
     const fakeSpawn = createFakeSpawn(fakeChild);
     const stderrLines: string[] = [];
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: () => { /* noop */ },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: () => {
+        /* noop */
+      },
     };
 
     runProxy(
-      [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-        '--log-path', logFilePath,
-      ],
+      ['node', 'proxy.js', '--real-clangd', '/fake/clangd', '--log-path', logFilePath],
       io,
       fakeSpawn,
     );
@@ -232,18 +244,15 @@ describe('CLI 日志行为 — 日志写入文件或 stderr，绝不写入 stdou
     const fakeSpawn = createFakeSpawn(fakeChild);
     const stderrLines: string[] = [];
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: () => { /* noop */ },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: () => {
+        /* noop */
+      },
     };
 
-    runProxy(
-      [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-      ],
-      io,
-      fakeSpawn,
-    );
+    runProxy(['node', 'proxy.js', '--real-clangd', '/fake/clangd'], io, fakeSpawn);
 
     expect(stderrLines.some((l) => l.includes('[clangd-proxy]'))).toBe(true);
   });
@@ -256,16 +265,16 @@ describe('CLI 日志行为 — 日志写入文件或 stderr，绝不写入 stdou
     const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderrLines: string[] = [];
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: () => { /* noop */ },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: () => {
+        /* noop */
+      },
     };
 
     runProxy(
-      [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-        '--log-path', logFilePath,
-      ],
+      ['node', 'proxy.js', '--real-clangd', '/fake/clangd', '--log-path', logFilePath],
       io,
       fakeSpawn,
     );
@@ -282,16 +291,23 @@ describe('CLI 日志行为 — 日志写入文件或 stderr，绝不写入 stdou
     const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderrLines: string[] = [];
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: () => { /* noop */ },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: () => {
+        /* noop */
+      },
     };
 
     // 使用一个不可写的路径（如根目录下的文件）
     runProxy(
       [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-        '--log-path', '/invalid-path/proxy.log',
+        'node',
+        'proxy.js',
+        '--real-clangd',
+        '/fake/clangd',
+        '--log-path',
+        '/invalid-path/proxy.log',
       ],
       io,
       fakeSpawn,

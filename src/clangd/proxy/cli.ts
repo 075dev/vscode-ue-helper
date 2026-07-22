@@ -105,14 +105,18 @@ export function runProxy(
   const logFn = createProxyLogFn(options.logPath, io);
 
   logFn(`[clangd-proxy] argv: ${JSON.stringify(argv)}`);
-  logFn(`[clangd-proxy] parsed: localizationEnabled=${options.localizationEnabled}, mode=${options.localizationMode}, realClangd=${options.realClangd}`);
+  logFn(
+    `[clangd-proxy] parsed: localizationEnabled=${options.localizationEnabled}, mode=${options.localizationMode}, realClangd=${options.realClangd}`,
+  );
 
   // 构造本地化选项：优先级 CLI 参数 > settings.json > 不启用
   const localization: LocalizationOptions | undefined = options.localizationEnabled
     ? { enabled: true, mode: options.localizationMode }
     : loadLocalizationFromSettings(logFn);
 
-  logFn(`[clangd-proxy] localization ${localization ? `ENABLED (mode=${localization.mode})` : 'DISABLED'}`);
+  logFn(
+    `[clangd-proxy] localization ${localization ? `ENABLED (mode=${localization.mode})` : 'DISABLED'}`,
+  );
 
   // 加载 UE 文档词典
   if (options.dictionaryPath) {
@@ -120,10 +124,14 @@ export function runProxy(
       const lookup = new UeDocLookup();
       lookup.load(options.dictionaryPath);
       setDocLookup(lookup);
-      logFn(`[clangd-proxy] UE docs dictionary loaded: ${lookup.size()} entries from ${options.dictionaryPath}`);
+      logFn(
+        `[clangd-proxy] UE docs dictionary loaded: ${lookup.size()} entries from ${options.dictionaryPath}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logFn(`[clangd-proxy] WARNING: failed to load dictionary from ${options.dictionaryPath}: ${msg}`);
+      logFn(
+        `[clangd-proxy] WARNING: failed to load dictionary from ${options.dictionaryPath}: ${msg}`,
+      );
     }
   }
 
@@ -148,9 +156,11 @@ export function runProxy(
     log: logFn,
     spawnFn,
     onChildClose: (code, signal) => {
-      const exitCode = code === 0 && !initializeCompleted ? 1 : code ?? 1;
+      const exitCode = code === 0 && !initializeCompleted ? 1 : (code ?? 1);
       if (code === 0 && !initializeCompleted) {
-        logFn('[clangd-proxy] clangd exited before initialize response; reporting failure to prevent restart loop');
+        logFn(
+          '[clangd-proxy] clangd exited before initialize response; reporting failure to prevent restart loop',
+        );
       }
       logFn(`[clangd-proxy] clangd exited (code=${code}, signal=${signal ?? 'none'})`);
       onChildEvent();
@@ -252,10 +262,7 @@ export function runProxy(
     changedFiles: ['src/clangd/proxy/cli.ts', 'src/clangd/proxy/status.ts'],
     commands: ['parseArgs', 'runProxy', 'ProcessBridge', 'LspBridge'],
     evidence: '.omo/evidence/task-13-clangd-lsp-proxy-localization.log',
-    cleanup: [
-      'process.off SIGINT/SIGTERM handlers',
-      'bridge.close() on child exit',
-    ],
+    cleanup: ['process.off SIGINT/SIGTERM handlers', 'bridge.close() on child exit'],
     risks: [
       'ProcessBridge spawn failure if clangd not found',
       'LspBridge keepalive memory usage under high document churn',

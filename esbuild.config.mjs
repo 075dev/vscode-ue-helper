@@ -12,7 +12,8 @@ import { writeFileSync, mkdirSync, chmodSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWatch = process.argv.includes('--watch');
-const isProd = process.argv.includes('--production') || (!isWatch && process.env.NODE_ENV === 'production');
+const isProd =
+  process.argv.includes('--production') || (!isWatch && process.env.NODE_ENV === 'production');
 
 /** @type {import('esbuild').BuildOptions} */
 const sharedOptions = {
@@ -114,6 +115,10 @@ if (isWatch) {
   ].join('\n');
   writeFileSync(resolve(launcherDir, 'proxy-launcher.sh'), shContent, 'utf-8');
   // Unix 可执行权限（Windows 上忽略失败）
-  try { chmodSync(resolve(launcherDir, 'proxy-launcher.sh'), 0o755); } catch { /* ignore on Windows */ }
+  try {
+    chmodSync(resolve(launcherDir, 'proxy-launcher.sh'), 0o755);
+  } catch {
+    /* ignore on Windows */
+  }
   console.log('[esbuild] launcher generated → out/launcher/proxy-launcher.sh');
 }

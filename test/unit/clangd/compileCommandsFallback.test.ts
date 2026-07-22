@@ -49,7 +49,16 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
   });
 
   it('Case A: Intermediate/UHT 路径被加进 cc.json 的 -I', async () => {
-    const uhtDir = path.join(fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassTest', 'UHT');
+    const uhtDir = path.join(
+      fixture.tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'MassTest',
+      'UHT',
+    );
     await fs.mkdir(uhtDir, { recursive: true });
     await fs.writeFile(path.join(uhtDir, 'MassTest.generated.h'), '// stub', 'utf-8');
 
@@ -83,8 +92,26 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
   });
 
   it('Case C: 多个模块的 UHT 目录全部收集', async () => {
-    const uht1 = path.join(fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'ModA', 'UHT');
-    const uht2 = path.join(fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'ModB', 'UHT');
+    const uht1 = path.join(
+      fixture.tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'ModA',
+      'UHT',
+    );
+    const uht2 = path.join(
+      fixture.tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'ModB',
+      'UHT',
+    );
     await fs.mkdir(uht1, { recursive: true });
     await fs.mkdir(uht2, { recursive: true });
 
@@ -163,7 +190,12 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
 
     // 1b. Plugins 内的反射 header (USTRUCT) —— 验证派生 module 名用 PluginMod 而非 MyPlugin
     const pluginPublicDir = path.join(
-      fixture.tmpDir, 'Plugins', 'MyPlugin', 'Source', 'PluginMod', 'Public',
+      fixture.tmpDir,
+      'Plugins',
+      'MyPlugin',
+      'Source',
+      'PluginMod',
+      'Public',
     );
     await fs.mkdir(pluginPublicDir, { recursive: true });
     const itemHeader = path.join(pluginPublicDir, 'Item.h');
@@ -190,9 +222,7 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     expect(result).toBeDefined();
 
     // 3. 断言: Player.generated.h + Item.generated.h 被创建, Helper.generated.h 未被创建
-    const stubRoot = path.join(
-      fixture.tmpDir, '.vscode', 'vscodeuehelper', 'fallback-generated',
-    );
+    const stubRoot = path.join(fixture.tmpDir, '.vscode', 'vscodeuehelper', 'fallback-generated');
     const expectedPlayerStub = path.join(stubRoot, 'GameModule', 'Player.generated.h');
     const expectedItemStub = path.join(stubRoot, 'PluginMod', 'Item.generated.h');
     const mustNotExistHelperStub = path.join(stubRoot, 'GameModule', 'Helper.generated.h');
@@ -315,12 +345,7 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     await fs.mkdir(gmPublicDir, { recursive: true });
     await fs.writeFile(
       path.join(gmPublicDir, 'G.h'),
-      [
-        '#pragma once',
-        'UCLASS()',
-        'class AG : public AActor { GENERATED_BODY() };',
-        '',
-      ].join('\n'),
+      ['#pragma once', 'UCLASS()', 'class AG : public AActor { GENERATED_BODY() };', ''].join('\n'),
       'utf-8',
     );
 
@@ -332,9 +357,7 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     expect(result).toBeDefined();
 
     // 3. 断言: stub .generated.h 落盘 + 内容含 #include + ueClangdCompat.h
-    const stubRoot = path.join(
-      fixture.tmpDir, '.vscode', 'vscodeuehelper', 'fallback-generated',
-    );
+    const stubRoot = path.join(fixture.tmpDir, '.vscode', 'vscodeuehelper', 'fallback-generated');
     const expectedStub = path.join(stubRoot, 'GM', 'G.generated.h');
     await expect(fs.access(expectedStub)).resolves.toBeUndefined();
 
@@ -364,11 +387,24 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
   it('Case I: uhtmanifest 存在时 stubDir 优先 OutputDirectory', async () => {
     // 1. 写 .uhtmanifest(BaseDirectory 在 projectDir 内,OutputDirectory = UHT dir)
     const uhtDir = path.join(
-      fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassTest', 'UHT',
+      fixture.tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'MassTest',
+      'UHT',
     );
     await fs.mkdir(uhtDir, { recursive: true });
     const manifestPath = path.join(
-      fixture.tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassTest.uhtmanifest',
+      fixture.tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'MassTest.uhtmanifest',
     );
     await fs.writeFile(
       manifestPath,
@@ -390,12 +426,7 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     await fs.mkdir(massPublicDir, { recursive: true });
     await fs.writeFile(
       path.join(massPublicDir, 'Entity.h'),
-      [
-        '#pragma once',
-        'UCLASS()',
-        'class AEntity { GENERATED_BODY() };',
-        '',
-      ].join('\n'),
+      ['#pragma once', 'UCLASS()', 'class AEntity { GENERATED_BODY() };', ''].join('\n'),
       'utf-8',
     );
 

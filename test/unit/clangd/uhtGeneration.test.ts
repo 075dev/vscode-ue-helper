@@ -22,11 +22,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  runUhtCodegen,
-  type UhtResult,
-  type MinimalLogger,
-} from '@clangd/uhtGeneration';
+import { runUhtCodegen, type UhtResult, type MinimalLogger } from '@clangd/uhtGeneration';
 
 // ---------------------------------------------------------------------------
 // FakeChild —— 模拟 ChildProcessWithoutNullStreams 的最小可用子集
@@ -100,9 +96,15 @@ function makeFakeSpawn(
 // ---------------------------------------------------------------------------
 
 const silentLogger: MinimalLogger = {
-  info: () => { /* silent */ },
-  warn: () => { /* silent */ },
-  error: () => { /* silent */ },
+  info: () => {
+    /* silent */
+  },
+  warn: () => {
+    /* silent */
+  },
+  error: () => {
+    /* silent */
+  },
 };
 
 /**
@@ -193,7 +195,9 @@ describe('runUhtCodegen', () => {
   afterEach(async () => {
     await Promise.all(
       tmpDirs.map((d) =>
-        fs.rm(d, { recursive: true, force: true }).catch(() => { /* ignore */ }),
+        fs.rm(d, { recursive: true, force: true }).catch(() => {
+          /* ignore */
+        }),
       ),
     );
   });

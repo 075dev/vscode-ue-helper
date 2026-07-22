@@ -76,7 +76,8 @@ export async function mergeUserCustomizations(
   baseList: string[],
   workspace?: WorkspaceState,
 ): Promise<string[]> {
-  const dir = workspace?.clangdHelperDir ?? path.join(path.dirname(projectPath), '.vscode', 'vscodeuehelper');
+  const dir =
+    workspace?.clangdHelperDir ?? path.join(path.dirname(projectPath), '.vscode', 'vscodeuehelper');
   const macroFile = path.join(dir, 'addMacroCompletions.h');
   try {
     await fs.access(macroFile);
@@ -136,10 +137,7 @@ export function getPreparseStats(): { hit: number; miss: number; hitRate: number
  * @param engineRoot - 引擎根目录的绝对路径
  * @returns 解析后的有效路径列表（含占位符且无法解析的会被过滤）
  */
-export function resolvePreparseHeaders(
-  headers: string[],
-  engineRoot: string,
-): string[] {
+export function resolvePreparseHeaders(headers: string[], engineRoot: string): string[] {
   if (headers.length === 0) {
     return [];
   }

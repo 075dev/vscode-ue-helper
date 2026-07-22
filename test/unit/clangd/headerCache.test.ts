@@ -88,8 +88,9 @@ describe('HeaderCache', () => {
 
   it('损坏 JSON 返回 undefined（不抛错）', async () => {
     const cache = new HeaderCache({ projectDir, ueVersion: '5.4' });
-    const entryPath = (cache as unknown as { entryPath: (k: string) => string })
-      .entryPath('corrupt-key');
+    const entryPath = (cache as unknown as { entryPath: (k: string) => string }).entryPath(
+      'corrupt-key',
+    );
 
     await fs.mkdir(path.dirname(entryPath), { recursive: true });
     await fs.writeFile(entryPath, '{ invalid json }', 'utf-8');

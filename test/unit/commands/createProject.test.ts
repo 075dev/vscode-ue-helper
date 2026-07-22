@@ -23,7 +23,11 @@ describe('formatFillResultDetail', () => {
     const result: FillResult = {
       roots: ['/proj/Source', '/proj/Plugins/MyPlugin/Source'],
       scanned: 45,
-      missing: ['/proj/Source/new.cpp', '/proj/Source/new.h', '/proj/Plugins/MyPlugin/Source/foo.h'],
+      missing: [
+        '/proj/Source/new.cpp',
+        '/proj/Source/new.h',
+        '/proj/Plugins/MyPlugin/Source/foo.h',
+      ],
       added: ['/proj/Source/new.cpp', '/proj/Source/new.h', '/proj/Plugins/MyPlugin/Source/foo.h'],
     };
     const detail = formatFillResultDetail(result);
@@ -118,7 +122,10 @@ const {
     mockAddCompletionHelper: vi.fn<[], Promise<boolean>>(),
     mockStartModifyRsp: vi.fn<[], Promise<{ replaced: number; unchanged: number }>>(),
     mockStartCreateRspMatchers: vi.fn<[], Promise<readonly unknown[]>>(),
-    mockRunUhtCodegen: vi.fn<[], Promise<{ ran: boolean; exitCode: number | null; generatedHeaderCount: number }>>(),
+    mockRunUhtCodegen: vi.fn<
+      [],
+      Promise<{ ran: boolean; exitCode: number | null; generatedHeaderCount: number }>
+    >(),
   };
 });
 
@@ -152,7 +159,9 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         return await task(fakeProgress);
       },
     );
-    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      undefined,
+    );
   });
 
   it('generateCompileCommands 返回 fallback 路径时不调 linkToWorkspaceRoot,流程不抛错', async () => {
@@ -161,7 +170,10 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     const projectDir = path.dirname(projectPath);
     // fallback 路径 = projectDir/.vscode/vscodeuehelper/compile_commands.json
     const fallbackJsonPath = path.join(
-      projectDir, '.vscode', 'vscodeuehelper', 'compile_commands.json',
+      projectDir,
+      '.vscode',
+      'vscodeuehelper',
+      'compile_commands.json',
     );
 
     // ---- mock @clangd 模块行为 ----
@@ -180,23 +192,33 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
 
     // ---- 构造依赖对象 ----
     const logger = new Logger('test');
-    const config = { configuration: 'Development' } as unknown as Parameters<typeof executeCreateProject>[0];
+    const config = { configuration: 'Development' } as unknown as Parameters<
+      typeof executeCreateProject
+    >[0];
     const detection = {
       scanner: {
-        scan: vi.fn(() => Promise.resolve([{
-          path: projectPath,
-          name: 'MyProj',
-          directory: projectDir,
-          modules: [],
-          enginePath: 'C:\\UE_5.4',
-          engineVersion: '5.4.0',
-        }])),
+        scan: vi.fn(() =>
+          Promise.resolve([
+            {
+              path: projectPath,
+              name: 'MyProj',
+              directory: projectDir,
+              modules: [],
+              enginePath: 'C:\\UE_5.4',
+              engineVersion: '5.4.0',
+            },
+          ]),
+        ),
       },
       discovery: {
-        discover: vi.fn(() => Promise.resolve([{
-          path: 'C:\\UE_5.4',
-          version: '5.4.0',
-        }])),
+        discover: vi.fn(() =>
+          Promise.resolve([
+            {
+              path: 'C:\\UE_5.4',
+              version: '5.4.0',
+            },
+          ]),
+        ),
       },
       vsBuildTools: {} as never,
       workspaceContext: {
@@ -206,14 +228,16 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         setEngine: vi.fn(() => Promise.resolve(undefined)),
       },
       ready: Promise.resolve({
-        projects: [{
-          path: projectPath,
-          name: 'MyProj',
-          directory: projectDir,
-          modules: [],
-          enginePath: 'C:\\UE_5.4',
-          engineVersion: '5.4.0',
-        }],
+        projects: [
+          {
+            path: projectPath,
+            name: 'MyProj',
+            directory: projectDir,
+            modules: [],
+            enginePath: 'C:\\UE_5.4',
+            engineVersion: '5.4.0',
+          },
+        ],
         engines: [],
         workspaceFile: null,
         workspaceRoot: projectDir,
@@ -270,23 +294,33 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     });
 
     const logger = new Logger('test');
-    const config = { configuration: 'Development' } as unknown as Parameters<typeof executeCreateProject>[0];
+    const config = { configuration: 'Development' } as unknown as Parameters<
+      typeof executeCreateProject
+    >[0];
     const detection = {
       scanner: {
-        scan: vi.fn(() => Promise.resolve([{
-          path: projectPath,
-          name: 'MyProj',
-          directory: projectDir,
-          modules: [],
-          enginePath: 'C:\\UE_5.4',
-          engineVersion: '5.4.0',
-        }])),
+        scan: vi.fn(() =>
+          Promise.resolve([
+            {
+              path: projectPath,
+              name: 'MyProj',
+              directory: projectDir,
+              modules: [],
+              enginePath: 'C:\\UE_5.4',
+              engineVersion: '5.4.0',
+            },
+          ]),
+        ),
       },
       discovery: {
-        discover: vi.fn(() => Promise.resolve([{
-          path: 'C:\\UE_5.4',
-          version: '5.4.0',
-        }])),
+        discover: vi.fn(() =>
+          Promise.resolve([
+            {
+              path: 'C:\\UE_5.4',
+              version: '5.4.0',
+            },
+          ]),
+        ),
       },
       vsBuildTools: {} as never,
       workspaceContext: {
@@ -296,14 +330,16 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         setEngine: vi.fn(() => Promise.resolve(undefined)),
       },
       ready: Promise.resolve({
-        projects: [{
-          path: projectPath,
-          name: 'MyProj',
-          directory: projectDir,
-          modules: [],
-          enginePath: 'C:\\UE_5.4',
-          engineVersion: '5.4.0',
-        }],
+        projects: [
+          {
+            path: projectPath,
+            name: 'MyProj',
+            directory: projectDir,
+            modules: [],
+            enginePath: 'C:\\UE_5.4',
+            engineVersion: '5.4.0',
+          },
+        ],
         engines: [],
         workspaceFile: null,
         workspaceRoot: projectDir,

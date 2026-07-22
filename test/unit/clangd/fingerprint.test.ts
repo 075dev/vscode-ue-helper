@@ -38,7 +38,11 @@ describe('computeFingerprint', () => {
     // fixture: .uproject + Source/Game/Game.Build.cs
     const sourceDir = path.join(tmpDir, 'Source', 'Game');
     await fs.mkdir(sourceDir, { recursive: true });
-    await fs.writeFile(path.join(sourceDir, 'Game.Build.cs'), 'public class GameTarget : TargetRules { }', 'utf-8');
+    await fs.writeFile(
+      path.join(sourceDir, 'Game.Build.cs'),
+      'public class GameTarget : TargetRules { }',
+      'utf-8',
+    );
 
     const fp1 = await computeFingerprint(tmpDir);
     const fp2 = await computeFingerprint(tmpDir);
@@ -55,7 +59,11 @@ describe('computeFingerprint', () => {
     const fp1 = await computeFingerprint(tmpDir);
 
     // 修改 Build.cs
-    await fs.writeFile(buildCs, 'public class GameTarget : TargetRules { /* comment change */ }', 'utf-8');
+    await fs.writeFile(
+      buildCs,
+      'public class GameTarget : TargetRules { /* comment change */ }',
+      'utf-8',
+    );
 
     const fp2 = await computeFingerprint(tmpDir);
     expect(fp2.fingerprint).not.toBe(fp1.fingerprint);

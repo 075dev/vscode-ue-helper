@@ -50,7 +50,10 @@ export const realIo: CliIo = {
  *
  * 优先写入日志文件，日志文件不可写时回退 stderr；绝不写 stdout。
  */
-export function createProxyLogFn(logPathOption: string | undefined, io: CliIo): (message: string) => void {
+export function createProxyLogFn(
+  logPathOption: string | undefined,
+  io: CliIo,
+): (message: string) => void {
   let activeLogPath: string | null = null;
 
   if (logPathOption) {

@@ -22,9 +22,7 @@ const BACKUP_CLANGD = 'C:/llvm/backup/clangd.exe';
 const PATH_CLANGD = 'C:/tools/LLVM/bin/clangd.exe';
 const DEFAULT_CLANGD = 'C:/Program Files/LLVM/bin/clangd.exe';
 
-type InputOverrides = Partial<
-  Omit<RealClangdResolverInput, 'pathDelimiter' | 'fileExists'>
-> & {
+type InputOverrides = Partial<Omit<RealClangdResolverInput, 'pathDelimiter' | 'fileExists'>> & {
   readonly existingPaths?: readonly string[];
 };
 
@@ -66,7 +64,14 @@ describe('resolveRealClangdPath — 自动解析真实 clangd 路径', () => {
       backupClangdPath: BACKUP_CLANGD,
       envPath: 'C:/tools/LLVM/bin',
       defaultSearchRoots: ['C:/Program Files/LLVM/bin'],
-      existingPaths: [OVERRIDE_CLANGD, CONFIG_CLANGD, CURRENT_CLANGD, BACKUP_CLANGD, PATH_CLANGD, DEFAULT_CLANGD],
+      existingPaths: [
+        OVERRIDE_CLANGD,
+        CONFIG_CLANGD,
+        CURRENT_CLANGD,
+        BACKUP_CLANGD,
+        PATH_CLANGD,
+        DEFAULT_CLANGD,
+      ],
     });
 
     // When / Then
@@ -188,7 +193,11 @@ describe('resolveRealClangdPath — 自动解析真实 clangd 路径', () => {
     expect(result.kind).toBe('notFound');
     if (result.kind === 'notFound') {
       expect(result.checkedCandidates).toEqual([
-        { path: 'c:\\ext\\out\\launcher\\proxy-launcher.bat', source: 'currentClangdPath', reason: 'proxyLauncher' },
+        {
+          path: 'c:\\ext\\out\\launcher\\proxy-launcher.bat',
+          source: 'currentClangdPath',
+          reason: 'proxyLauncher',
+        },
       ]);
     }
   });

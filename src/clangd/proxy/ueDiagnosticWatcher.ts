@@ -194,7 +194,10 @@ export class UeDiagnosticWatcher {
   handleDiagnostics(params: {
     uri: string;
     diagnostics: Array<{
-      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
       severity: number;
       source?: string;
       message: string;
@@ -336,7 +339,13 @@ export class UeDiagnosticWatcher {
     // TargetDescriptor.ParseCommandLine)。但 Build.bat 用 %* 透传时拆开含空格 argv →
     // "File not found 'Development'" / "No platforms specified"。直接 spawn dotnet，
     // Node 对含空格 argv 加引号，dotnet 解析时保留为单个 argv。
-    const dotnetBaseDir = path.join(this.options.engineRoot, 'Engine', 'Binaries', 'ThirdParty', 'DotNet');
+    const dotnetBaseDir = path.join(
+      this.options.engineRoot,
+      'Engine',
+      'Binaries',
+      'ThirdParty',
+      'DotNet',
+    );
     let dotnetExe = '';
     let dotnetVersionDir = '';
     try {
@@ -347,13 +356,24 @@ export class UeDiagnosticWatcher {
           dotnetExe = candidate;
           dotnetVersionDir = path.dirname(candidate);
           break;
-        } catch { /* 该版本目录无 dotnet.exe，继续 */ }
+        } catch {
+          /* 该版本目录无 dotnet.exe，继续 */
+        }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     if (!dotnetExe) {
       throw new Error(`bundled dotnet not found under ${dotnetBaseDir}`);
     }
-    const ubtDll = path.join(this.options.engineRoot, 'Engine', 'Binaries', 'DotNET', 'UnrealBuildTool', 'UnrealBuildTool.dll');
+    const ubtDll = path.join(
+      this.options.engineRoot,
+      'Engine',
+      'Binaries',
+      'DotNET',
+      'UnrealBuildTool',
+      'UnrealBuildTool.dll',
+    );
     const engineSourceDir = path.join(this.options.engineRoot, 'Engine', 'Source');
 
     const args = [
@@ -403,7 +423,9 @@ export class UeDiagnosticWatcher {
         if (code !== 0) {
           const combined = stdout + stderr;
           // 错误详情在输出开头(末尾是 usage/总结),打印开头 + 末尾便于诊断
-          this.logger.warn(`[ueDiagnosticWatcher] UBT failed (code ${code}). Output start:\n${combined.slice(0, 2000)}`);
+          this.logger.warn(
+            `[ueDiagnosticWatcher] UBT failed (code ${code}). Output start:\n${combined.slice(0, 2000)}`,
+          );
           this.logger.warn(`[ueDiagnosticWatcher] UBT output end:\n${combined.slice(-500)}`);
           reject(new Error(`UBT exited with code ${code}`));
           return;
@@ -480,7 +502,10 @@ export class UeDiagnosticWatcher {
           // pathToFileURL 保留输入盘符大小写（projectDir 小写 e: → file:///e:/...），与 clangd 内部
           // URI 不匹配 → didChangeWatchedFiles 被忽略，不失效 preamble，不 re-parse。盘符大写对齐。
           let uri = pathToFileURL(fsPath).toString();
-          uri = uri.replace(/^file:\/\/\/([a-zA-Z]):/, (_m, drive: string) => `file:///${drive.toUpperCase()}:`);
+          uri = uri.replace(
+            /^file:\/\/\/([a-zA-Z]):/,
+            (_m, drive: string) => `file:///${drive.toUpperCase()}:`,
+          );
           return { uri, type: 2 }; // Changed
         }),
       });
@@ -544,7 +569,9 @@ export class UeDiagnosticWatcher {
       `[ueDiagnosticWatcher] forceReparse: ueErrorFiles.size=${this.ueErrorFiles.size}`,
     );
     if (this.ueErrorFiles.size === 0) {
-      this.logger.warn('[ueDiagnosticWatcher] forceReparse: no UE-error files tracked, skipping didChange injection');
+      this.logger.warn(
+        '[ueDiagnosticWatcher] forceReparse: no UE-error files tracked, skipping didChange injection',
+      );
       return;
     }
     for (const uri of this.ueErrorFiles) {

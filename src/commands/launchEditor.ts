@@ -30,7 +30,9 @@ export async function executeLaunchEditor(
     silent,
     warningKey: 'launchEditor.noProject',
   });
-  if (!project) {return;}
+  if (!project) {
+    return;
+  }
   await persistSelection(workspace, detection, project, undefined);
 
   const engine = await resolveEngineOrPick({
@@ -39,7 +41,9 @@ export async function executeLaunchEditor(
     silent,
     warningKey: 'cmd.noEngineSelected',
   });
-  if (!engine) {return;}
+  if (!engine) {
+    return;
+  }
   await persistSelection(workspace, detection, undefined, engine);
 
   logger.info(`[launchEditor] launching ${engine.path} with ${project.path}`);

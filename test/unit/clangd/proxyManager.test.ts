@@ -17,9 +17,7 @@ import { ClangdProxyManager } from '@clangd/proxyManager';
 // 辅助：创建 ExtensionContext mock
 // ---------------------------------------------------------------------------
 
-function createContextMock(
-  overrides?: Partial<vscode.ExtensionContext>,
-): vscode.ExtensionContext {
+function createContextMock(overrides?: Partial<vscode.ExtensionContext>): vscode.ExtensionContext {
   return {
     subscriptions: [],
     extensionPath: '/fake/extension',
@@ -60,17 +58,19 @@ function createLoggerMock() {
 // 辅助：创建 Config mock
 // ---------------------------------------------------------------------------
 
-function createConfigMock(overrides?: Partial<{
-  clangdPath: string | undefined;
-  clangdProxyEnabled: boolean;
-  clangdProxyKeepaliveMax: number;
-  clangdProxyKeepaliveTtlSec: number;
-  clangdProxyRealClangdPath: string | undefined;
-  clangdProxyLogPath: string | undefined;
-  clangdProxyLocalizationEnabled: boolean;
-  clangdProxyLocalizationMode: string;
-  clangdProxyLocalizationTargets: string[];
-}>) {
+function createConfigMock(
+  overrides?: Partial<{
+    clangdPath: string | undefined;
+    clangdProxyEnabled: boolean;
+    clangdProxyKeepaliveMax: number;
+    clangdProxyKeepaliveTtlSec: number;
+    clangdProxyRealClangdPath: string | undefined;
+    clangdProxyLogPath: string | undefined;
+    clangdProxyLocalizationEnabled: boolean;
+    clangdProxyLocalizationMode: string;
+    clangdProxyLocalizationTargets: string[];
+  }>,
+) {
   return {
     clangdPath: undefined,
     clangdProxyEnabled: false,
@@ -149,30 +149,18 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
     });
 
     it('enabled 默认 false', () => {
-      const manager = new ClangdProxyManager(
-        context,
-        createConfigMock() as never,
-        logger as never,
-      );
+      const manager = new ClangdProxyManager(context, createConfigMock() as never, logger as never);
       expect(manager.enabled).toBe(false);
     });
 
     it('isActive 委托给 settingsManager.isUsingOurLauncher', () => {
-      const manager = new ClangdProxyManager(
-        context,
-        createConfigMock() as never,
-        logger as never,
-      );
+      const manager = new ClangdProxyManager(context, createConfigMock() as never, logger as never);
       // 默认 mock 返回 undefined，所以 isActive 应为 false
       expect(manager.isActive).toBe(false);
     });
 
     it('hasBackup 委托给 settingsManager.hasBackup', () => {
-      const manager = new ClangdProxyManager(
-        context,
-        createConfigMock() as never,
-        logger as never,
-      );
+      const manager = new ClangdProxyManager(context, createConfigMock() as never, logger as never);
       expect(manager.hasBackup).toBe(false);
     });
 
@@ -186,11 +174,7 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
     });
 
     it('logPath 未配置时返回默认路径（context.logUri 下）', () => {
-      const manager = new ClangdProxyManager(
-        context,
-        createConfigMock() as never,
-        logger as never,
-      );
+      const manager = new ClangdProxyManager(context, createConfigMock() as never, logger as never);
       // 未配置 clangdProxyLogPath 时回落到 defaultLogPath（始终有值，保证 proxy 写文件）
       expect(manager.logPath).toContain('clangd-proxy.log');
     });
@@ -209,8 +193,12 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
       // 这里只验证：不被 enabled=false 拦截（不再 throw 'not enabled'）
       vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         get: vi.fn((key: string) => {
-          if (key === 'arguments') {return [];}
-          if (key === 'path') {return undefined;}
+          if (key === 'arguments') {
+            return [];
+          }
+          if (key === 'path') {
+            return undefined;
+          }
           return undefined;
         }),
         update: vi.fn(async () => await Promise.resolve()),
@@ -237,19 +225,20 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
 
       vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         get: vi.fn((key: string) => {
-          if (key === 'arguments') {return ['--background-index'];}
-          if (key === 'path') {return undefined;}
+          if (key === 'arguments') {
+            return ['--background-index'];
+          }
+          if (key === 'path') {
+            return undefined;
+          }
           return undefined;
         }),
         update: vi.fn(),
       } as unknown as vscode.WorkspaceConfiguration);
 
-      const manager = new ClangdProxyManager(
-        context,
-        configMock as never,
-        logger as never,
-        { fileExists },
-      );
+      const manager = new ClangdProxyManager(context, configMock as never, logger as never, {
+        fileExists,
+      });
       const enableSpy = vi.spyOn(manager.settingsManager, 'enable');
 
       // When
@@ -283,19 +272,20 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
 
       vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         get: vi.fn((key: string) => {
-          if (key === 'arguments') {return ['--background-index'];}
-          if (key === 'path') {return '/missing/current-clangd.exe';}
+          if (key === 'arguments') {
+            return ['--background-index'];
+          }
+          if (key === 'path') {
+            return '/missing/current-clangd.exe';
+          }
           return undefined;
         }),
         update: vi.fn(),
       } as unknown as vscode.WorkspaceConfiguration);
 
-      const manager = new ClangdProxyManager(
-        context,
-        configMock as never,
-        logger as never,
-        { fileExists },
-      );
+      const manager = new ClangdProxyManager(context, configMock as never, logger as never, {
+        fileExists,
+      });
       const enableSpy = vi.spyOn(manager.settingsManager, 'enable');
 
       // When / Then
@@ -309,11 +299,7 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
 
   describe('disable — 禁用代理', () => {
     it('disable 调用 settingsManager.disable', async () => {
-      const manager = new ClangdProxyManager(
-        context,
-        createConfigMock() as never,
-        logger as never,
-      );
+      const manager = new ClangdProxyManager(context, createConfigMock() as never, logger as never);
 
       const disableSpy = vi.spyOn(manager.settingsManager, 'disable');
 

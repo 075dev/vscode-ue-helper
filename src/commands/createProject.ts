@@ -74,11 +74,15 @@ export async function executeCreateProject(
 
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({ detection, workspace });
-  if (!project) {return;}
+  if (!project) {
+    return;
+  }
   await persistSelection(workspace, detection, project, undefined);
 
   const engine = await resolveEngineOrPick({ detection, workspace });
-  if (!engine) {return;}
+  if (!engine) {
+    return;
+  }
   await persistSelection(workspace, detection, undefined, engine);
 
   const projectDir = path.dirname(project.path);
@@ -87,7 +91,8 @@ export async function executeCreateProject(
   let jsonPath = '';
   // 仅用于日志信息（createCompletionFiles 内部已有自己的路径派生）
   // [Phase 11 SSoT] 走 WorkspaceState.clangdHelperDir；fallback 留给测试兼容
-  const customDir = workspace?.clangdHelperDir ?? path.join(projectDir, '.vscode', 'vscodeuehelper');
+  const customDir =
+    workspace?.clangdHelperDir ?? path.join(projectDir, '.vscode', 'vscodeuehelper');
 
   // === 5-step pipeline ===
   const results: { step: string; ok: boolean; detail: string }[] = [];
@@ -173,7 +178,7 @@ export async function executeCreateProject(
         const projectDirForLink = path.dirname(project.path);
         logger.info(
           `[createProject] step 2 invoke generateCompileCommands: ` +
-            `project=${project.path}, projectDir=${projectDirForLink}, engine=${engine.path}`
+            `project=${project.path}, projectDir=${projectDirForLink}, engine=${engine.path}`,
         );
 
         // [UHT pre-codegen] 主动跑 UBT -Mode=UnrealHeaderTool 预生成 .generated.h。
@@ -188,9 +193,7 @@ export async function executeCreateProject(
         try {
           const buildTargetName = project.name ? `${project.name}Editor` : '';
           if (!buildTargetName) {
-            logger.warn(
-              '[createProject] step 2 UHT pre-codegen skipped: project.name is empty',
-            );
+            logger.warn('[createProject] step 2 UHT pre-codegen skipped: project.name is empty');
             results.push({
               step: t('createProject.uhtPreCodegen', { count: 0 }),
               ok: false,
@@ -242,12 +245,8 @@ export async function executeCreateProject(
         // 显式分支让 step 2 的控制流与 UBT 正常路径对称。
         // [Phase 11 SSoT] 走 WorkspaceState.compileCommandsPath（单一真相源）
         const expectedFallbackPath =
-          workspace?.compileCommandsPath ?? path.join(
-            projectDir,
-            '.vscode',
-            'vscodeuehelper',
-            'compile_commands.json',
-          );
+          workspace?.compileCommandsPath ??
+          path.join(projectDir, '.vscode', 'vscodeuehelper', 'compile_commands.json');
         const isFallbackPath = path.resolve(jsonPath) === path.resolve(expectedFallbackPath);
 
         let linkPath: string;
@@ -269,7 +268,7 @@ export async function executeCreateProject(
           // projectDir，即 .uproject 所在目录
           logger.info(
             `[createProject] step 2 calling linkToWorkspaceRoot: ` +
-              `jsonPath=${jsonPath}, projectPath=${project.path} (projectDir will be ${projectDirForLink})`
+              `jsonPath=${jsonPath}, projectPath=${project.path} (projectDir will be ${projectDirForLink})`,
           );
           linkPath = await linkToWorkspaceRoot(jsonPath, project.path, logger);
 
@@ -386,10 +385,7 @@ export async function executeCreateProject(
         increment: 0,
       });
       try {
-        const added = await addCompletionHelperToCompileCommands(
-          project.path,
-          jsonPath,
-        );
+        const added = await addCompletionHelperToCompileCommands(project.path, jsonPath);
         results.push({
           step: 'Add to compile_commands.json',
           ok: true,
@@ -407,10 +403,7 @@ export async function executeCreateProject(
           ok: false,
           detail: msg,
         });
-        logger.error(
-          '[createProject] addCompletionHelperToCompileCommands failed:',
-          msg,
-        );
+        logger.error('[createProject] addCompletionHelperToCompileCommands failed:', msg);
       }
       progress.report({ increment: 20 });
 
@@ -434,9 +427,7 @@ export async function executeCreateProject(
   // === Summary ===
   const ok = results.filter((r) => r.ok).length;
   const total = results.length;
-  const lines = results.map(
-    (r) => `${r.ok ? 'OK ' : 'FAIL'} ${r.step}: ${r.detail}`,
-  );
+  const lines = results.map((r) => `${r.ok ? 'OK ' : 'FAIL'} ${r.step}: ${r.detail}`);
   logger.info(`[createProject] ${ok}/${total} steps OK\n${lines.join('\n')}`);
 
   // 简化弹窗：只显示成功提示

@@ -37,9 +37,21 @@ const SKIP_DIRS = new Set(['Intermediate', 'Binaries', '.git', 'Saved', '.vs', '
 
 /** 引擎核心模块（其 Public 目录作为 fallback include） */
 const ENGINE_CORE_MODULES = [
-  'Core', 'CoreUObject', 'ApplicationCore', 'RHI', 'RenderCore',
-  'SlateCore', 'Slate', 'Engine', 'InputCore', 'AssetRegistry',
-  'Json', 'JsonUtilities', 'Projects', 'NetCore', 'Sockets',
+  'Core',
+  'CoreUObject',
+  'ApplicationCore',
+  'RHI',
+  'RenderCore',
+  'SlateCore',
+  'Slate',
+  'Engine',
+  'InputCore',
+  'AssetRegistry',
+  'Json',
+  'JsonUtilities',
+  'Projects',
+  'NetCore',
+  'Sockets',
 ];
 
 /**
@@ -48,12 +60,17 @@ const ENGINE_CORE_MODULES = [
  */
 function buildTypeToMacro(buildType: string | undefined): string {
   switch (buildType) {
-    case 'Debug': return 'UE_BUILD_DEBUG=1';
-    case 'DebugGame': return 'UE_BUILD_DEBUG_GAME=1';
-    case 'Shipping': return 'UE_BUILD_SHIPPING=1';
-    case 'Test': return 'UE_BUILD_TEST=1';
+    case 'Debug':
+      return 'UE_BUILD_DEBUG=1';
+    case 'DebugGame':
+      return 'UE_BUILD_DEBUG_GAME=1';
+    case 'Shipping':
+      return 'UE_BUILD_SHIPPING=1';
+    case 'Test':
+      return 'UE_BUILD_TEST=1';
     case 'Development':
-    default: return 'UE_BUILD_DEVELOPMENT=1';
+    default:
+      return 'UE_BUILD_DEVELOPMENT=1';
   }
 }
 
@@ -97,8 +114,10 @@ async function scanCppFiles(dir: string): Promise<string[]> {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) { continue; }
-      results.push(...await scanCppFiles(full));
+      if (SKIP_DIRS.has(entry.name)) {
+        continue;
+      }
+      results.push(...(await scanCppFiles(full)));
     } else if (entry.isFile() && /\.cpp$/i.test(entry.name)) {
       results.push(path.normalize(full));
     }
@@ -119,7 +138,9 @@ async function collectSourceDirs(dir: string, acc: Set<string>): Promise<void> {
   let hasSource = false;
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) { continue; }
+      if (SKIP_DIRS.has(entry.name)) {
+        continue;
+      }
       await collectSourceDirs(path.join(dir, entry.name), acc);
     } else if (entry.isFile() && /\.(h|hpp|cpp|inl)$/i.test(entry.name)) {
       hasSource = true;
@@ -144,7 +165,7 @@ async function findFilesByExt(dir: string, ext: string): Promise<string[]> {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      results.push(...await findFilesByExt(full, ext));
+      results.push(...(await findFilesByExt(full, ext)));
     } else if (entry.isFile() && entry.name.endsWith(ext)) {
       results.push(full);
     }
@@ -231,10 +252,14 @@ async function extractUhtManifestOutputDirs(projectDir: string): Promise<string[
       for (const mod of parsed.Modules ?? []) {
         const baseDir = mod.BaseDirectory;
         const outputDir = mod.OutputDirectory;
-        if (!baseDir || !outputDir) { continue; }
+        if (!baseDir || !outputDir) {
+          continue;
+        }
         // 仅保留 BaseDirectory 位于 projectDir 之内的模块
         const rel = path.relative(projectDir, baseDir);
-        if (rel.startsWith('..') || path.isAbsolute(rel)) { continue; }
+        if (rel.startsWith('..') || path.isAbsolute(rel)) {
+          continue;
+        }
         outputs.push(outputDir);
       }
     } catch {
@@ -258,7 +283,9 @@ async function ensureCompatHeader(projectPath: string, logger?: Logger): Promise
       await fs.writeFile(compatPath, getUeClangdCompatContent(), 'utf-8');
       logger?.info(`[fallback] created ueClangdCompat.h at ${compatPath}`);
     } catch (err) {
-      logger?.warn(`[fallback] failed to create ueClangdCompat.h: ${err instanceof Error ? err.message : String(err)}`);
+      logger?.warn(
+        `[fallback] failed to create ueClangdCompat.h: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
   return compatPath;
@@ -279,7 +306,9 @@ function deriveModuleName(headerPath: string, projectDir: string): string | unde
   const rel = path.relative(projectDir, headerPath);
   // path.relative 在 Windows 上使用 \，需兼容两种分隔符
   const parts = rel.split(/[\\/]/);
-  if (parts.length < 3) { return undefined; }
+  if (parts.length < 3) {
+    return undefined;
+  }
 
   // Plugins/<Plugin>/Source/<Module>/...
   if (parts[0] === 'Plugins' && parts[2] === 'Source' && parts.length >= 4) {
@@ -307,7 +336,9 @@ async function scanHeaderFiles(dir: string, acc: string[]): Promise<void> {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) { continue; }
+      if (SKIP_DIRS.has(entry.name)) {
+        continue;
+      }
       await scanHeaderFiles(full, acc);
     } else if (entry.isFile() && /\.h$/i.test(entry.name)) {
       acc.push(path.normalize(full));
@@ -417,11 +448,15 @@ async function writeStubGeneratedHeaders(
     } catch {
       continue;
     }
-    if (!REFLECTION_MACRO_RE.test(content)) { continue; }
+    if (!REFLECTION_MACRO_RE.test(content)) {
+      continue;
+    }
 
     // 2. 派生 module 名
     const moduleName = deriveModuleName(headerPath, projectDir);
-    if (!moduleName) { continue; }
+    if (!moduleName) {
+      continue;
+    }
 
     // 3. 构造 stub 路径
     //    a) 有 manifest 匹配的 OutputDirectory:写到那里（扁平化文件名，
@@ -465,12 +500,19 @@ async function writeStubGeneratedHeaders(
 /**
  * 过滤 include 集合，仅保留实际存在的目录。
  */
-async function filterExistingDirs(candidates: Iterable<string>, existing: Set<string>): Promise<void> {
+async function filterExistingDirs(
+  candidates: Iterable<string>,
+  existing: Set<string>,
+): Promise<void> {
   for (const p of candidates) {
-    if (existing.has(p)) { continue; }
+    if (existing.has(p)) {
+      continue;
+    }
     try {
       const stat = await fs.stat(p);
-      if (stat.isDirectory()) { existing.add(p); }
+      if (stat.isDirectory()) {
+        existing.add(p);
+      }
     } catch {
       // 不存在，跳过
     }
@@ -482,7 +524,9 @@ async function filterExistingDirs(candidates: Iterable<string>, existing: Set<st
  *
  * @returns 写入路径与统计；无 .cpp 文件或写入失败时返回 undefined
  */
-export async function generateFallbackCompileCommands(opts: FallbackOptions): Promise<FallbackResult | undefined> {
+export async function generateFallbackCompileCommands(
+  opts: FallbackOptions,
+): Promise<FallbackResult | undefined> {
   const log = opts.logger ?? sharedLogger;
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
 
@@ -551,7 +595,7 @@ export async function generateFallbackCompileCommands(opts: FallbackOptions): Pr
     const pluginEntries = await fs.readdir(pluginsDir, { withFileTypes: true });
     for (const e of pluginEntries) {
       if (e.isDirectory()) {
-        cppFiles.push(...await scanCppFiles(path.join(pluginsDir, e.name, 'Source')));
+        cppFiles.push(...(await scanCppFiles(path.join(pluginsDir, e.name, 'Source'))));
       }
     }
   } catch {

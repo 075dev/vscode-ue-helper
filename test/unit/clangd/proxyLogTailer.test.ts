@@ -27,7 +27,9 @@ function sleep(ms: number): Promise<void> {
 function makeChannel(): { channel: vscode.OutputChannel; lines: string[] } {
   const lines: string[] = [];
   const channel = {
-    appendLine: (l: string) => { lines.push(l); },
+    appendLine: (l: string) => {
+      lines.push(l);
+    },
     append: vi.fn(),
     clear: vi.fn(),
     show: vi.fn(),
@@ -57,7 +59,11 @@ describe('ProxyLogTailer', () => {
   });
 
   afterEach(() => {
-    try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   // ─── 已存在文件 ─────────────────────────────────────────────

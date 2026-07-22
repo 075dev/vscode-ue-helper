@@ -144,7 +144,12 @@ export function callTool(name: string, args: Record<string, unknown>): string {
       const mode: 'build' | 'rebuild' | 'clean' =
         rawMode === 'rebuild' || rawMode === 'clean' ? rawMode : 'build';
       dispatch(executeBuild(mode, config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, mode, note: 'fire-and-forget; see logger' });
+      return JSON.stringify({
+        ok: true,
+        dispatched: name,
+        mode,
+        note: 'fire-and-forget; see logger',
+      });
     }
     case 'ue_launch_editor':
       dispatch(executeLaunchEditor(config, logger, detection, workspace, true), name);
@@ -159,7 +164,10 @@ export function callTool(name: string, args: Record<string, unknown>): string {
       dispatch(showProjectInfo(config, logger, detection, workspace, true), name);
       return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_set_system_includes':
-      dispatch(executeSetSystemIncludes(config, logger, detection, workspace, clangdOps, true), name);
+      dispatch(
+        executeSetSystemIncludes(config, logger, detection, workspace, clangdOps, true),
+        name,
+      );
       return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     default:
       return JSON.stringify({ ok: false, error: `Unknown tool: ${name}` });

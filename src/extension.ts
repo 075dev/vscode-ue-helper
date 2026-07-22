@@ -41,7 +41,11 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // 项目/引擎/路径信息，统一派生路径 get 函数 + 去重错误通知。
     // [Phase 9 SSoT] 注入 WorkspaceContext，selected* getter 才生效；收敛 29 处
     //   `detection.workspaceContext.*` 调用全部到 workspace.selected* / setSelected*。
-    const workspace = new WorkspaceState({ detection, logger, workspaceContext: detection.workspaceContext });
+    const workspace = new WorkspaceState({
+      detection,
+      logger,
+      workspaceContext: detection.workspaceContext,
+    });
 
     // [Phase 8 架构] ClangdOps 统一 .clangd 操作 API（mutate / setAddFlag / replaceAddBlock）
     // [Phase 9 SSoT] 实际 API: readConfig / exists / writeFull / mutate / applyAddFlags（无 setAddFlag / replaceAddBlock）
@@ -58,15 +62,25 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 
     // [first-time-init] 首次打开插件时检测 + 弹窗 + 初始化编排
     // fire-and-forget：内部会 await，但激活主流程不应被阻塞
-    void runFirstTimeInit({ context, config, logger, detection, clangd, workspace, clangdOps }, context)
-      .catch((err: unknown) => logger.error('[firstRunInit] unexpected error:', err));
+    void runFirstTimeInit(
+      { context, config, logger, detection, clangd, workspace, clangdOps },
+      context,
+    ).catch((err: unknown) => logger.error('[firstRunInit] unexpected error:', err));
 
     // [T2.7] workspace + clangdOps 已 implements vscode.Disposable
     // 接入 context.subscriptions 让 deactivate 时随 extension 一起释放
     context.subscriptions.push(workspace);
     context.subscriptions.push(clangdOps);
 
-    ControlPanelProvider.register({ context, config, logger, detection, workspace, clangd, clangdOps });
+    ControlPanelProvider.register({
+      context,
+      config,
+      logger,
+      detection,
+      workspace,
+      clangd,
+      clangdOps,
+    });
 
     const elapsed = Date.now() - activationStart;
     logger.info(`VSCodeUEHelper activated in ${elapsed}ms`);
@@ -109,6 +123,10 @@ export function deactivate(): void {
   logger?.info('Deactivating VSCodeUEHelper...');
   while (disposables.length) {
     const d = disposables.pop();
-    try { d?.dispose(); } catch { /* ignore */ }
+    try {
+      d?.dispose();
+    } catch {
+      /* ignore */
+    }
   }
 }

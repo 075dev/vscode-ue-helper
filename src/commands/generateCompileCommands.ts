@@ -53,7 +53,8 @@ export async function executeGenerateCompileCommands(
   if (!silent) {
     project = (await pickProject(projects)) ?? projects[0];
   } else {
-    project = workspace?.resolveSelectedProject(projects) ??
+    project =
+      workspace?.resolveSelectedProject(projects) ??
       ((): ProjectInfo | undefined => {
         const sp = detection.workspaceContext.getSelectedProject();
         return sp ? projects.find((p) => p.path === sp) : undefined;

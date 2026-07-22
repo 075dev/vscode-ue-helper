@@ -71,7 +71,9 @@ describe('compileCommands 5 阶段细化插桩 (Phase 7 PLAN B / per D-03)', () 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  function eventsByName(name: string): Array<{ event: string; elapsedMs: number; meta?: Record<string, unknown> }> {
+  function eventsByName(
+    name: string,
+  ): Array<{ event: string; elapsedMs: number; meta?: Record<string, unknown> }> {
     return recordCalls.filter((c) => c.event === name);
   }
 
@@ -125,7 +127,9 @@ describe('compileCommands 5 阶段细化插桩 (Phase 7 PLAN B / per D-03)', () 
     const src = await fs.readFile(compileCommandsSrcPath, 'utf-8');
     expect(src).toContain("event: 'compileCommands.candidatesScanned'");
     // meta.candidateCount 字段
-    expect(src).toMatch(/event:\s*'compileCommands\.candidatesScanned'[\s\S]*?meta:\s*\{[^}]*candidateCount/);
+    expect(src).toMatch(
+      /event:\s*'compileCommands\.candidatesScanned'[\s\S]*?meta:\s*\{[^}]*candidateCount/,
+    );
   });
 
   it('阶段 4：compileCommands.linkToWorkspaceRoot 埋点存在（运行时已验证 succeeded=true + skipped=true）', async () => {

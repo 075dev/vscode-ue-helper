@@ -40,14 +40,8 @@ export function getLocale(): Locale {
  * 占位符值支持 string 与 number(后者在 replace 时由 JS 自动 toString),
  * 便于调用方直接传计数等数值而无需显式 String() 包装。
  */
-export function t(
-  key: TranslationKey,
-  params?: Record<string, string | number>,
-): string;
-export function t(
-  key: string,
-  params?: Record<string, string | number>,
-): string;
+export function t(key: TranslationKey, params?: Record<string, string | number>): string;
+export function t(key: string, params?: Record<string, string | number>): string;
 export function t(key: string, params?: Record<string, string | number>): string {
   const lookup = (locale: Locale): string | undefined => {
     const dict = locales[locale] as Record<string, string>;

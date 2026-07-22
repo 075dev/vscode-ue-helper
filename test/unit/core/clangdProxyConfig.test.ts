@@ -20,7 +20,9 @@ function setupMockConfig(values: Record<string, unknown>): void {
     return def;
   });
 
-  (vi.mocked(vscode.workspace.getConfiguration) as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+  (
+    vi.mocked(vscode.workspace.getConfiguration) as unknown as ReturnType<typeof vi.fn>
+  ).mockReturnValue({
     get: mockGet,
     update: vi.fn(),
   });
@@ -123,7 +125,6 @@ describe('ClangdProxyConfig', () => {
       const config = new Config();
       expect(config.clangdProxyLocalizationMode).toBe('append');
     });
-
   });
 
   describe('clamp 逻辑：无效数值 clamp 到安全默认值', () => {

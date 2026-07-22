@@ -35,11 +35,7 @@ import { IncrementalFileWatcher } from './fileWatcher';
 
 // [Phase 9 SSoT] clangd 模块内部允许 import 自己的 clangdConfig（仅产出 config 对象 + YAML 字符串，无 fs 副作用）
 // eslint-disable-next-line no-restricted-imports
-export {
-  defaultClangdConfig,
-  renderClangdConfig,
-  type ClangdConfigOptions,
-} from './clangdConfig';
+export { defaultClangdConfig, renderClangdConfig, type ClangdConfigOptions } from './clangdConfig';
 export {
   resolveFlags,
   getGlossaryForWebview,
@@ -51,10 +47,27 @@ export {
   type WireFlagEntry,
   type ResolveContext,
 } from './flagGlossary';
-export { generateCompileCommands, linkToWorkspaceRoot, isClangdAvailable, fillMissingCompileCommands } from './compileCommands';
-export { generateFallbackCompileCommands, type FallbackOptions, type FallbackResult } from './compileCommandsFallback';
-export { collectIntermediateUhtDirs, type IntermediateUhtCollectorOptions } from './intermediateUhtCollector';
-export { runUhtCodegen, type UhtResult, type RunUhtCodegenOptions, type MinimalLogger } from './uhtGeneration';
+export {
+  generateCompileCommands,
+  linkToWorkspaceRoot,
+  isClangdAvailable,
+  fillMissingCompileCommands,
+} from './compileCommands';
+export {
+  generateFallbackCompileCommands,
+  type FallbackOptions,
+  type FallbackResult,
+} from './compileCommandsFallback';
+export {
+  collectIntermediateUhtDirs,
+  type IntermediateUhtCollectorOptions,
+} from './intermediateUhtCollector';
+export {
+  runUhtCodegen,
+  type UhtResult,
+  type RunUhtCodegenOptions,
+  type MinimalLogger,
+} from './uhtGeneration';
 export {
   createCompletionFiles,
   addCompletionHelperToCompileCommands,
@@ -73,7 +86,11 @@ export {
   toIncludeFlags,
 } from './preparseIncludes';
 export { WorkspaceBackup } from './workspaceBackup';
-export { CompletionModeController, type CompletionModeProjectContext, type RewriteResult } from './completionMode';
+export {
+  CompletionModeController,
+  type CompletionModeProjectContext,
+  type RewriteResult,
+} from './completionMode';
 export {
   discoverSystemIncludes,
   listMsvcVersions,

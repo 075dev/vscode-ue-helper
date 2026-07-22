@@ -185,7 +185,8 @@ function createWorkspaceMock(opts?: {
   workspaceFile?: string | null;
 }): WorkspaceState {
   const project = opts?.project === undefined ? createProjectInfo() : opts.project;
-  const workspaceFile = opts?.workspaceFile === undefined ? '/fake/proj/MyProject.code-workspace' : opts.workspaceFile;
+  const workspaceFile =
+    opts?.workspaceFile === undefined ? '/fake/proj/MyProject.code-workspace' : opts.workspaceFile;
   const state = {
     get isInjected() {
       return true;
@@ -330,7 +331,12 @@ describe('markInitializedInWorkspace', () => {
     let writtenContent: string | undefined;
     readFileMock.mockResolvedValue(originalJson);
     writeFileMock.mockImplementation((_path: string, data: string | NodeJS.ArrayBufferView) => {
-      writtenContent = typeof data === 'string' ? data : Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+      writtenContent =
+        typeof data === 'string'
+          ? data
+          : Buffer.isBuffer(data)
+            ? data.toString('utf-8')
+            : String(data);
       return Promise.resolve(undefined);
     });
     renameMock.mockResolvedValue(undefined);
@@ -350,7 +356,12 @@ describe('markInitializedInWorkspace', () => {
     let writtenContent: string | undefined;
     readFileMock.mockResolvedValue(originalJson);
     writeFileMock.mockImplementation((_path: string, data: string | NodeJS.ArrayBufferView) => {
-      writtenContent = typeof data === 'string' ? data : Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+      writtenContent =
+        typeof data === 'string'
+          ? data
+          : Buffer.isBuffer(data)
+            ? data.toString('utf-8')
+            : String(data);
       return Promise.resolve(undefined);
     });
     renameMock.mockResolvedValue(undefined);
@@ -366,9 +377,9 @@ describe('markInitializedInWorkspace', () => {
     readFileMock.mockResolvedValue('{}');
     writeFileMock.mockRejectedValue(new Error('EACCES: permission denied'));
 
-    await expect(markInitializedInWorkspace('/fake/proj/LockedProject.code-workspace')).rejects.toThrow(
-      /EACCES|permission/i,
-    );
+    await expect(
+      markInitializedInWorkspace('/fake/proj/LockedProject.code-workspace'),
+    ).rejects.toThrow(/EACCES|permission/i);
   });
 });
 
@@ -390,7 +401,9 @@ describe('runFirstTimeInit failure semantics', () => {
     workspace = createWorkspaceMock();
 
     // 默认展示信息 + 用户点 Initialize
-    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue('Initialize');
+    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      'Initialize',
+    );
   });
 
   it('does not call executeEnableClangdProxy when executeCreateProject throws', async () => {
@@ -405,7 +418,9 @@ describe('runFirstTimeInit failure semantics', () => {
     expect(result).toBe('fail');
     expect(executeCreateProjectMock).toHaveBeenCalledOnce();
     expect(executeEnableClangdProxyMock).not.toHaveBeenCalled();
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('workbench.action.reloadWindow');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'workbench.action.reloadWindow',
+    );
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('mock createProject failure'),
     );
@@ -423,7 +438,9 @@ describe('runFirstTimeInit failure semantics', () => {
     expect(result).toBe('fail');
     expect(executeCreateProjectMock).toHaveBeenCalledOnce();
     expect(executeEnableClangdProxyMock).toHaveBeenCalledOnce();
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('workbench.action.reloadWindow');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'workbench.action.reloadWindow',
+    );
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('mock proxy failure'),
     );
@@ -447,7 +464,9 @@ describe('runFirstTimeInit happy path', () => {
     clangd = createClangdHandlesMock();
     workspace = createWorkspaceMock();
 
-    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue('Initialize');
+    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      'Initialize',
+    );
   });
 
   it('runs both steps, writes marker, then reloads window', async () => {
@@ -490,12 +509,9 @@ describe('runFirstTimeInit happy path', () => {
     );
 
     expect(result).toBe('init');
-    expect(executeEnableClangdProxyMock).toHaveBeenCalledWith(
-      config,
-      logger,
-      clangd,
-      { suppressReloadPrompt: true },
-    );
+    expect(executeEnableClangdProxyMock).toHaveBeenCalledWith(config, logger, clangd, {
+      suppressReloadPrompt: true,
+    });
   });
 });
 

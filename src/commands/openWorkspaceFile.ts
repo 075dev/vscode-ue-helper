@@ -22,9 +22,12 @@ export async function executeOpenWorkspaceFile(workspace?: WorkspaceState): Prom
   for (const folder of folders) {
     try {
       // folder 是 WorkspaceFolderInfo（无 uri）| vscode.WorkspaceFolder（有 uri）—— 处理两种形态
-      const folderPath = (folder as { uri?: { fsPath: string }; absPath?: string }).uri?.fsPath
-        ?? (folder as { absPath?: string }).absPath;
-      if (!folderPath) {continue;}
+      const folderPath =
+        (folder as { uri?: { fsPath: string }; absPath?: string }).uri?.fsPath ??
+        (folder as { absPath?: string }).absPath;
+      if (!folderPath) {
+        continue;
+      }
       const entries = await fs.readdir(folderPath);
       const ws = entries.find((e) => e.endsWith('.code-workspace'));
       if (ws) {

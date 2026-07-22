@@ -55,12 +55,20 @@ const mockState = vi.hoisted(() => {
   let mockWatcher: ReturnType<typeof createMockWatcher> = createMockWatcher();
   const watchMock = vi.fn((_patterns?: string | string[], _options?: unknown) => mockWatcher);
 
-  return { createMockWatcher, getMockWatcher: () => mockWatcher, setMockWatcher: (w: ReturnType<typeof createMockWatcher>) => { mockWatcher = w; }, watchMock };
+  return {
+    createMockWatcher,
+    getMockWatcher: () => mockWatcher,
+    setMockWatcher: (w: ReturnType<typeof createMockWatcher>) => {
+      mockWatcher = w;
+    },
+    watchMock,
+  };
 });
 
 vi.mock('chokidar', () => ({
   default: {
-    watch: (patterns: string | string[], options?: unknown) => mockState.watchMock(patterns, options),
+    watch: (patterns: string | string[], options?: unknown) =>
+      mockState.watchMock(patterns, options),
   },
   watch: (patterns: string | string[], options?: unknown) => mockState.watchMock(patterns, options),
 }));
@@ -150,7 +158,10 @@ describe('IncrementalFileWatcher (Phase 7 PLAN B / per D-15/D-16/D-17)', () => {
     const callArgs = mockState.watchMock.mock.calls[0]!;
     expect(callArgs[0]).toEqual(['/test/**/*.cpp']);
     // 验证 options.ignored 包含默认 + 自定义
-    const opts = callArgs[1] as { ignored: string[]; awaitWriteFinish: { stabilityThreshold: number } };
+    const opts = callArgs[1] as {
+      ignored: string[];
+      awaitWriteFinish: { stabilityThreshold: number };
+    };
     expect(opts.ignored).toContain('**/Intermediate/**');
     expect(opts.ignored).toContain('**/Binaries/**');
     expect(opts.ignored).toContain('**/MyExcludedDir/**');
@@ -186,7 +197,9 @@ describe('IncrementalFileWatcher (Phase 7 PLAN B / per D-15/D-16/D-17)', () => {
   it('重复 dispose 不抛错（幂等性）', () => {
     const { handle } = startWatcher();
     handle.dispose();
-    expect(() => { handle.dispose(); }).not.toThrow();
+    expect(() => {
+      handle.dispose();
+    }).not.toThrow();
   });
 
   it('add/change/unlink 三个事件统一入队（per D-15）', async () => {

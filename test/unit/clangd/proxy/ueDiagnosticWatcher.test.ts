@@ -14,10 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  validateUbtArgs,
-  UBTArgsValidationError,
-} from '@clangd/proxy/ueDiagnosticWatcher';
+import { validateUbtArgs, UBTArgsValidationError } from '@clangd/proxy/ueDiagnosticWatcher';
 
 describe('validateUbtArgs (T5.2)', () => {
   it('accepts plain UE target name', () => {
@@ -33,27 +30,39 @@ describe('validateUbtArgs (T5.2)', () => {
   });
 
   it('rejects target with shell metacharacter &', () => {
-    expect(() => validateUbtArgs('MyTarget&rm -rf /', 'C:/x.uproject')).toThrow(UBTArgsValidationError);
+    expect(() => validateUbtArgs('MyTarget&rm -rf /', 'C:/x.uproject')).toThrow(
+      UBTArgsValidationError,
+    );
   });
 
   it('rejects target with shell pipe |', () => {
-    expect(() => validateUbtArgs('MyTarget|cat /etc/passwd', 'C:/x.uproject')).toThrow(UBTArgsValidationError);
+    expect(() => validateUbtArgs('MyTarget|cat /etc/passwd', 'C:/x.uproject')).toThrow(
+      UBTArgsValidationError,
+    );
   });
 
   it('rejects target with command substitution $()', () => {
-    expect(() => validateUbtArgs('MyTarget$(whoami)', 'C:/x.uproject')).toThrow(UBTArgsValidationError);
+    expect(() => validateUbtArgs('MyTarget$(whoami)', 'C:/x.uproject')).toThrow(
+      UBTArgsValidationError,
+    );
   });
 
   it('rejects target with backticks (command substitution)', () => {
-    expect(() => validateUbtArgs('MyTarget`whoami`', 'C:/x.uproject')).toThrow(UBTArgsValidationError);
+    expect(() => validateUbtArgs('MyTarget`whoami`', 'C:/x.uproject')).toThrow(
+      UBTArgsValidationError,
+    );
   });
 
   it('rejects target with newline (argv injection)', () => {
-    expect(() => validateUbtArgs('MyTarget\n--injected-flag', 'C:/x.uproject')).toThrow(UBTArgsValidationError);
+    expect(() => validateUbtArgs('MyTarget\n--injected-flag', 'C:/x.uproject')).toThrow(
+      UBTArgsValidationError,
+    );
   });
 
   it('rejects target with quote characters', () => {
-    expect(() => validateUbtArgs('MyTarget"--inject', 'C:/x.uproject')).toThrow(UBTArgsValidationError);
+    expect(() => validateUbtArgs('MyTarget"--inject', 'C:/x.uproject')).toThrow(
+      UBTArgsValidationError,
+    );
   });
 
   it('rejects projectFile with shell metacharacter', () => {

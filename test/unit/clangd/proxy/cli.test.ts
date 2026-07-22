@@ -20,13 +20,19 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('解析完整参数集（含 -- 分隔符）', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--keepalive-max', '50',
-      '--keepalive-ttl-sec', '300',
-      '--real-clangd', '/usr/bin/clangd',
-      '--log-path', '/tmp/proxy.log',
+      'node',
+      'proxy.js',
+      '--keepalive-max',
+      '50',
+      '--keepalive-ttl-sec',
+      '300',
+      '--real-clangd',
+      '/usr/bin/clangd',
+      '--log-path',
+      '/tmp/proxy.log',
       '--localization-enabled',
-      '--localization-mode', 'zh-only',
+      '--localization-mode',
+      'zh-only',
       '--',
       '--background-index',
       '--header-insertion=never',
@@ -65,10 +71,7 @@ describe('parseArgs — CLI 参数解析', () => {
   // ─── 无 -- 分隔符 ─────────────────────────────────────────────
 
   it('无 -- 分隔符时 realClangdArgs 为空数组', () => {
-    const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', '/usr/bin/clangd',
-    ]);
+    const result = parseArgs(['node', 'proxy.js', '--real-clangd', '/usr/bin/clangd']);
 
     expect(result.errors).toHaveLength(0);
     expect(result.options.realClangdArgs).toEqual([]);
@@ -77,10 +80,7 @@ describe('parseArgs — CLI 参数解析', () => {
   // ─── 默认值 ───────────────────────────────────────────────────
 
   it('未指定代理参数时使用默认值', () => {
-    const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', '/usr/bin/clangd',
-    ]);
+    const result = parseArgs(['node', 'proxy.js', '--real-clangd', '/usr/bin/clangd']);
 
     expect(result.options.keepaliveMax).toBe(20);
     expect(result.options.keepaliveTtlSec).toBe(900);
@@ -93,9 +93,12 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('未知代理参数返回错误信息', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--unknown-arg', 'value',
-      '--real-clangd', '/usr/bin/clangd',
+      'node',
+      'proxy.js',
+      '--unknown-arg',
+      'value',
+      '--real-clangd',
+      '/usr/bin/clangd',
     ]);
 
     expect(result.errors.length).toBeGreaterThan(0);
@@ -108,9 +111,12 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('--real-clangd 是最后一个代理参数时正确解析', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--keepalive-max', '10',
-      '--real-clangd', '/usr/bin/clangd',
+      'node',
+      'proxy.js',
+      '--keepalive-max',
+      '10',
+      '--real-clangd',
+      '/usr/bin/clangd',
       '--',
       '--compile-commands-dir=build',
     ]);
@@ -124,11 +130,7 @@ describe('parseArgs — CLI 参数解析', () => {
   // ─── 仅 -- 分隔符 ─────────────────────────────────────────────
 
   it('仅有 -- 分隔符且无 real clangd 参数时 realClangdArgs 为空', () => {
-    const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', '/usr/bin/clangd',
-      '--',
-    ]);
+    const result = parseArgs(['node', 'proxy.js', '--real-clangd', '/usr/bin/clangd', '--']);
 
     expect(result.errors).toHaveLength(0);
     expect(result.options.realClangdArgs).toEqual([]);
@@ -138,9 +140,12 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('--keepalive-max 非数字值时使用默认值', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--keepalive-max', 'not-a-number',
-      '--real-clangd', '/usr/bin/clangd',
+      'node',
+      'proxy.js',
+      '--keepalive-max',
+      'not-a-number',
+      '--real-clangd',
+      '/usr/bin/clangd',
     ]);
 
     expect(result.options.keepaliveMax).toBe(20);
@@ -150,9 +155,12 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('--keepalive-ttl-sec 非数字值时使用默认值', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--keepalive-ttl-sec', 'abc',
-      '--real-clangd', '/usr/bin/clangd',
+      'node',
+      'proxy.js',
+      '--keepalive-ttl-sec',
+      'abc',
+      '--real-clangd',
+      '/usr/bin/clangd',
     ]);
 
     expect(result.options.keepaliveTtlSec).toBe(900);
@@ -162,9 +170,12 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('--localization-mode 无效值时使用默认值', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--localization-mode', 'invalid',
-      '--real-clangd', '/usr/bin/clangd',
+      'node',
+      'proxy.js',
+      '--localization-mode',
+      'invalid',
+      '--real-clangd',
+      '/usr/bin/clangd',
     ]);
 
     expect(result.options.localizationMode).toBe('append');
@@ -173,10 +184,7 @@ describe('parseArgs — CLI 参数解析', () => {
   // ─── --localization-targets 空值 ──────────────────────────────
 
   it('--localization-targets 参数已移除（默认全开）', () => {
-    const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', '/usr/bin/clangd',
-    ]);
+    const result = parseArgs(['node', 'proxy.js', '--real-clangd', '/usr/bin/clangd']);
 
     // --localization-targets 参数已删除，--localization-enabled 未传时默认禁用
     expect(result.options.localizationEnabled).toBe(false);
@@ -186,11 +194,14 @@ describe('parseArgs — CLI 参数解析', () => {
 
   it('--localization-enabled 启用本地化并指定模式与目标', () => {
     const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', '/usr/bin/clangd',
+      'node',
+      'proxy.js',
+      '--real-clangd',
+      '/usr/bin/clangd',
       '--localization-enabled',
-      '--localization-mode', 'append',
-          ]);
+      '--localization-mode',
+      'append',
+    ]);
 
     expect(result.options.localizationEnabled).toBe(true);
     expect(result.options.localizationMode).toBe('append');
@@ -199,10 +210,7 @@ describe('parseArgs — CLI 参数解析', () => {
   // ─── 仅 --real-clangd 路径 ────────────────────────────────────
 
   it('最简参数：仅 --real-clangd', () => {
-    const result = parseArgs([
-      'node', 'proxy.js',
-      '--real-clangd', 'clangd.exe',
-    ]);
+    const result = parseArgs(['node', 'proxy.js', '--real-clangd', 'clangd.exe']);
 
     expect(result.errors).toHaveLength(0);
     expect(result.options.realClangd).toBe('clangd.exe');

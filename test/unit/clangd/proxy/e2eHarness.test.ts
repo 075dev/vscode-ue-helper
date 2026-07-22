@@ -158,13 +158,17 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   // ─── 场景 1: Initialize 握手 ──────────────────────────────────
 
   it('场景1: initialize 请求转发到服务器，响应透传到客户端', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 1, method: 'initialize',
-      params: {
-        processId: 123,
-        capabilities: { textDocument: { hover: { contentFormat: ['markdown'] } } },
-      },
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          processId: 123,
+          capabilities: { textDocument: { hover: { contentFormat: ['markdown'] } } },
+        },
+      }),
+    );
 
     expect(transport.sent).toHaveLength(1);
     const sentMsgs = parseFrames(transport.sent);
@@ -172,16 +176,19 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     expect(sentMsgs[0]?.method).toBe('initialize');
     expect(sentMsgs[0]?.id).toBe(1);
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 1,
-      result: {
-        capabilities: {
-          textDocumentSync: 1,
-          hoverProvider: true,
-          codeActionProvider: true,
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          capabilities: {
+            textDocumentSync: 1,
+            hoverProvider: true,
+            codeActionProvider: true,
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const respMsgs = parseFrames(clientOutput);
@@ -197,10 +204,13 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
 
   it('场景2: didOpen 通知转发到服务器', () => {
     const uri = 'file:///test.cpp';
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didOpen',
-      params: didOpenParams(uri, 'int main() {}', 1),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: didOpenParams(uri, 'int main() {}', 1),
+      }),
+    );
 
     expect(transport.sent).toHaveLength(1);
     const msgs = parseFrames(transport.sent);
@@ -215,10 +225,13 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   // ─── 场景 3: didClose 保活延迟 ────────────────────────────────
 
   it('场景3: didClose 被保活，不立即转发到服务器', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///test.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///test.cpp'),
+      }),
+    );
 
     expect(transport.sent).toHaveLength(0);
   });
@@ -228,16 +241,22 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   it('场景4: 保活 URI 重新打开时转发 didChange 而非 didOpen', () => {
     const uri = 'file:///test.cpp';
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams(uri),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams(uri),
+      }),
+    );
     expect(transport.sent).toHaveLength(0);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didOpen',
-      params: didOpenParams(uri, 'int x = 42;', 2),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: didOpenParams(uri, 'int x = 42;', 2),
+      }),
+    );
 
     expect(transport.sent).toHaveLength(1);
     const msgs = parseFrames(transport.sent);
@@ -254,40 +273,62 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   it('场景5: 完整帧序列：initialize → didOpen → didClose → didOpen→didChange', () => {
     const uri = 'file:///main.cpp';
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 1, method: 'initialize', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {},
+      }),
+    );
     expect(transport.sent).toHaveLength(1);
     expect(parseFrames(transport.sent)[0]?.method).toBe('initialize');
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 1, result: { capabilities: {} },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { capabilities: {} },
+      }),
+    );
     expect(clientOutput).toHaveLength(1);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'initialized', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'initialized',
+        params: {},
+      }),
+    );
     expect(transport.sent).toHaveLength(2);
     expect(parseFrames(transport.sent)[1]?.method).toBe('initialized');
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didOpen',
-      params: didOpenParams(uri, 'int main() { return 0; }', 1),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: didOpenParams(uri, 'int main() { return 0; }', 1),
+      }),
+    );
     expect(transport.sent).toHaveLength(3);
     expect(parseFrames(transport.sent)[2]?.method).toBe('textDocument/didOpen');
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams(uri),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams(uri),
+      }),
+    );
     expect(transport.sent).toHaveLength(3);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didOpen',
-      params: didOpenParams(uri, 'int main() { return 1; }', 2),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: didOpenParams(uri, 'int main() { return 1; }', 2),
+      }),
+    );
     expect(transport.sent).toHaveLength(4);
     expect(parseFrames(transport.sent)[3]?.method).toBe('textDocument/didChange');
   });
@@ -298,23 +339,30 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     bridge = createLocalizedBridge(transport);
     clientOutput = collectClientOutput(bridge);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 10, method: 'textDocument/hover',
-      params: {
-        textDocument: { uri: 'file:///test.cpp' },
-        position: { line: 5, character: 3 },
-      },
-    }));
-
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 10,
-      result: {
-        contents: {
-          kind: 'markdown',
-          value: "use of undeclared identifier 'Foo'",
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'textDocument/hover',
+        params: {
+          textDocument: { uri: 'file:///test.cpp' },
+          position: { line: 5, character: 3 },
         },
-      },
-    }));
+      }),
+    );
+
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 10,
+        result: {
+          contents: {
+            kind: 'markdown',
+            value: "use of undeclared identifier 'Foo'",
+          },
+        },
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const msgs = parseFrames(clientOutput);
@@ -330,23 +378,30 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     bridge = createLocalizedBridge(transport, 'zh-only');
     clientOutput = collectClientOutput(bridge);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 11, method: 'textDocument/hover',
-      params: {
-        textDocument: { uri: 'file:///test.cpp' },
-        position: { line: 0, character: 0 },
-      },
-    }));
-
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 11,
-      result: {
-        contents: {
-          kind: 'markdown',
-          value: "unknown type name 'FMyClass'",
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 11,
+        method: 'textDocument/hover',
+        params: {
+          textDocument: { uri: 'file:///test.cpp' },
+          position: { line: 0, character: 0 },
         },
-      },
-    }));
+      }),
+    );
+
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 11,
+        result: {
+          contents: {
+            kind: 'markdown',
+            value: "unknown type name 'FMyClass'",
+          },
+        },
+      }),
+    );
 
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Record<string, unknown> | undefined;
@@ -362,37 +417,47 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     bridge = createLocalizedBridge(transport);
     clientOutput = collectClientOutput(bridge);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 20, method: 'textDocument/codeAction',
-      params: {
-        textDocument: { uri: 'file:///test.cpp' },
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        context: { diagnostics: [] },
-      },
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 20,
+        method: 'textDocument/codeAction',
+        params: {
+          textDocument: { uri: 'file:///test.cpp' },
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          context: { diagnostics: [] },
+        },
+      }),
+    );
 
     const editData = {
       changes: {
         'file:///test.cpp': [
-          { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'int x;' },
+          {
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+            newText: 'int x;',
+          },
         ],
       },
     };
     const commandData = { command: 'test.command', title: 'Test', arguments: [42] };
     const dataPayload = { someData: 'preserved' };
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 20,
-      result: [
-        {
-          title: "use of undeclared identifier 'Foo'",
-          kind: 'quickfix',
-          edit: editData,
-          command: commandData,
-          data: dataPayload,
-        },
-      ],
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 20,
+        result: [
+          {
+            title: "use of undeclared identifier 'Foo'",
+            kind: 'quickfix',
+            edit: editData,
+            command: commandData,
+            data: dataPayload,
+          },
+        ],
+      }),
+    );
 
     const msgs = parseFrames(clientOutput);
     const result = msgs[0]?.result as Array<Record<string, unknown>> | undefined;
@@ -409,24 +474,27 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
     bridge = createLocalizedBridge(transport);
     clientOutput = collectClientOutput(bridge);
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: {
-        uri: 'file:///test.cpp',
-        diagnostics: [
-          {
-            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
-            severity: 1,
-            message: "use of undeclared identifier 'Foo'",
-          },
-          {
-            range: { start: { line: 1, character: 0 }, end: { line: 1, character: 10 } },
-            severity: 1,
-            message: "unknown type name 'FMyClass'",
-          },
-        ],
-      },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/publishDiagnostics',
+        params: {
+          uri: 'file:///test.cpp',
+          diagnostics: [
+            {
+              range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+              severity: 1,
+              message: "use of undeclared identifier 'Foo'",
+            },
+            {
+              range: { start: { line: 1, character: 0 }, end: { line: 1, character: 10 } },
+              severity: 1,
+              message: "unknown type name 'FMyClass'",
+            },
+          ],
+        },
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const msgs = parseFrames(clientOutput);
@@ -443,10 +511,13 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   // ─── 场景 9: 失败路径 —— bridge.close 刷新待处理 didClose ────
 
   it('场景9: bridge.close 刷新待处理 didClose', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///pending.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///pending.cpp'),
+      }),
+    );
 
     expect(transport.sent).toHaveLength(0);
 
@@ -462,25 +533,33 @@ describe('E2E: clangd LSP 代理冒烟测试', () => {
   // ─── 场景 10: 失败路径 —— bridge.handleSignal 刷新 ───────────
 
   it('场景10: handleSignal 刷新所有待处理 didClose', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///sig1.cpp'),
-    }));
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///sig2.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///sig1.cpp'),
+      }),
+    );
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///sig2.cpp'),
+      }),
+    );
 
     bridge.handleSignal();
 
     expect(transport.sent).toHaveLength(2);
     const msgs = parseFrames(transport.sent);
     expect(msgs).toHaveLength(2);
-    expect(msgs.map((m) => {
-      const p = m.params as Record<string, unknown> | undefined;
-      const td = p?.textDocument as Record<string, unknown> | undefined;
-      return td?.uri;
-    })).toEqual(['file:///sig1.cpp', 'file:///sig2.cpp']);
+    expect(
+      msgs.map((m) => {
+        const p = m.params as Record<string, unknown> | undefined;
+        const td = p?.textDocument as Record<string, unknown> | undefined;
+        return td?.uri;
+      }),
+    ).toEqual(['file:///sig1.cpp', 'file:///sig2.cpp']);
   });
 });
 
@@ -508,7 +587,9 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
     const processBridge = new ProcessBridge({
       clangdPath: '/fake/clangd',
       clangdArgs: ['--background-index'],
-      log: (msg: string) => { logs.push(msg); },
+      log: (msg: string) => {
+        logs.push(msg);
+      },
       spawnFn: fakeSpawn,
     });
 
@@ -523,10 +604,14 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
     bridge.onClientOutput((frame) => clientOutput.push(frame));
 
     // 客户端发送 initialize 请求
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 1, method: 'initialize',
-      params: { processId: 123, capabilities: {} },
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: 123, capabilities: {} },
+      }),
+    );
 
     // 验证请求通过 ProcessBridge 写入子进程 stdin
     expect(fakeChild.stdinWriteCalls).toHaveLength(1);
@@ -535,36 +620,48 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
     expect(sentMsgs[0]?.method).toBe('initialize');
 
     // 模拟子进程 stdout 返回 initialize 响应
-    fakeChild.stdout.emit('data', encodeMessage({
-      jsonrpc: '2.0', id: 1,
-      result: { capabilities: { hoverProvider: true } },
-    }));
+    fakeChild.stdout.emit(
+      'data',
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { capabilities: { hoverProvider: true } },
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const initResp = parseFrames(clientOutput);
     expect(initResp[0]?.id).toBe(1);
 
     // 客户端发送 hover 请求
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 2, method: 'textDocument/hover',
-      params: {
-        textDocument: { uri: 'file:///test.cpp' },
-        position: { line: 5, character: 3 },
-      },
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'textDocument/hover',
+        params: {
+          textDocument: { uri: 'file:///test.cpp' },
+          position: { line: 5, character: 3 },
+        },
+      }),
+    );
 
     expect(fakeChild.stdinWriteCalls).toHaveLength(2);
 
     // 模拟子进程 stdout 返回 hover 响应（英文原文）
-    fakeChild.stdout.emit('data', encodeMessage({
-      jsonrpc: '2.0', id: 2,
-      result: {
-        contents: {
-          kind: 'markdown',
-          value: "use of undeclared identifier 'Foo'",
+    fakeChild.stdout.emit(
+      'data',
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 2,
+        result: {
+          contents: {
+            kind: 'markdown',
+            value: "use of undeclared identifier 'Foo'",
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(clientOutput).toHaveLength(2);
     const hoverResp = parseFrames(clientOutput.slice(1));
@@ -586,16 +683,24 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
 
   it('场景12: runProxy 完整管线：CLI 参数解析 → ProcessBridge → LspBridge → 本地化 hover', () => {
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: (code: number) => { exitCode = code; },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: (code: number) => {
+        exitCode = code;
+      },
     };
 
     const claim = runProxy(
       [
-        'node', 'proxy.js',
-        '--keepalive-max', '10',
-        '--keepalive-ttl-sec', '60',
-        '--real-clangd', '/fake/clangd',
+        'node',
+        'proxy.js',
+        '--keepalive-max',
+        '10',
+        '--keepalive-ttl-sec',
+        '60',
+        '--real-clangd',
+        '/fake/clangd',
         '--localization-enabled',
         '--',
         '--background-index',
@@ -624,15 +729,15 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
 
   it('场景13: 子进程提前退出（code=1）触发 io.exit(1)，不挂起', () => {
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: (code: number) => { exitCode = code; },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: (code: number) => {
+        exitCode = code;
+      },
     };
 
-    runProxy(
-      ['node', 'proxy.js', '--real-clangd', '/fake/clangd'],
-      io,
-      fakeSpawn,
-    );
+    runProxy(['node', 'proxy.js', '--real-clangd', '/fake/clangd'], io, fakeSpawn);
 
     // 模拟子进程提前退出（非零码）
     fakeChild.emit('close', 1, null);
@@ -651,15 +756,15 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
 
   it('场景14: 子进程 error 事件触发 io.exit(1)，不挂起', () => {
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: (code: number) => { exitCode = code; },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: (code: number) => {
+        exitCode = code;
+      },
     };
 
-    runProxy(
-      ['node', 'proxy.js', '--real-clangd', '/fake/clangd'],
-      io,
-      fakeSpawn,
-    );
+    runProxy(['node', 'proxy.js', '--real-clangd', '/fake/clangd'], io, fakeSpawn);
 
     // 模拟子进程 error
     fakeChild.emit('error', new Error('ENOENT'));
@@ -675,8 +780,12 @@ describe('E2E: 进程级冒烟测试（ProcessBridge + runProxy）', () => {
 
   it('场景15: spawn 抛出异常时 runProxy 返回 error DoneClaim', () => {
     const io: CliIo = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: (code: number) => { exitCode = code; },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: (code: number) => {
+        exitCode = code;
+      },
     };
 
     const throwingSpawn = (() => {

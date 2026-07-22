@@ -89,7 +89,9 @@ export function parseArgs(argv: string[]): ParseArgsResult {
 
   while (i < proxyArgs.length) {
     const arg = proxyArgs[i];
-    if (arg === undefined) {break;}
+    if (arg === undefined) {
+      break;
+    }
     if (!arg.startsWith('--')) {
       i++;
       continue;

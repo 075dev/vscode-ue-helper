@@ -33,12 +33,18 @@ export interface ResolveOpts {
 }
 
 /** legacy fallback:从 detection.workspaceContext 读 selection 缓存 */
-function legacyFindProject(detection: DetectionHandles, projects: readonly ProjectInfo[]): ProjectInfo | undefined {
+function legacyFindProject(
+  detection: DetectionHandles,
+  projects: readonly ProjectInfo[],
+): ProjectInfo | undefined {
   const sp = detection.workspaceContext.getSelectedProject();
   return sp ? projects.find((p) => p.path === sp) : undefined;
 }
 
-function legacyFindEngine(detection: DetectionHandles, engines: readonly EngineInstall[]): EngineInstall | undefined {
+function legacyFindEngine(
+  detection: DetectionHandles,
+  engines: readonly EngineInstall[],
+): EngineInstall | undefined {
   const se = detection.workspaceContext.getSelectedEngine();
   return se ? engines.find((e) => e.path === se) : undefined;
 }
@@ -47,7 +53,8 @@ function legacyFindEngine(detection: DetectionHandles, engines: readonly EngineI
 export async function resolveProjectOrPick(opts: ResolveOpts): Promise<ProjectInfo | undefined> {
   const silent = opts.silent ?? false;
   const { projects } = await opts.detection.ready;
-  let project = opts.workspace?.resolveSelectedProject(projects) ?? legacyFindProject(opts.detection, projects);
+  let project =
+    opts.workspace?.resolveSelectedProject(projects) ?? legacyFindProject(opts.detection, projects);
   if (!project && projects.length === 1 && !silent) {
     project = projects[0];
   }
@@ -65,7 +72,8 @@ export async function resolveProjectOrPick(opts: ResolveOpts): Promise<ProjectIn
 export async function resolveEngineOrPick(opts: ResolveOpts): Promise<EngineInstall | undefined> {
   const silent = opts.silent ?? false;
   const engines = await opts.detection.discovery.discover();
-  let engine = opts.workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine(opts.detection, engines);
+  let engine =
+    opts.workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine(opts.detection, engines);
   if (!engine && engines.length === 1 && !silent) {
     engine = engines[0];
   }

@@ -44,7 +44,10 @@ const fakeCompletionContext: vscode.CompletionContext = {
   triggerCharacter: undefined,
 };
 
-function mockDocument(languageId: string, sourceWithCursor: string): {
+function mockDocument(
+  languageId: string,
+  sourceWithCursor: string,
+): {
   readonly document: MockTextDocument;
   readonly position: vscode.Position;
 } {
@@ -85,7 +88,12 @@ async function provideItems(
   sourceWithCursor: string,
 ): Promise<readonly MockCompletionItem[]> {
   const { document, position } = mockDocument(languageId, sourceWithCursor);
-  const result = await provider.provideCompletionItems(document, position, fakeCancellationToken, fakeCompletionContext);
+  const result = await provider.provideCompletionItems(
+    document,
+    position,
+    fakeCancellationToken,
+    fakeCompletionContext,
+  );
   if (!result) {
     return [];
   }
@@ -140,10 +148,10 @@ describe('UE 宏 completion provider (T6)', () => {
   });
 
   it('Given clangd 激活 When 注册 provider Then 覆盖 cpp/c/h/hpp 文档', () => {
-  const context = {
-    subscriptions: [],
-    asAbsolutePath: (relativePath: string) => relativePath,
-  } as unknown as vscode.ExtensionContext;
+    const context = {
+      subscriptions: [],
+      asAbsolutePath: (relativePath: string) => relativePath,
+    } as unknown as vscode.ExtensionContext;
     const config = mockConfig();
     const logger = new Logger('test');
 

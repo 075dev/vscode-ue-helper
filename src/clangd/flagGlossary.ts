@@ -18,11 +18,11 @@
  */
 
 export type FlagCategory =
-  | 'forced-include'   // /FI<ueClangdCompat.h>、/FI<macroCompletionHelper.h>
-  | 'standard'         // /std:c++20
-  | 'system-include'   // /X、/imsvc<...>、-fms-compatibility-version=
-  | 'preparse'         // -include <preparse header>
-  | 'uht-include';     // /I<Intermediate/.../Inc/UHT>
+  | 'forced-include' // /FI<ueClangdCompat.h>、/FI<macroCompletionHelper.h>
+  | 'standard' // /std:c++20
+  | 'system-include' // /X、/imsvc<...>、-fms-compatibility-version=
+  | 'preparse' // -include <preparse header>
+  | 'uht-include'; // /I<Intermediate/.../Inc/UHT>
 
 export type FlagSeverity = 'required' | 'recommended' | 'optional';
 
@@ -137,10 +137,7 @@ export function findFlagEntry(id: string): FlagEntry | undefined {
  *    它们由 setSystemIncludes 命令强制写入，不进入 glossary。
  *    因此本函数不处理 windowsSdk 渲染逻辑——调用方在外部组装 ids 时直接带 'system-include-windows'。
  */
-export function resolveFlags(
-  ids: readonly string[],
-  ctx: ResolveContext = {},
-): string[] {
+export function resolveFlags(ids: readonly string[], ctx: ResolveContext = {}): string[] {
   const out: string[] = [];
 
   // 处理 dynamic id（无对应 FlagEntry 但语义已知）

@@ -11,9 +11,7 @@ import { ensureBackgroundIndexPriority } from '@clangd/proxyManager';
 
 describe('ensureBackgroundIndexPriority (P1-2)', () => {
   it('空参数列表追加 --background-index-priority=normal', () => {
-    expect(ensureBackgroundIndexPriority([])).toEqual([
-      '--background-index-priority=normal',
-    ]);
+    expect(ensureBackgroundIndexPriority([])).toEqual(['--background-index-priority=normal']);
   });
 
   it('未设置 priority 时保留原有参数并追加 normal', () => {

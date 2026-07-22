@@ -4,9 +4,14 @@
 
 import { t } from '@i18n';
 import {
-  BUTTON_GROUPS, COMMAND_MAP,
-  CONFIG_FIELDS, CONFIG_SELECTS, CONFIG_BOOLEANS,
-  PROXY_FIELDS, PROXY_SELECTS, PROXY_BOOLEANS,
+  BUTTON_GROUPS,
+  COMMAND_MAP,
+  CONFIG_FIELDS,
+  CONFIG_SELECTS,
+  CONFIG_BOOLEANS,
+  PROXY_FIELDS,
+  PROXY_SELECTS,
+  PROXY_BOOLEANS,
   type AddFlagWire,
 } from './controlPanelMessages';
 import type { ButtonGroup } from './controlPanelMessages';
@@ -584,7 +589,9 @@ function renderGroup(group: ButtonGroup): string {
   const buttonsHtml = group.buttons
     .map((btn) => {
       const cmdId = COMMAND_MAP[btn.id];
-      if (!cmdId) {return '';}
+      if (!cmdId) {
+        return '';
+      }
       const isPrimary = ['build', 'liveCoding', 'launchEditor'].includes(btn.id);
       return `<button class="panel-btn${isPrimary ? ' primary' : ''}" data-command="${btn.id}" title="${escapeHtml(t(btn.i18nKey))}"><span class="icon">${btn.icon}</span>${escapeHtml(t(btn.i18nKey))}</button>`;
     })
@@ -610,10 +617,12 @@ function renderFormField(prefix: string, field: string, isProxy: boolean): strin
   }
   if (field in selects) {
     const options = selects[field] ?? [];
-    const optsHtml = options.map((opt) => {
-      const label = opt.labelKey ? t(opt.labelKey) : (opt.label ?? opt.value);
-      return `<option value="${escapeHtml(opt.value)}">${escapeHtml(label)}</option>`;
-    }).join('\n        ');
+    const optsHtml = options
+      .map((opt) => {
+        const label = opt.labelKey ? t(opt.labelKey) : (opt.label ?? opt.value);
+        return `<option value="${escapeHtml(opt.value)}">${escapeHtml(label)}</option>`;
+      })
+      .join('\n        ');
     return `<div class="form-field"><label class="form-label" for="${prefix}${field}">${escapeHtml(t(labelKey))}</label><select id="${prefix}${field}">${optsHtml}</select></div>`;
   }
   const isNumber = field.includes('Max') || field.includes('Ttl') || field.includes('Sec');
@@ -621,5 +630,10 @@ function renderFormField(prefix: string, field: string, isProxy: boolean): strin
 }
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

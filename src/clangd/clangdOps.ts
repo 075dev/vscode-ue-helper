@@ -70,15 +70,23 @@ export class ClangdOps implements vscode.Disposable {
    */
   async readConfig(): Promise<ClangdConfig | null> {
     const target = this.workspace.clangdConfigPath;
-    if (!target) {return null;}
+    if (!target) {
+      return null;
+    }
     const text = await this.readText();
-    if (text === null) {return null;}
+    if (text === null) {
+      return null;
+    }
     try {
       const parsed: unknown = yaml.parse(text);
-      if (!parsed || typeof parsed !== 'object') {return null;}
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
       return parsed as ClangdConfig;
     } catch (err) {
-      this.logger.warn(`[clangdOps] readConfig failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        `[clangdOps] readConfig failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return null;
     }
   }
@@ -94,11 +102,15 @@ export class ClangdOps implements vscode.Disposable {
    */
   async readText(overridePath?: string): Promise<string | null> {
     const target = overridePath ?? this.workspace.clangdConfigPath;
-    if (!target) {return null;}
+    if (!target) {
+      return null;
+    }
     try {
       return await fs.readFile(target, 'utf-8');
     } catch (err) {
-      this.logger.warn(`[clangdOps] readText failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        `[clangdOps] readText failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return null;
     }
   }
@@ -108,7 +120,9 @@ export class ClangdOps implements vscode.Disposable {
    */
   async exists(): Promise<boolean> {
     const target = this.workspace.clangdConfigPath;
-    if (!target) {return false;}
+    if (!target) {
+      return false;
+    }
     try {
       await fs.access(target);
       return true;
@@ -127,14 +141,18 @@ export class ClangdOps implements vscode.Disposable {
    */
   async writeFull(configOpts: ClangdConfigOptions): Promise<{ path: string } | null> {
     const target = this.workspace.clangdConfigPath;
-    if (!target) {return null;}
+    if (!target) {
+      return null;
+    }
     try {
       const text = renderClangdConfig(defaultClangdConfig(configOpts));
       await this._atomicWrite(target, text);
       this.logger.info(`[clangdOps] wrote full .clangd to ${target}`);
       return { path: target };
     } catch (err) {
-      this.logger.error(`[clangdOps] writeFull failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `[clangdOps] writeFull failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return null;
     }
   }
@@ -159,7 +177,9 @@ export class ClangdOps implements vscode.Disposable {
    */
   async mutate(mutator: (ctx: ClangdMutatorContext) => void): Promise<ClangdMutateResult> {
     const target = this.workspace.clangdConfigPath;
-    if (!target) {return { ok: false, reason: 'no-config-path' };}
+    if (!target) {
+      return { ok: false, reason: 'no-config-path' };
+    }
 
     try {
       // 读取或初始化
@@ -176,7 +196,9 @@ export class ClangdOps implements vscode.Disposable {
       try {
         parsed = yaml.parse(text);
       } catch (err) {
-        this.logger.error(`[clangdOps] mutate parse failed: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.error(
+          `[clangdOps] mutate parse failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return { ok: false, reason: 'parse-failed', error: err };
       }
 
@@ -191,7 +213,9 @@ export class ClangdOps implements vscode.Disposable {
       this.logger.info('[clangdOps] mutate committed');
       return { ok: true };
     } catch (err) {
-      this.logger.error(`[clangdOps] mutate failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `[clangdOps] mutate failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return { ok: false, reason: 'write-failed', error: err };
     }
   }
@@ -202,7 +226,10 @@ export class ClangdOps implements vscode.Disposable {
    * 原子写入：先写临时文件再 rename（per PATTERNS §3 第 280-285 行）
    */
   private async _atomicWrite(target: string, content: string): Promise<void> {
-    const tmp = path.join(path.dirname(target), `.${path.basename(target)}.tmp-${process.pid}-${Date.now()}`);
+    const tmp = path.join(
+      path.dirname(target),
+      `.${path.basename(target)}.tmp-${process.pid}-${Date.now()}`,
+    );
     await fs.writeFile(tmp, content, 'utf-8');
     try {
       await fs.rename(tmp, target);
@@ -210,7 +237,9 @@ export class ClangdOps implements vscode.Disposable {
       // rename 失败时清理 tmp
       try {
         await fs.unlink(tmp);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       throw err;
     }
   }
@@ -248,7 +277,9 @@ export class ClangdOps implements vscode.Disposable {
    * 这里只做幂等标记 + 日志，方便后续排查重复 dispose。
    */
   dispose(): void {
-    if (this._disposed) {return;}
+    if (this._disposed) {
+      return;
+    }
     this._disposed = true;
     this.logger.info('[clangdOps] disposed');
   }

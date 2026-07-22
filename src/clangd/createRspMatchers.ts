@@ -70,7 +70,9 @@ export async function startCreateRspMatchers(
     return [];
   }
 
-  if (rspNames.length === 0) {return [];}
+  if (rspNames.length === 0) {
+    return [];
+  }
 
   // 步骤 3：获取 UE 引擎源码的模块目录列表，用于匹配
   const engineSourceDir = path.join(enginePath, 'Engine', 'Source');
@@ -125,7 +127,9 @@ async function findRspDirForMatchers(projectDir: string): Promise<string | null>
       const candidate = path.join(vscodeDir, name);
       try {
         const stat = await fs.stat(candidate);
-        if (!stat.isDirectory()) {continue;}
+        if (!stat.isDirectory()) {
+          continue;
+        }
         const subEntries = await fs.readdir(candidate);
         if (subEntries.some((e) => e.endsWith('.rsp'))) {
           return candidate;
@@ -207,12 +211,12 @@ function matchRspToEngineModule(
     includePaths.push(match[1] ?? '');
   }
 
-  if (includePaths.length === 0) {return null;}
+  if (includePaths.length === 0) {
+    return null;
+  }
 
   // 去掉 Intermediate 路径
-  const filtered = includePaths.filter(
-    (p) => !/[\\/]Intermediate[\\/]/i.test(p),
-  );
+  const filtered = includePaths.filter((p) => !/[\\/]Intermediate[\\/]/i.test(p));
 
   // 对每个候选模块，检查是否有匹配的 include 路径
   for (const candidate of moduleCandidates) {
@@ -223,17 +227,11 @@ function matchRspToEngineModule(
       // 匹配策略：
       //   路径以 candidate.name 结尾，
       //   且路径在 engineSourceDir 下
-      if (
-        normalized.endsWith(candidate.name) ||
-        normalized.endsWith(candidate.name + path.sep)
-      ) {
+      if (normalized.endsWith(candidate.name) || normalized.endsWith(candidate.name + path.sep)) {
         if (normalized.includes(engineSourceDir)) {
           const ueDirRelative = path.relative(engineSourceDir, normalized);
           // 确保不在项目目录外且不是绝对路径
-          if (
-            !ueDirRelative.startsWith('..') &&
-            !path.isAbsolute(ueDirRelative)
-          ) {
+          if (!ueDirRelative.startsWith('..') && !path.isAbsolute(ueDirRelative)) {
             return {
               rspRelative: path.relative(projectDir, rspPath),
               ueDirRelative,

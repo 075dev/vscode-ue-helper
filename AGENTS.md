@@ -16,17 +16,17 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
 
 进入具体模块前先读对应的 AGENTS.md：
 
-| 模块 | 路径 | 内容 |
-|---|---|---|
-| build | `src/build/AGENTS.md` | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、DDD 三层结构 |
-| clangd | `src/clangd/AGENTS.md` | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引 |
-| clangd/proxy | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO |
-| commands | `src/commands/AGENTS.md` | 19 个命令注册表、新增命令 4 步流程 |
-| detection | `src/detection/AGENTS.md` | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强 |
-| ui | `src/ui/AGENTS.md` | 11 个状态栏按钮布局、QuickPick 模式、ControlPanel Webview |
-| core | `src/core/AGENTS.md` | Logger/Config/WorkspaceState 横切基础设施、Config.update 陷阱 |
-| mcp | `src/mcp/AGENTS.md` | MCP 服务器（仅 Cursor/Claude Code 环境激活）、6 个工具 |
-| i18n / parsers / rules | （合并到根） | i18n 见下方"风格与约定"、parsers 是纯函数、rules 是 AI 规则生成器 |
+| 模块                   | 路径                         | 内容                                                                     |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------ |
+| build                  | `src/build/AGENTS.md`        | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、DDD 三层结构    |
+| clangd                 | `src/clangd/AGENTS.md`       | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引 |
+| clangd/proxy           | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO                            |
+| commands               | `src/commands/AGENTS.md`     | 19 个命令注册表、新增命令 4 步流程                                       |
+| detection              | `src/detection/AGENTS.md`    | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强          |
+| ui                     | `src/ui/AGENTS.md`           | 11 个状态栏按钮布局、QuickPick 模式、ControlPanel Webview                |
+| core                   | `src/core/AGENTS.md`         | Logger/Config/WorkspaceState 横切基础设施、Config.update 陷阱            |
+| mcp                    | `src/mcp/AGENTS.md`          | MCP 服务器（仅 Cursor/Claude Code 环境激活）、6 个工具                   |
+| i18n / parsers / rules | （合并到根）                 | i18n 见下方"风格与约定"、parsers 是纯函数、rules 是 AI 规则生成器        |
 
 ## 常用命令
 
@@ -79,8 +79,8 @@ initI18n()        ← 必须最先，Logger 内部可能用翻译
 `tsconfig.json`、`esbuild.config.mjs`、`vitest.config.ts` 三处声明。**禁止相对导入**：
 
 ```typescript
-import { Logger } from '@core/logger';           // ✅
-import { Logger } from '../../core/logger';      // ❌ 违反风格
+import { Logger } from '@core/logger'; // ✅
+import { Logger } from '../../core/logger'; // ❌ 违反风格
 ```
 
 可用别名：`@core`、`@detection`、`@build`、`@clangd`、`@commands`、`@ui`、`@parsers`、`@mcp`、`@rules`、`@i18n`、`@platform`（**注意 `@platform` 是死的**——`src/platform/` 目录不存在，是历史残留）。

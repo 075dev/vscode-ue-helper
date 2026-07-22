@@ -33,7 +33,9 @@ export async function readUProject(projectPath: string): Promise<UProjectRaw | n
  * generation in Phase 3.
  */
 export function getEnabledPlugins(raw: UProjectRaw): string[] {
-  if (!Array.isArray(raw.Plugins)) {return [];}
+  if (!Array.isArray(raw.Plugins)) {
+    return [];
+  }
   return raw.Plugins.filter((p) => p?.Enabled !== false)
     .map((p) => p.Name)
     .filter(Boolean);

@@ -28,18 +28,26 @@ describe('runProxy — 代理入口', () => {
     exitCode = null;
     stdio = new FakeStdio();
     io = {
-      stderrWrite: (msg: string) => { stderrLines.push(msg); },
-      exit: (code: number) => { exitCode = code; },
+      stderrWrite: (msg: string) => {
+        stderrLines.push(msg);
+      },
+      exit: (code: number) => {
+        exitCode = code;
+      },
     };
   });
 
   it('完整参数启动代理返回 DoneClaim', () => {
     const claim = runProxy(
       [
-        'node', 'proxy.js',
-        '--keepalive-max', '10',
-        '--keepalive-ttl-sec', '60',
-        '--real-clangd', '/fake/clangd',
+        'node',
+        'proxy.js',
+        '--keepalive-max',
+        '10',
+        '--keepalive-ttl-sec',
+        '60',
+        '--real-clangd',
+        '/fake/clangd',
         '--',
         '--background-index',
       ],
@@ -56,12 +64,7 @@ describe('runProxy — 代理入口', () => {
   });
 
   it('缺失 --real-clangd 时打印 stderr 并调用 io.exit(2)，且 stdout 保持空协议通道', () => {
-    const claim = runProxy(
-      ['node', 'proxy.js', '--', '--arg'],
-      io,
-      fakeSpawn,
-      stdio,
-    );
+    const claim = runProxy(['node', 'proxy.js', '--', '--arg'], io, fakeSpawn, stdio);
 
     expect(claim.status).toBe('error');
     expect(stderrLines.length).toBeGreaterThan(0);
@@ -73,29 +76,14 @@ describe('runProxy — 代理入口', () => {
   it('代理不向 stdout 写入任何内容', () => {
     const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
-    runProxy(
-      [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-      ],
-      io,
-      fakeSpawn,
-    );
+    runProxy(['node', 'proxy.js', '--real-clangd', '/fake/clangd'], io, fakeSpawn);
 
     expect(stdoutWrite).not.toHaveBeenCalled();
     stdoutWrite.mockRestore();
   });
 
   it('Given 注入 stdin initialize 帧，When runProxy 接收数据，Then 转发到真实 clangd stdin', () => {
-    runProxy(
-      [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-      ],
-      io,
-      fakeSpawn,
-      stdio,
-    );
+    runProxy(['node', 'proxy.js', '--real-clangd', '/fake/clangd'], io, fakeSpawn, stdio);
 
     stdio.emitStdinFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
 
@@ -108,18 +96,13 @@ describe('runProxy — 代理入口', () => {
   });
 
   it('Given 真实 clangd 返回 initialize 响应，When bridge 收到 stdout，Then 只向注入 stdout 写协议帧', () => {
-    runProxy(
-      [
-        'node', 'proxy.js',
-        '--real-clangd', '/fake/clangd',
-      ],
-      io,
-      fakeSpawn,
-      stdio,
-    );
+    runProxy(['node', 'proxy.js', '--real-clangd', '/fake/clangd'], io, fakeSpawn, stdio);
 
     stdio.emitStdinFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
-    fakeChild.stdout.emit('data', encodeMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } }));
+    fakeChild.stdout.emit(
+      'data',
+      encodeMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } }),
+    );
 
     const messages = stdio.parseStdoutMessages();
     expect(messages).toHaveLength(1);

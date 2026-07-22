@@ -139,7 +139,10 @@ function literalCandidate(
   return normalized === undefined ? undefined : { path: normalized, source };
 }
 
-function pathCandidates(envPath: string | undefined, delimiter: string): readonly RealClangdCandidate[] {
+function pathCandidates(
+  envPath: string | undefined,
+  delimiter: string,
+): readonly RealClangdCandidate[] {
   if (envPath === undefined || envPath.trim().length === 0) {
     return [];
   }

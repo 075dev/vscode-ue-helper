@@ -70,7 +70,7 @@ describe('getUeClangdCompatContent (内容生成器)', () => {
   });
 
   it('不含 BOM (\\uFEFF)', () => {
-    expect(content.charCodeAt(0)).not.toBe(0xFEFF);
+    expect(content.charCodeAt(0)).not.toBe(0xfeff);
   });
 
   it('长度大于 50 字符', () => {

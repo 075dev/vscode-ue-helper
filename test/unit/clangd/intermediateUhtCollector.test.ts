@@ -21,8 +21,26 @@ describe('collectIntermediateUhtDirs (Intermediate/UHT 收集)', () => {
   });
 
   it('典型三层结构下找到所有 UHT 目录', async () => {
-    const uht1 = path.join(tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassTest', 'UHT');
-    const uht2 = path.join(tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'MassBattle', 'UHT');
+    const uht1 = path.join(
+      tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'MassTest',
+      'UHT',
+    );
+    const uht2 = path.join(
+      tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'MassBattle',
+      'UHT',
+    );
     await fs.mkdir(uht1, { recursive: true });
     await fs.mkdir(uht2, { recursive: true });
 
@@ -42,7 +60,15 @@ describe('collectIntermediateUhtDirs (Intermediate/UHT 收集)', () => {
   });
 
   it('Inc 下模块没有 UHT 子目录时跳过', async () => {
-    const modNoUht = path.join(tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'NoUhtMod');
+    const modNoUht = path.join(
+      tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'NoUhtMod',
+    );
     await fs.mkdir(modNoUht, { recursive: true });
     // 不创建 UHT 子目录
 
@@ -61,7 +87,16 @@ describe('collectIntermediateUhtDirs (Intermediate/UHT 收集)', () => {
   });
 
   it('多 PlatformCfg 同时存在 → 全部返回', async () => {
-    const win64 = path.join(tmpDir, 'Intermediate', 'Build', 'Win64', 'Editor', 'Inc', 'ModA', 'UHT');
+    const win64 = path.join(
+      tmpDir,
+      'Intermediate',
+      'Build',
+      'Win64',
+      'Editor',
+      'Inc',
+      'ModA',
+      'UHT',
+    );
     const mac = path.join(tmpDir, 'Intermediate', 'Build', 'Mac', 'Editor', 'Inc', 'ModA', 'UHT');
     await fs.mkdir(win64, { recursive: true });
     await fs.mkdir(mac, { recursive: true });

@@ -174,10 +174,7 @@ async function collectFingerprintFiles(projectDir: string): Promise<string[]> {
   return out;
 }
 
-async function walkDir(
-  dir: string,
-  visitor: (filePath: string) => void,
-): Promise<void> {
+async function walkDir(dir: string, visitor: (filePath: string) => void): Promise<void> {
   let entries: import('node:fs').Dirent[];
   try {
     // withFileTypes: true → Promise<Dirent[]>（@types/node v20 overload: ObjectEncodingOptions & { withFileTypes: true }）
@@ -190,10 +187,12 @@ async function walkDir(
     const name = String(entry.name);
     const fullPath = path.join(dir, name);
     if (entry.isDirectory()) {
-      if (name.startsWith('.') ||
-          name === 'Intermediate' ||
-          name === 'Binaries' ||
-          name === 'Saved') {
+      if (
+        name.startsWith('.') ||
+        name === 'Intermediate' ||
+        name === 'Binaries' ||
+        name === 'Saved'
+      ) {
         continue;
       }
       await walkDir(fullPath, visitor);

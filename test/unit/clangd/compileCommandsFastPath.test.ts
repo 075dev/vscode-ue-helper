@@ -31,7 +31,11 @@ async function createFixture(): Promise<{ tmpDir: string; projectPath: string }>
   // 必须有 Source 目录和至少一个 Build.cs，fingerprint 才能产生稳定 hash
   const sourceDir = path.join(tmpDir, 'Source', 'TestProject');
   await fs.mkdir(sourceDir, { recursive: true });
-  await fs.writeFile(path.join(sourceDir, 'TestProject.Build.cs'), 'class TestProjectTarget : TargetRules {}', 'utf-8');
+  await fs.writeFile(
+    path.join(sourceDir, 'TestProject.Build.cs'),
+    'class TestProjectTarget : TargetRules {}',
+    'utf-8',
+  );
 
   return { tmpDir, projectPath };
 }

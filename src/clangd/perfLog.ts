@@ -22,10 +22,7 @@
 
 import * as vscode from 'vscode';
 import { Logger, sharedLogger } from '@core/logger';
-import type {
-  PerfEvent,
-  PerfMetricSnapshot,
-} from './types';
+import type { PerfEvent, PerfMetricSnapshot } from './types';
 
 /**
  * PerfSession —— 性能埋点会话接口
@@ -59,21 +56,19 @@ export interface PerfSession {
 
   /** [Phase 9 SSoT] 注入 WorkspaceState 让 flushToDisk 走单一真相源——消除 vscode.workspace.workspaceFolders 直读 */
   // [Phase 11 SSoT] 扩展接口含 clangdPerfCachePath；perfLog.ensureCacheDir 改走 getter
-  setWorkspace(
-    workspace: {
-      readonly projectDir: string | null;
-      readonly clangdPerfCachePath?: string | null;
-    },
-  ): void;
+  setWorkspace(workspace: {
+    readonly projectDir: string | null;
+    readonly clangdPerfCachePath?: string | null;
+  }): void;
 }
 
 /* ------------------------------------------------------------------ */
 /*  内部实现                                                            */
 /* ------------------------------------------------------------------ */
 
-const MAX_PERF_LOG_BYTES = 100 * 1024 * 1024;        // 100MB 触发轮转（D-07）
-const MAX_ROTATION_FILES = 5;                         // 最多保留 5 个轮转文件
-const FLUSH_QUEUE_FLUSH_MS = 500;                     // 500ms 批量 flush 阈值
+const MAX_PERF_LOG_BYTES = 100 * 1024 * 1024; // 100MB 触发轮转（D-07）
+const MAX_ROTATION_FILES = 5; // 最多保留 5 个轮转文件
+const FLUSH_QUEUE_FLUSH_MS = 500; // 500ms 批量 flush 阈值
 
 /** 在测试 / 单元测试场景下强制视为 dev 模式（便于写盘断言） */
 let forceDevMode = false;
@@ -134,12 +129,10 @@ class PerfSessionImpl implements PerfSession {
   }
 
   /** [Phase 9 SSoT] 注入 WorkspaceState 让 flushToDisk 走单一真相源。 */
-  setWorkspace(
-    workspace: {
-      readonly projectDir: string | null;
-      readonly clangdPerfCachePath?: string | null;
-    },
-  ): void {
+  setWorkspace(workspace: {
+    readonly projectDir: string | null;
+    readonly clangdPerfCachePath?: string | null;
+  }): void {
     this._workspace = workspace;
   }
 
@@ -296,9 +289,10 @@ class PerfSessionImpl implements PerfSession {
   private broadcast(): void {
     const snapshot: PerfMetricSnapshot = {
       genMs: this.ccLastMs > 0 ? this.ccLastMs : undefined,
-      hitRate: this.preparseHits + this.preparseMisses > 0
-        ? this.preparseHits / (this.preparseHits + this.preparseMisses)
-        : undefined,
+      hitRate:
+        this.preparseHits + this.preparseMisses > 0
+          ? this.preparseHits / (this.preparseHits + this.preparseMisses)
+          : undefined,
       incrMs: this.incrLastMs > 0 ? this.incrLastMs : undefined,
       ts: new Date().toISOString(),
     };
@@ -336,11 +330,12 @@ class PerfSessionImpl implements PerfSession {
     // 路径安全校验（per T-7-03）：必须 startsWith 项目路径
     // [Phase 11 SSoT] 优先 WorkspaceState.clangdPerfCachePath；fallback 用 path.join 保留行为兼容
     const cacheDir =
-      this._workspace?.clangdPerfCachePath ??
-      path.join(projectDir, '.vscode', 'clangd-perf-cache');
+      this._workspace?.clangdPerfCachePath ?? path.join(projectDir, '.vscode', 'clangd-perf-cache');
     const normalized = path.normalize(cacheDir);
-    if (!normalized.startsWith(path.normalize(projectDir) + path.sep) &&
-        normalized !== path.normalize(projectDir)) {
+    if (
+      !normalized.startsWith(path.normalize(projectDir) + path.sep) &&
+      normalized !== path.normalize(projectDir)
+    ) {
       throw new Error('perfLog cache dir outside workspace');
     }
 
@@ -362,7 +357,9 @@ class PerfSessionImpl implements PerfSession {
       // 清理超出 MAX_ROTATION_FILES 数量的旧轮转文件
       const entries = await fs.readdir(dir);
       const archives = entries
-        .filter((n) => n.startsWith(`${baseName}.`) && n.endsWith('.json') && n !== `${baseName}.json`)
+        .filter(
+          (n) => n.startsWith(`${baseName}.`) && n.endsWith('.json') && n !== `${baseName}.json`,
+        )
         .sort()
         .reverse();
       for (let i = MAX_ROTATION_FILES - 1; i < archives.length; i++) {

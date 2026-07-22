@@ -11,7 +11,12 @@ import { activateCommands } from '@commands/index';
 import type { Config } from '@core/config';
 import type { ClangdHandles } from '@clangd';
 
-const mockPickProject = vi.fn<[{ readonly path: string }[]], Promise<{ readonly path: string; readonly name: string; readonly engineVersion: string } | undefined>>();
+const mockPickProject = vi.fn<
+  [{ readonly path: string }[]],
+  Promise<
+    { readonly path: string; readonly name: string; readonly engineVersion: string } | undefined
+  >
+>();
 
 vi.mock('@ui/quickPicks', () => ({
   pickProject: (projects: { readonly path: string }[]) => mockPickProject(projects),
@@ -30,7 +35,9 @@ function createLoggerMock(): Logger {
 function createDetectionMock(projectPath: string): DetectionHandles {
   return {
     scanner: {
-      scan: vi.fn().mockResolvedValue([{ path: projectPath, name: 'MyGame', engineVersion: '5.4' }]),
+      scan: vi
+        .fn()
+        .mockResolvedValue([{ path: projectPath, name: 'MyGame', engineVersion: '5.4' }]),
     },
     workspaceContext: {
       getSelectedProject: vi.fn().mockReturnValue(projectPath),
@@ -64,7 +71,9 @@ describe('executeDiagnoseProject', () => {
       readonly info: ReturnType<typeof vi.fn>;
       readonly show: ReturnType<typeof vi.fn>;
     };
-    expect(loggerMock.info).toHaveBeenCalledWith(expect.stringContaining('Clangd Project Diagnostic'));
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining('Clangd Project Diagnostic'),
+    );
     expect(loggerMock.show).toHaveBeenCalledOnce();
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining('failed'),

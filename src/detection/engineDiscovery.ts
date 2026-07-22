@@ -61,14 +61,18 @@ export class EngineDiscovery {
     this.invalid.length = 0;
 
     for (const candidate of this.opts.candidates) {
-      if (!candidate || candidate.trim().length === 0) {continue;}
+      if (!candidate || candidate.trim().length === 0) {
+        continue;
+      }
       const install = await this.validate(candidate);
       if (!install) {
         this.invalid.push(candidate);
         continue;
       }
       const key = this.normalize(install.path);
-      if (seen.has(key)) {continue;}
+      if (seen.has(key)) {
+        continue;
+      }
       seen.add(key);
       installs.push(install);
     }
@@ -85,9 +89,13 @@ export class EngineDiscovery {
   // --- Validation ---
 
   private async validate(candidate: string): Promise<EngineInstall | null> {
-    if (!(await this.isEngineRoot(candidate))) {return null;}
+    if (!(await this.isEngineRoot(candidate))) {
+      return null;
+    }
     const version = await this.readVersion(candidate);
-    if (!version) {return null;}
+    if (!version) {
+      return null;
+    }
     return {
       path: candidate,
       version,
@@ -138,8 +146,12 @@ export class EngineDiscovery {
     };
     const [aMaj, aMin, aPatch] = parse(a);
     const [bMaj, bMin, bPatch] = parse(b);
-    if (aMaj !== bMaj) {return aMaj - bMaj;}
-    if (aMin !== bMin) {return aMin - bMin;}
+    if (aMaj !== bMaj) {
+      return aMaj - bMaj;
+    }
+    if (aMin !== bMin) {
+      return aMin - bMin;
+    }
     return aPatch - bPatch;
   }
 }

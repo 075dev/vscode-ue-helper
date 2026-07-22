@@ -214,7 +214,15 @@ describe('ClangdSettingsManager — clangd 设置管理器', () => {
 
       expect(clangdConfigMock.update).toHaveBeenCalledWith(
         'arguments',
-        ['--real-clangd', '/usr/bin/clangd', '--keepalive-max', '20', '--', '--background-index', '--header-insertion=never'],
+        [
+          '--real-clangd',
+          '/usr/bin/clangd',
+          '--keepalive-max',
+          '20',
+          '--',
+          '--background-index',
+          '--header-insertion=never',
+        ],
         vscode.ConfigurationTarget.Workspace,
       );
     });
@@ -331,7 +339,9 @@ describe('ClangdSettingsManager — clangd 设置管理器', () => {
       // 模拟用户修改了 clangd.path（在我们的 mock 中，enable 写入 LAUNCHER_PATH，
       // 现在手动改回其他路径）
       clangdConfigMock.get.mockImplementation((key: string) => {
-        if (key === 'path') {return '/usr/local/bin/clangd';}
+        if (key === 'path') {
+          return '/usr/local/bin/clangd';
+        }
         return undefined;
       });
 
@@ -381,7 +391,10 @@ describe('ClangdSettingsManager — clangd 设置管理器', () => {
 
       await manager.enable(['--real-clangd', '/usr/bin/clangd'], []);
 
-      const backup = workspaceStateMock.get('vscodeUEHelper.clangdProxy.backup') as Record<string, unknown>;
+      const backup = workspaceStateMock.get('vscodeUEHelper.clangdProxy.backup') as Record<
+        string,
+        unknown
+      >;
       expect(backup.path).toBe('/usr/bin/clangd');
       expect(backup.arguments).toBeUndefined();
       expect(backup.useScriptAsExecutable).toBeUndefined();
@@ -393,7 +406,9 @@ describe('ClangdSettingsManager — clangd 设置管理器', () => {
       // 验证 mock 的 update 更新了内部 store
       // 通过 isUsingOurLauncher 间接验证
       clangdConfigMock.get.mockImplementation((key: string) => {
-        if (key === 'path') {return LAUNCHER_PATH;}
+        if (key === 'path') {
+          return LAUNCHER_PATH;
+        }
         return undefined;
       });
       expect(manager.isUsingOurLauncher).toBe(true);

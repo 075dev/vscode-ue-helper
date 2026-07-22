@@ -54,7 +54,10 @@ export interface BridgeHooks {
   onPublishDiagnostics?: (params: {
     uri: string;
     diagnostics: Array<{
-      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
       severity: number;
       source?: string;
       message: string;
@@ -422,7 +425,10 @@ export class LspBridge {
         const params = msg.params as {
           uri: string;
           diagnostics: Array<{
-            range: { start: { line: number; character: number }; end: { line: number; character: number } };
+            range: {
+              start: { line: number; character: number };
+              end: { line: number; character: number };
+            };
             severity: number;
             source?: string;
             message: string;
@@ -450,7 +456,10 @@ export class LspBridge {
    * - textDocument/hover → 本地化 hover 内容
    * - 其他 → 透传
    */
-  private applyLocalizationToResponse(msg: JsonRpcMessage, method: string | undefined): JsonRpcMessage {
+  private applyLocalizationToResponse(
+    msg: JsonRpcMessage,
+    method: string | undefined,
+  ): JsonRpcMessage {
     if (!this.localization || !this.localization.enabled) {
       return msg;
     }
@@ -658,7 +667,9 @@ export class LspBridge {
             const localized = applyLocalizationToHover(original);
             const result = this.applyMode(original, localized);
             if (result !== original) {
-              this.log?.(`[bridge]   ✓ hover code: "${original.substring(0, 60)}..." → "${result.substring(0, 60)}..."`);
+              this.log?.(
+                `[bridge]   ✓ hover code: "${original.substring(0, 60)}..." → "${result.substring(0, 60)}..."`,
+              );
             }
             return { ...ms, value: result };
           }

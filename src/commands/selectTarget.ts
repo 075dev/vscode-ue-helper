@@ -13,7 +13,9 @@ import { t } from '@i18n';
 
 export async function executeSelectTarget(config: Config, logger: Logger): Promise<void> {
   const picked = await pickTarget();
-  if (!picked) {return;}
+  if (!picked) {
+    return;
+  }
   await config.update('target', picked);
   logger.info(`[selectTarget] target = ${picked}`);
   void vscode.window.showInformationMessage(t('picker.targetChanged', { 0: picked }));

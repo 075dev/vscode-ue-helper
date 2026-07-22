@@ -23,12 +23,11 @@ export const GENERATED_BODY_MAX_LOOKAHEAD_LINES = 7;
 export const UFUNCTION_RPC_SPECIFIERS = ['Server', 'Client', 'NetMulticast'] as const;
 
 /** 反射宏 -> 期望的类名前缀（首字母不符则 warning） */
-export const REFLECTION_MACRO_PREFIXES: Readonly<
-  Record<UeReflectionMacroKind, readonly string[]>
-> = {
-  // A = AActor 派生，U = UObject 派生（非 Actor），两者皆合法
-  UCLASS: ['A', 'U'],
-  USTRUCT: ['F'],
-  UENUM: ['E'],
-  UINTERFACE: ['I'],
-};
+export const REFLECTION_MACRO_PREFIXES: Readonly<Record<UeReflectionMacroKind, readonly string[]>> =
+  {
+    // A = AActor 派生，U = UObject 派生（非 Actor），两者皆合法
+    UCLASS: ['A', 'U'],
+    USTRUCT: ['F'],
+    UENUM: ['E'],
+    UINTERFACE: ['I'],
+  };

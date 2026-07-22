@@ -20,7 +20,9 @@ function actionParams(action: KeepaliveAction): Record<string, unknown> {
 
 /** 辅助：类型安全地断言值已定义，消除非空断言 */
 function assertDefined<T>(value: T | undefined): asserts value is T {
-  if (value === undefined) {throw new Error('Expected value to be defined');}
+  if (value === undefined) {
+    throw new Error('Expected value to be defined');
+  }
 }
 
 /** 辅助：创建 didClose params */
@@ -247,7 +249,10 @@ describe('Keepalive — didClose 保活状态机', () => {
     const ka = new Keepalive();
     ka.handleDidClose('file:///foo.cpp', didCloseParams('file:///foo.cpp'));
 
-    const actions = ka.handleDidOpen('file:///foo.cpp', didOpenParamsNoVersion('file:///foo.cpp', 'content'));
+    const actions = ka.handleDidOpen(
+      'file:///foo.cpp',
+      didOpenParamsNoVersion('file:///foo.cpp', 'content'),
+    );
 
     expect(actions).toHaveLength(2);
     expect(actions[0]!.type).toBe('forwardDidClose');
@@ -282,11 +287,7 @@ describe('Keepalive — didClose 保活状态机', () => {
     const actions = ka.flush();
 
     expect(actions).toHaveLength(3);
-    expect(actions.map((a) => a.uri)).toEqual([
-      'file:///a.cpp',
-      'file:///b.cpp',
-      'file:///c.cpp',
-    ]);
+    expect(actions.map((a) => a.uri)).toEqual(['file:///a.cpp', 'file:///b.cpp', 'file:///c.cpp']);
     expect(ka.size).toBe(0);
   });
 
@@ -309,11 +310,7 @@ describe('Keepalive — didClose 保活状态机', () => {
 
     const actions = ka.flush();
     expect(actions).toHaveLength(3);
-    expect(actions.map((a) => a.uri)).toEqual([
-      'file:///b.cpp',
-      'file:///c.cpp',
-      'file:///d.cpp',
-    ]);
+    expect(actions.map((a) => a.uri)).toEqual(['file:///b.cpp', 'file:///c.cpp', 'file:///d.cpp']);
   });
 
   // ─── 边界条件 ──────────────────────────────────────────────

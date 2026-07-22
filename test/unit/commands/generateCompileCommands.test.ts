@@ -46,16 +46,11 @@ const mockStartModifyRsp = vi.fn<
 vi.mock('@clangd', () => ({
   generateCompileCommands: () => mockGenerateCompileCommands(),
   linkToWorkspaceRoot: () => mockLinkToWorkspaceRoot(),
-  addCompletionHelperToCompileCommands: (
-    projectPath: string,
-    ccJsonPath?: string,
-  ) => mockAddCompletionHelper(projectPath, ccJsonPath),
+  addCompletionHelperToCompileCommands: (projectPath: string, ccJsonPath?: string) =>
+    mockAddCompletionHelper(projectPath, ccJsonPath),
   createCompletionFiles: (projectPath: string) => mockCreateCompletionFiles(projectPath),
-  fillMissingCompileCommands: (
-    jsonPath: string,
-    projectPath: string,
-    logger?: Logger,
-  ) => mockFillMissing(jsonPath, projectPath, logger),
+  fillMissingCompileCommands: (jsonPath: string, projectPath: string, logger?: Logger) =>
+    mockFillMissing(jsonPath, projectPath, logger),
   startModifyResponseFiles: (projectPath: string, logger?: Logger) =>
     mockStartModifyRsp(projectPath, logger),
 }));
@@ -106,9 +101,9 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     // ---- 构造 DetectionHandles mock ----
     detection = {
       scanner: {
-        scan: vi.fn().mockResolvedValue([
-          { path: PROJECT_PATH, name: 'MyGame', engineVersion: '5.4' },
-        ]),
+        scan: vi
+          .fn()
+          .mockResolvedValue([{ path: PROJECT_PATH, name: 'MyGame', engineVersion: '5.4' }]),
         findSingle: vi.fn().mockResolvedValue({
           path: PROJECT_PATH,
           name: 'MyGame',
@@ -116,9 +111,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
         }),
       },
       discovery: {
-        discover: vi.fn().mockResolvedValue([
-          { path: ENGINE_PATH, version: '5.4' },
-        ]),
+        discover: vi.fn().mockResolvedValue([{ path: ENGINE_PATH, version: '5.4' }]),
       },
       workspaceContext: {
         getSelectedProject: vi.fn().mockReturnValue(PROJECT_PATH),
@@ -228,17 +221,21 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       );
       await realCreateCompletionFiles(projectPath);
 
-      mockGenerateCompileCommands.mockResolvedValue(path.join(tempDir, 'Engine', 'compile_commands.json'));
+      mockGenerateCompileCommands.mockResolvedValue(
+        path.join(tempDir, 'Engine', 'compile_commands.json'),
+      );
       mockLinkToWorkspaceRoot.mockResolvedValue(linkedCompileCommandsPath);
       mockAddCompletionHelper.mockImplementation(realAddCompletionHelperToCompileCommands);
       mockFillMissing.mockResolvedValue(undefined);
-      mockCreateCompletionFiles.mockImplementation(async () => realCreateCompletionFiles(projectPath));
+      mockCreateCompletionFiles.mockImplementation(async () =>
+        realCreateCompletionFiles(projectPath),
+      );
 
       detection = {
         scanner: {
-          scan: vi.fn().mockResolvedValue([
-            { path: projectPath, name: 'MyGame', engineVersion: '5.4' },
-          ]),
+          scan: vi
+            .fn()
+            .mockResolvedValue([{ path: projectPath, name: 'MyGame', engineVersion: '5.4' }]),
           findSingle: vi.fn().mockResolvedValue({
             path: projectPath,
             name: 'MyGame',
@@ -265,7 +262,11 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
           engineFolder: null,
         }),
       } as unknown as DetectionHandles;
-      mockPickProject.mockResolvedValue({ path: projectPath, name: 'MyGame', engineVersion: '5.4' });
+      mockPickProject.mockResolvedValue({
+        path: projectPath,
+        name: 'MyGame',
+        engineVersion: '5.4',
+      });
 
       // When: 执行命令管线。
       await executeGenerateCompileCommands(config, logger, detection);

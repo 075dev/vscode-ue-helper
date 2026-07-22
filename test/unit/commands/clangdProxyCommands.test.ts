@@ -17,7 +17,11 @@ function createLoggerMock(): Logger {
   const debug = vi.fn();
   const show = vi.fn();
   return {
-    info, warn, error, debug, show,
+    info,
+    warn,
+    error,
+    debug,
+    show,
     channel: {} as never,
     prefix: 'test',
     currentLevel: 'info' as const,
@@ -84,7 +88,7 @@ function createClangdHandlesMock(overrides?: Record<string, unknown>) {
         keepaliveTtlSec: 900,
         localizationEnabled: false,
         localizationMode: 'append',
-                logPath: o.logPath ?? undefined,
+        logPath: o.logPath ?? undefined,
         backupExists: o.hasBackup ?? false,
         lastKnownProblem: undefined,
       })),
@@ -129,23 +133,27 @@ describe('executeEnableClangdProxy', () => {
     expect(clangd.proxyManager.enable).toHaveBeenCalledOnce();
     // 不再触碰 clangdProxy.enabled toggle —— 这是用户配置，不该被命令悄悄改写
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect((config.update as unknown as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(config.update as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('proxy enabled successfully'));
   });
 
   it('Given proxyManager 启用失败 When 首次启用 Then 弹错误，不回滚 enabled toggle', async () => {
     // Given: F-fix 后失败路径不回滚 clangdProxy.enabled（因为我们从不主动改它）。
     const clangd = createClangdHandlesMock({ config });
-    clangd.proxyManager.enable = vi.fn<[], Promise<void>>(() => Promise.reject(new Error('mock failure')));
+    clangd.proxyManager.enable = vi.fn<[], Promise<void>>(() =>
+      Promise.reject(new Error('mock failure')),
+    );
 
     // When
     await executeEnableClangdProxy(config, logger, clangd as never);
 
     // Then
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect((config.update as unknown as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(config.update as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('failed'), expect.any(Error));
-    expect((vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    expect(
+      vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalled();
   });
 });
 
@@ -170,16 +178,23 @@ describe('executeDisableClangdProxy', () => {
     await executeDisableClangdProxy(config, logger, clangd as never);
     expect(clangd.proxyManager.disable).toHaveBeenCalledOnce();
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect((config.update as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('clangdProxy.enabled', false);
+    expect(config.update as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+      'clangdProxy.enabled',
+      false,
+    );
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('settings restored'));
   });
 
   it('禁用失败时显示错误消息', async () => {
     const clangd = createClangdHandlesMock();
-    clangd.proxyManager.disable = vi.fn<[], Promise<void>>(() => Promise.reject(new Error('mock failure')));
+    clangd.proxyManager.disable = vi.fn<[], Promise<void>>(() =>
+      Promise.reject(new Error('mock failure')),
+    );
     await executeDisableClangdProxy(config, logger, clangd as never);
     expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('failed'), expect.any(Error));
-    expect((vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    expect(
+      vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalled();
   });
 });
 
@@ -205,7 +220,9 @@ describe('executeShowClangdProxyStatus', () => {
 
   it('显示所有状态字段到 output', () => {
     const clangd = createClangdHandlesMock({
-      enabled: true, isActive: true, hasBackup: true,
+      enabled: true,
+      isActive: true,
+      hasBackup: true,
       launcherPath: '/fake/extension/out/launcher/proxy-launcher.bat',
       logPath: '/tmp/clangd-proxy.log',
       realClangdPath: '/usr/bin/clangd',
@@ -221,12 +238,22 @@ describe('executeShowClangdProxyStatus', () => {
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Log Path'));
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Backup Exists'));
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect((vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    expect(
+      vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalled();
   });
 
   it('未配置路径时显示自动检测', () => {
-    const configNoPath = createConfigMock({ clangdProxyRealClangdPath: undefined, clangdProxyLogPath: undefined });
-    const clangd = createClangdHandlesMock({ enabled: false, isActive: false, hasBackup: false, logPath: undefined });
+    const configNoPath = createConfigMock({
+      clangdProxyRealClangdPath: undefined,
+      clangdProxyLogPath: undefined,
+    });
+    const clangd = createClangdHandlesMock({
+      enabled: false,
+      isActive: false,
+      hasBackup: false,
+      logPath: undefined,
+    });
     executeShowClangdProxyStatus(configNoPath, logger, clangd as never);
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('auto-detect'));
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('not set'));
@@ -235,7 +262,9 @@ describe('executeShowClangdProxyStatus', () => {
 
 describe('package.json manifest', () => {
   it('包含三个 proxy 命令', async () => {
-    const pkg = (await import('../../../package.json')) as unknown as { contributes: { commands: Array<{ command: string }> } };
+    const pkg = (await import('../../../package.json')) as unknown as {
+      contributes: { commands: Array<{ command: string }> };
+    };
     const cmds = pkg.contributes.commands;
     const ids = cmds.map((c) => c.command);
     expect(ids).toContain('vscodeUEHelper.enableClangdProxy');
@@ -244,7 +273,9 @@ describe('package.json manifest', () => {
   });
 
   it('commandPalette 包含三个 proxy 命令', async () => {
-    const pkg = (await import('../../../package.json')) as unknown as { contributes: { menus: { commandPalette: Array<{ command: string }> } } };
+    const pkg = (await import('../../../package.json')) as unknown as {
+      contributes: { menus: { commandPalette: Array<{ command: string }> } };
+    };
     const palette = pkg.contributes.menus.commandPalette;
     const ids = palette.map((c) => c.command);
     expect(ids).toContain('vscodeUEHelper.enableClangdProxy');

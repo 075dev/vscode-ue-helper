@@ -40,10 +40,7 @@ interface KeepaliveEntry {
  * - forwardDidOpen: 转发原始 didOpen 通知
  * - forwardDidChange: 转发全量 didChange 通知（由保活命中触发）
  */
-export type KeepaliveActionType =
-  | 'forwardDidClose'
-  | 'forwardDidOpen'
-  | 'forwardDidChange';
+export type KeepaliveActionType = 'forwardDidClose' | 'forwardDidOpen' | 'forwardDidChange';
 
 /** 保活动作 */
 export interface KeepaliveAction {
@@ -92,7 +89,9 @@ export class Keepalive {
     // LRU 淘汰：超出 max 时移除最旧条目（Map 第一个）
     while (this.entries.size > this.max) {
       const firstKey = this.entries.keys().next();
-      if (firstKey.done) {break;}
+      if (firstKey.done) {
+        break;
+      }
       const evictedUri = firstKey.value;
       const evicted = this.entries.get(evictedUri);
       this.entries.delete(evictedUri);

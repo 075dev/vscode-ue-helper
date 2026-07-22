@@ -30,11 +30,13 @@ interface Harness {
   cleanup: () => Promise<void>;
 }
 
-async function setupHarness(opts: {
-  userAddFlags?: readonly string[];
-  engineRoot?: string;
-  includeCompletionFiles?: boolean;
-} = {}): Promise<Harness> {
+async function setupHarness(
+  opts: {
+    userAddFlags?: readonly string[];
+    engineRoot?: string;
+    includeCompletionFiles?: boolean;
+  } = {},
+): Promise<Harness> {
   const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'completion-mode-test-'));
   await fs.writeFile(path.join(projectDir, 'MyProject.uproject'), '{}', 'utf-8');
   const clangdPath = path.join(projectDir, '.clangd');
@@ -72,7 +74,9 @@ async function setupHarness(opts: {
 
   // engine SharedPCH 文件路径（用于 preparse-headers 解析）
   if (engineRoot) {
-    await fs.mkdir(path.join(engineRoot, 'Source', 'Runtime', 'Core', 'Public'), { recursive: true });
+    await fs.mkdir(path.join(engineRoot, 'Source', 'Runtime', 'Core', 'Public'), {
+      recursive: true,
+    });
     await fs.writeFile(
       path.join(engineRoot, 'Source', 'Runtime', 'Core', 'Public', 'CoreSharedPCH.h'),
       '// pch\n',
@@ -302,7 +306,9 @@ describe('CompletionModeController (Plan Add 收束)', () => {
       const joined = add.Add.join(' ');
       expect(joined).toContain('CoreSharedPCH.h');
     } finally {
-      if (h) {await h.cleanup();}
+      if (h) {
+        await h.cleanup();
+      }
       await fs.rm(engineRoot, { recursive: true, force: true });
     }
   });

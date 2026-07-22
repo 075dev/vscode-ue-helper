@@ -95,5 +95,5 @@ export function defaultClangdConfig(opts: ClangdConfigOptions = {}): ClangdConfi
 /** 把 ClangdConfig 对象渲染为 YAML 文本 */
 export function renderClangdConfig(config: ClangdConfig): string {
   const doc = new yaml.Document(config);
-  return doc.toString({ lineWidth: 0 });  // lineWidth=0 禁止自动折行（防止长路径被 yaml 库折行）
+  return doc.toString({ lineWidth: 0 }); // lineWidth=0 禁止自动折行（防止长路径被 yaml 库折行）
 }

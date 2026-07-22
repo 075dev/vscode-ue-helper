@@ -131,13 +131,15 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       meta: { project: opts.project, isNative: isNativeAtEntry },
     });
   } catch (err) {
-    log.warn(`[perf] instrumentation entry failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `[perf] instrumentation entry failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // [LOG] 函数入口：明确打印输入参数，便于诊断 linkToWorkspaceRoot 后续找不到源文件
   log.info(
     `[generateCompileCommands] ENTRY project=${opts.project}, engineRoot=${opts.engineRoot}, ` +
-      `isNative=${isNativeAtEntry}, platform=${opts.platform ?? '(auto)'}`
+      `isNative=${isNativeAtEntry}, platform=${opts.platform ?? '(auto)'}`,
   );
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
@@ -176,7 +178,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
             meta: { hit: true, outcome: 'cacheFastPath' },
           });
         } catch (err) {
-          log.warn(`[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`);
+          log.warn(
+            `[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         return cachedEntry.ccPath;
       }
@@ -205,8 +209,8 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   if (!ubtAbsPath) {
     throw new Error(
       `UnrealBuildTool not found under ${opts.engineRoot}. ` +
-      'Make sure the engine root directory contains Engine/Build/BatchFiles/RunUBT.bat ' +
-      'or Engine/Binaries/DotNET/UnrealBuildTool/.',
+        'Make sure the engine root directory contains Engine/Build/BatchFiles/RunUBT.bat ' +
+        'or Engine/Binaries/DotNET/UnrealBuildTool/.',
     );
   }
   log.info(`[compileCommands] UBT found at: ${ubtAbsPath}`);
@@ -272,7 +276,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       meta: { isNative, target: args[0] ?? 'unknown' },
     });
   } catch (err) {
-    log.warn(`[perf] instrumentation ubtStart failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `[perf] instrumentation ubtStart failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   await executeShellTask(ubtRelPath, args, opts.engineRoot, log, taskEnv, opts.signal);
   try {
@@ -282,7 +288,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       meta: { isNative, exitCode: 0 },
     });
   } catch (err) {
-    log.warn(`[perf] instrumentation ubt.taskCompleted failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `[perf] instrumentation ubt.taskCompleted failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // 6. 定位输出文件
@@ -308,7 +316,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     path.join(opts.engineRoot, '.vscode', 'unreal-clangd', FILE_NAME_COMPILE_COMMANDS),
   ];
 
-  log.info(`[generateCompileCommands] searching compile_commands.json in candidates: ${JSON.stringify(candidates)}`);
+  log.info(
+    `[generateCompileCommands] searching compile_commands.json in candidates: ${JSON.stringify(candidates)}`,
+  );
 
   // 找到**第一个存在且非空**的文件
   // [Phase 7 PLAN B / per D-03] 阶段 3：candidates 文件查找 — 循环前后 timing
@@ -318,7 +328,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       const stat = await fs.stat(p);
       if (stat.size > 2) {
         // > 2 字节：避免空数组 []
-        log.info(`[generateCompileCommands] found compile_commands.json at: ${p} (${stat.size} bytes)`);
+        log.info(
+          `[generateCompileCommands] found compile_commands.json at: ${p} (${stat.size} bytes)`,
+        );
 
         // [Phase 7 D-08] 写入缓存，供下次快速命中
         if (cachedEntry?.ccPath !== p) {
@@ -349,7 +361,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
             meta: { candidateCount: candidates.length, hit: true, ccPath: p },
           });
         } catch (err) {
-          log.warn(`[perf] instrumentation candidatesScanned failed: ${err instanceof Error ? err.message : String(err)}`);
+          log.warn(
+            `[perf] instrumentation candidatesScanned failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         // [Phase 7 PLAN B / per D-03] 阶段 5：generateCompileCommands 总耗时 — return 前
         try {
@@ -359,11 +373,15 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
             meta: { hit: true, outcome: 'found', ccPath: p },
           });
         } catch (err) {
-          log.warn(`[perf] instrumentation totalElapsed (return) failed: ${err instanceof Error ? err.message : String(err)}`);
+          log.warn(
+            `[perf] instrumentation totalElapsed (return) failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         return p;
       } else {
-        log.warn(`[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`);
+        log.warn(
+          `[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`,
+        );
       }
     } catch {
       // not here
@@ -378,7 +396,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       meta: { candidateCount: candidates.length, hit: false },
     });
   } catch (err) {
-    log.warn(`[perf] instrumentation candidatesScanned (miss) failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `[perf] instrumentation candidatesScanned (miss) failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // [P1-3] candidates 全部未命中 -> 尝试 fallback 降级 DB
@@ -425,13 +445,19 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
           );
         } else {
           const fillResult = await fillMissingCompileCommands(
-            fbResult.ccPath, opts.project, log, opts.workspace,
+            fbResult.ccPath,
+            opts.project,
+            log,
+            opts.workspace,
           );
           if (fillResult) {
             perfLog.record({
               event: 'compileCommands.fillMissing',
               elapsedMs: performance.now() - entryStart,
-              meta: { outcome: fillResult.skippedReason ? 'skipped' : 'added', added: fillResult.added.length },
+              meta: {
+                outcome: fillResult.skippedReason ? 'skipped' : 'added',
+                added: fillResult.added.length,
+              },
             });
           }
         }
@@ -447,7 +473,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
           meta: { hit: false, outcome: 'fallback', ccPath: fbResult.ccPath },
         });
       } catch (err) {
-        log.warn(`[perf] instrumentation totalElapsed (fallback) failed: ${err instanceof Error ? err.message : String(err)}`);
+        log.warn(
+          `[perf] instrumentation totalElapsed (fallback) failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
       return fbResult.ccPath;
     }
@@ -464,17 +492,19 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       meta: { hit: false, outcome: 'notFound' },
     });
   } catch (err) {
-    log.warn(`[perf] instrumentation totalElapsed failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `[perf] instrumentation totalElapsed failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   throw new Error(
     `UBT task completed but compile_commands.json not found or empty.\n` +
-    `Checked:\n` +
-    candidates.map((c) => `  - ${c}`).join('\n') +
-    `\n\nPossible causes:\n` +
-    `  1. UBT isNative mode (-projectfiles) does not generate compile_commands.json\n` +
-    `  2. LLVM/clang not found: set LLVM_PATH env var or vscodeUEHelper.clangdPath setting\n` +
-    `  3. Engine version compatibility issue\n` +
-    `Check the VSCode UE Helper output channel for UBT logs.`,
+      `Checked:\n` +
+      candidates.map((c) => `  - ${c}`).join('\n') +
+      `\n\nPossible causes:\n` +
+      `  1. UBT isNative mode (-projectfiles) does not generate compile_commands.json\n` +
+      `  2. LLVM/clang not found: set LLVM_PATH env var or vscodeUEHelper.clangdPath setting\n` +
+      `  3. Engine version compatibility issue\n` +
+      `Check the VSCode UE Helper output channel for UBT logs.`,
   );
 }
 
@@ -502,7 +532,7 @@ export async function linkToWorkspaceRoot(
   const target = path.join(ccDir, FILE_NAME_COMPILE_COMMANDS);
   logger?.info(
     `[linkToWorkspaceRoot] ENTRY jsonPath=${jsonPath}, projectPath=${projectPath}, ` +
-      `projectDir=${projectDir}, target=${target}`
+      `projectDir=${projectDir}, target=${target}`,
   );
 
   // 如果生成的已经在目标位置，无需操作
@@ -516,7 +546,9 @@ export async function linkToWorkspaceRoot(
         meta: { skipped: true, target },
       });
     } catch (err) {
-      logger?.warn(`[perf] instrumentation linkToWorkspaceRoot skipped failed: ${err instanceof Error ? err.message : String(err)}`);
+      logger?.warn(
+        `[perf] instrumentation linkToWorkspaceRoot skipped failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     return target;
   }
@@ -530,7 +562,7 @@ export async function linkToWorkspaceRoot(
     const stat = await fs.lstat(target);
     logger?.info(
       `[linkToWorkspaceRoot] existing target: isSymbolicLink=${stat.isSymbolicLink()}, ` +
-        `isFile=${stat.isFile()}, size=${stat.size}`
+        `isFile=${stat.isFile()}, size=${stat.size}`,
     );
     if (stat.isSymbolicLink() || stat.isFile()) {
       const existing = await fs.readlink(target).catch(() => null);
@@ -545,7 +577,7 @@ export async function linkToWorkspaceRoot(
   } catch (err) {
     // 不存在，继续
     logger?.info(
-      `[linkToWorkspaceRoot] no existing target (lstat failed: ${err instanceof Error ? err.message : String(err)})`
+      `[linkToWorkspaceRoot] no existing target (lstat failed: ${err instanceof Error ? err.message : String(err)})`,
     );
   }
 
@@ -563,7 +595,7 @@ export async function linkToWorkspaceRoot(
         : 'UNKNOWN';
     logger?.info(
       `[linkToWorkspaceRoot] fs.symlink FAILED errno=${errno} msg=${symlinkMsg}; ` +
-        `falling back to fs.copyFile`
+        `falling back to fs.copyFile`,
     );
 
     // Symlink 在 Windows 非 Developer Mode 下可能失败，回退 copy。
@@ -586,12 +618,12 @@ export async function linkToWorkspaceRoot(
           `giving up. source exists?=${await fs
             .access(jsonPath)
             .then(() => 'yes')
-            .catch(() => 'no')}`
+            .catch(() => 'no')}`,
       );
       throw new Error(
         `linkToWorkspaceRoot: both symlink and copy failed. ` +
           `symlink errno=${errno} (${symlinkMsg}), copy errno=${copyErrno} (${copyMsg}). ` +
-          `source=${jsonPath}, target=${target}`
+          `source=${jsonPath}, target=${target}`,
       );
     }
   }
@@ -604,7 +636,9 @@ export async function linkToWorkspaceRoot(
       meta: { succeeded: lwsSucceeded, target },
     });
   } catch (err) {
-    logger?.warn(`[perf] instrumentation linkToWorkspaceRoot done failed: ${err instanceof Error ? err.message : String(err)}`);
+    logger?.warn(
+      `[perf] instrumentation linkToWorkspaceRoot done failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   return target;
 }
@@ -651,10 +685,7 @@ function normalizeComparableKey(filePath: string): string {
  *
  * 不会扫描 Engine/Plugins、Intermediate、Binaries、Saved、.vs、.git。
  */
-async function discoverSourceRoots(
-  projectDir: string,
-  logger?: Logger,
-): Promise<string[]> {
+async function discoverSourceRoots(projectDir: string, logger?: Logger): Promise<string[]> {
   const roots: string[] = [];
 
   // 项目 Source
@@ -672,7 +703,9 @@ async function discoverSourceRoots(
           const stat = await fs.stat(pluginSource);
           if (stat.isDirectory()) {
             roots.push(pluginSource);
-            logger?.debug(`[fillMissingCompileCommands] discovered plugin source root: ${pluginSource}`);
+            logger?.debug(
+              `[fillMissingCompileCommands] discovered plugin source root: ${pluginSource}`,
+            );
           }
         } catch {
           // 插件没有 Source 目录，跳过
@@ -681,7 +714,9 @@ async function discoverSourceRoots(
     }
   } catch {
     // Plugins 目录不存在或不可读，跳过
-    logger?.warn('[fillMissingCompileCommands] Plugins directory not found or not readable, skipping plugin source discovery');
+    logger?.warn(
+      '[fillMissingCompileCommands] Plugins directory not found or not readable, skipping plugin source discovery',
+    );
   }
 
   return roots;
@@ -690,10 +725,7 @@ async function discoverSourceRoots(
 /**
  * 递归扫描目录下所有源文件（.cpp/.h/.hpp/.c）
  */
-async function scanDirRecursive(
-  dir: string,
-  logger?: Logger,
-): Promise<string[]> {
+async function scanDirRecursive(dir: string, logger?: Logger): Promise<string[]> {
   const files: string[] = [];
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -707,7 +739,9 @@ async function scanDirRecursive(
       }
     }
   } catch (err) {
-    logger?.warn(`[fillMissingCompileCommands] scan failed for ${dir}: ${err instanceof Error ? err.message : String(err)}`);
+    logger?.warn(
+      `[fillMissingCompileCommands] scan failed for ${dir}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   return files;
 }
@@ -731,7 +765,10 @@ function findNearestTemplate(
   // 找出缺失文件所属的 source root
   const missingRoot = sourceRoots.find((root) => {
     const rootKey = normalizeComparableKey(root);
-    return missingKey.startsWith(rootKey + '/') || missingKey.startsWith(rootKey.replace(/\\/g, '/').toLowerCase() + '/');
+    return (
+      missingKey.startsWith(rootKey + '/') ||
+      missingKey.startsWith(rootKey.replace(/\\/g, '/').toLowerCase() + '/')
+    );
   });
 
   // 优先从同 root 的 .cpp 条目中找模板
@@ -786,7 +823,12 @@ export async function fillMissingCompileCommands(
   let entries: { file: string; directory: string; command?: string; arguments?: string[] }[];
   try {
     const content = await fs.readFile(jsonPath, 'utf-8');
-    entries = JSON.parse(content) as { file: string; directory: string; command?: string; arguments?: string[] }[];
+    entries = JSON.parse(content) as {
+      file: string;
+      directory: string;
+      command?: string;
+      arguments?: string[];
+    }[];
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger?.error(`[fillMissingCompileCommands] failed to read existing JSON: ${msg}`);
@@ -794,7 +836,9 @@ export async function fillMissingCompileCommands(
   }
 
   if (!Array.isArray(entries) || entries.length === 0) {
-    logger?.warn('[fillMissingCompileCommands] existing JSON is empty or not an array, skip filling');
+    logger?.warn(
+      '[fillMissingCompileCommands] existing JSON is empty or not an array, skip filling',
+    );
     return undefined;
   }
 
@@ -812,10 +856,14 @@ export async function fillMissingCompileCommands(
     const files = await scanDirRecursive(root, logger);
     allSourceFiles.push(...files);
   }
-  logger?.info(`[fillMissingCompileCommands] found ${allSourceFiles.length} source files across ${sourceRoots.length} roots`);
+  logger?.info(
+    `[fillMissingCompileCommands] found ${allSourceFiles.length} source files across ${sourceRoots.length} roots`,
+  );
 
   // 5. 找出缺失的文件（用规范化键比较）
-  const missingFiles = allSourceFiles.filter((f) => !existingFileKeys.has(normalizeComparableKey(f)));
+  const missingFiles = allSourceFiles.filter(
+    (f) => !existingFileKeys.has(normalizeComparableKey(f)),
+  );
   logger?.info(`[fillMissingCompileCommands] missing entries: ${missingFiles.length}`);
 
   if (missingFiles.length === 0) {
@@ -833,7 +881,9 @@ export async function fillMissingCompileCommands(
   for (const missingFile of missingFiles) {
     const templateEntry = findNearestTemplate(missingFile, entries, sourceRoots, projectDir);
     if (!templateEntry) {
-      logger?.warn(`[fillMissingCompileCommands] no suitable template for: ${missingFile}, skipping`);
+      logger?.warn(
+        `[fillMissingCompileCommands] no suitable template for: ${missingFile}, skipping`,
+      );
       continue;
     }
 
@@ -862,7 +912,7 @@ export async function fillMissingCompileCommands(
   try {
     await fs.writeFile(jsonPath, JSON.stringify(entries, null, 2), 'utf-8');
     logger?.info(
-      `[fillMissingCompileCommands] SUCCESS: added ${added.length} entries, total now ${entries.length}`
+      `[fillMissingCompileCommands] SUCCESS: added ${added.length} entries, total now ${entries.length}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

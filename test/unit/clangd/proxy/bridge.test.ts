@@ -98,14 +98,17 @@ describe('LspBridge — 代理桥接', () => {
 
   it('hover 请求透传并记录关联，服务器响应后关联可查', () => {
     const hover = {
-      jsonrpc: '2.0', id: 7, method: 'textDocument/hover',
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'textDocument/hover',
       params: { textDocument: { uri: 'file:///test.cpp' }, position: { line: 10, character: 5 } },
     };
     bridge.feedClientFrame(encodeMessage(hover));
 
     // 服务器响应
     const response = {
-      jsonrpc: '2.0', id: 7,
+      jsonrpc: '2.0',
+      id: 7,
       result: { contents: [{ kind: 'markdown', value: 'hover info' }] },
     };
     transport.receiveFromServer(encodeMessage(response));
@@ -115,13 +118,19 @@ describe('LspBridge — 代理桥接', () => {
     const msgs = parseFrames(clientOutput);
     expect(msgs).toHaveLength(1);
     expect(msgs[0]?.id).toBe(7);
-    const result = (msgs[0] as Record<string, unknown>)?.result as Record<string, unknown> | undefined;
+    const result = (msgs[0] as Record<string, unknown>)?.result as
+      | Record<string, unknown>
+      | undefined;
     expect(result).toBeDefined();
   });
 
   it('多个请求各自独立关联', () => {
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {} }));
-    bridge.feedClientFrame(encodeMessage({ jsonrpc: '2.0', id: 2, method: 'textDocument/codeAction', params: {} }));
+    bridge.feedClientFrame(
+      encodeMessage({ jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {} }),
+    );
+    bridge.feedClientFrame(
+      encodeMessage({ jsonrpc: '2.0', id: 2, method: 'textDocument/codeAction', params: {} }),
+    );
 
     expect(transport.sent).toHaveLength(2);
 
@@ -135,10 +144,13 @@ describe('LspBridge — 代理桥接', () => {
   // ─── keepalive 集成 ──────────────────────────────────────────
 
   it('didClose 进入保活，不立即转发到服务器', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///foo.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///foo.cpp'),
+      }),
+    );
 
     // 没有转发到服务器
     expect(transport.sent).toHaveLength(0);
@@ -146,16 +158,22 @@ describe('LspBridge — 代理桥接', () => {
 
   it('didOpen 命中保活 URI 时转发 didChange（全量文本）', () => {
     // 先关闭文件
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///foo.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///foo.cpp'),
+      }),
+    );
 
     // 重新打开
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didOpen',
-      params: didOpenParams('file:///foo.cpp', 'int main() {}', 2),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: didOpenParams('file:///foo.cpp', 'int main() {}', 2),
+      }),
+    );
 
     // 应该转发 didChange（不是 didOpen）
     expect(transport.sent).toHaveLength(1);
@@ -169,20 +187,29 @@ describe('LspBridge — 代理桥接', () => {
     clientOutput = [];
     bridge.onClientOutput((frame) => clientOutput.push(frame));
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///a.cpp'),
-    }));
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///b.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///a.cpp'),
+      }),
+    );
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///b.cpp'),
+      }),
+    );
 
     // 第三个 didClose → 淘汰 a.cpp
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///c.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///c.cpp'),
+      }),
+    );
 
     expect(transport.sent).toHaveLength(1);
     const msgs = parseFrames(transport.sent);
@@ -194,34 +221,45 @@ describe('LspBridge — 代理桥接', () => {
   });
 
   it('flush 刷新所有待处理 didClose', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///a.cpp'),
-    }));
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///b.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///a.cpp'),
+      }),
+    );
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///b.cpp'),
+      }),
+    );
 
     bridge.flush();
 
     expect(transport.sent).toHaveLength(2);
     const msgs = parseFrames(transport.sent);
     expect(msgs).toHaveLength(2);
-    expect(msgs.map((m) => {
-      const p = m.params as Record<string, unknown> | undefined;
-      const td = p?.textDocument as Record<string, unknown> | undefined;
-      return td?.uri;
-    })).toEqual(['file:///a.cpp', 'file:///b.cpp']);
+    expect(
+      msgs.map((m) => {
+        const p = m.params as Record<string, unknown> | undefined;
+        const td = p?.textDocument as Record<string, unknown> | undefined;
+        return td?.uri;
+      }),
+    ).toEqual(['file:///a.cpp', 'file:///b.cpp']);
   });
 
   // ─── server→client 路径 ──────────────────────────────────────
 
   it('服务器通知透传到客户端', () => {
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [] },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/publishDiagnostics',
+        params: { uri: 'file:///test.cpp', diagnostics: [] },
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const msgs = parseFrames(clientOutput);
@@ -230,13 +268,22 @@ describe('LspBridge — 代理桥接', () => {
   });
 
   it('服务器响应透传到客户端', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 5, method: 'textDocument/completion', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'textDocument/completion',
+        params: {},
+      }),
+    );
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 5, result: { items: [] },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 5,
+        result: { items: [] },
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const msgs = parseFrames(clientOutput);
@@ -245,13 +292,22 @@ describe('LspBridge — 代理桥接', () => {
   });
 
   it('服务器错误响应透传到客户端', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 3, method: 'textDocument/hover', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'textDocument/hover',
+        params: {},
+      }),
+    );
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 3, error: { code: -32601, message: 'Method not found' },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 3,
+        error: { code: -32601, message: 'Method not found' },
+      }),
+    );
 
     expect(clientOutput).toHaveLength(1);
     const msgs = parseFrames(clientOutput);
@@ -266,20 +322,31 @@ describe('LspBridge — 代理桥接', () => {
     bridge = new LspBridge(transport, {
       hooks: {
         onServerResponse: (_msg, method) => {
-          if (method) {hookMethods.push(method);}
+          if (method) {
+            hookMethods.push(method);
+          }
         },
       },
     });
     clientOutput = [];
     bridge.onClientOutput((frame) => clientOutput.push(frame));
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 7, method: 'textDocument/hover', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'textDocument/hover',
+        params: {},
+      }),
+    );
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 7, result: { contents: [] },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 7,
+        result: { contents: [] },
+      }),
+    );
 
     expect(hookMethods).toEqual(['textDocument/hover']);
   });
@@ -290,17 +357,22 @@ describe('LspBridge — 代理桥接', () => {
       hooks: {
         onServerNotification: (msg) => {
           const m = msg.method;
-          if (m) {notifications.push(m);}
+          if (m) {
+            notifications.push(m);
+          }
         },
       },
     });
     clientOutput = [];
     bridge.onClientOutput((frame) => clientOutput.push(frame));
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/publishDiagnostics',
-      params: { uri: 'file:///test.cpp', diagnostics: [] },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/publishDiagnostics',
+        params: { uri: 'file:///test.cpp', diagnostics: [] },
+      }),
+    );
 
     expect(notifications).toEqual(['textDocument/publishDiagnostics']);
   });
@@ -308,10 +380,13 @@ describe('LspBridge — 代理桥接', () => {
   // ─── 子进程关闭刷新 ──────────────────────────────────────────
 
   it('close 时刷新待处理 didClose', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///pending.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///pending.cpp'),
+      }),
+    );
 
     bridge.close();
 
@@ -328,25 +403,33 @@ describe('LspBridge — 代理桥接', () => {
   // ─── 信号刷新 ────────────────────────────────────────────────
 
   it('handleSignal 刷新所有待处理 didClose', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///sig.cpp'),
-    }));
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///sig2.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///sig.cpp'),
+      }),
+    );
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///sig2.cpp'),
+      }),
+    );
 
     bridge.handleSignal();
 
     expect(transport.sent).toHaveLength(2);
     const msgs = parseFrames(transport.sent);
     expect(msgs).toHaveLength(2);
-    expect(msgs.map((m) => {
-      const p = m.params as Record<string, unknown> | undefined;
-      const td = p?.textDocument as Record<string, unknown> | undefined;
-      return td?.uri;
-    })).toEqual(['file:///sig.cpp', 'file:///sig2.cpp']);
+    expect(
+      msgs.map((m) => {
+        const p = m.params as Record<string, unknown> | undefined;
+        const td = p?.textDocument as Record<string, unknown> | undefined;
+        return td?.uri;
+      }),
+    ).toEqual(['file:///sig.cpp', 'file:///sig2.cpp']);
   });
 
   it('handleSignal 无待处理时不做任何事', () => {
@@ -362,10 +445,13 @@ describe('LspBridge — 代理桥接', () => {
     clientOutput = [];
     bridge.onClientOutput((frame) => clientOutput.push(frame));
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didClose',
-      params: didCloseParams('file:///ttl-test.cpp'),
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: didCloseParams('file:///ttl-test.cpp'),
+      }),
+    );
 
     // 初始没有转发
     expect(transport.sent).toHaveLength(0);
@@ -374,10 +460,16 @@ describe('LspBridge — 代理桥接', () => {
     // 由于 keepaliveTtlSec=0，tick() 会立即过期
     // 但 tick() 只在 feedClientFrame 时被调用（通过 processClientMessage）
     // 需要发送一条任意消息触发 tick
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didChange',
-      params: { textDocument: { uri: 'file:///trigger.cpp', version: 1 }, contentChanges: [{ text: '' }] },
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didChange',
+        params: {
+          textDocument: { uri: 'file:///trigger.cpp', version: 1 },
+          contentChanges: [{ text: '' }],
+        },
+      }),
+    );
 
     // TTL=0 的条目应该在 tick 时过期并转发
     expect(transport.sent).toHaveLength(2); // didChange + 过期的 didClose
@@ -392,10 +484,16 @@ describe('LspBridge — 代理桥接', () => {
   // ─── 其他通知透传 ────────────────────────────────────────────
 
   it('非 didClose/didOpen 通知直接透传', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'textDocument/didChange',
-      params: { textDocument: { uri: 'file:///test.cpp', version: 2 }, contentChanges: [{ text: 'x' }] },
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'textDocument/didChange',
+        params: {
+          textDocument: { uri: 'file:///test.cpp', version: 2 },
+          contentChanges: [{ text: 'x' }],
+        },
+      }),
+    );
 
     expect(transport.sent).toHaveLength(1);
     const msgs = parseFrames(transport.sent);
@@ -404,9 +502,13 @@ describe('LspBridge — 代理桥接', () => {
   });
 
   it('initialized 通知直接透传', () => {
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', method: 'initialized', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        method: 'initialized',
+        params: {},
+      }),
+    );
 
     expect(transport.sent).toHaveLength(1);
     const msgs = parseFrames(transport.sent);
@@ -418,7 +520,10 @@ describe('LspBridge — 代理桥接', () => {
 
   it('分块喂入客户端数据正确累积解析', () => {
     const frame = encodeMessage({
-      jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {},
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'textDocument/hover',
+      params: {},
     });
     const part1 = frame.subarray(0, 15);
     const part2 = frame.subarray(15);
@@ -436,13 +541,22 @@ describe('LspBridge — 代理桥接', () => {
     // 模拟 stdout write 监控
     const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
-    bridge.feedClientFrame(encodeMessage({
-      jsonrpc: '2.0', id: 1, method: 'initialize', params: {},
-    }));
+    bridge.feedClientFrame(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {},
+      }),
+    );
 
-    transport.receiveFromServer(encodeMessage({
-      jsonrpc: '2.0', id: 1, result: { capabilities: {} },
-    }));
+    transport.receiveFromServer(
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { capabilities: {} },
+      }),
+    );
 
     // bridge 不应直接写入 stdout
     expect(stdoutWrite).not.toHaveBeenCalled();

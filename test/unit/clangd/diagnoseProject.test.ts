@@ -35,7 +35,10 @@ type ProjectFixture = {
 async function createFixture(options: FixtureOptions = {}): Promise<ProjectFixture> {
   const rootDir = await fs.mkdtemp(path.join(tmpdir(), 'diagnose-clangd-'));
   const projectPath = path.join(rootDir, 'MyGame.uproject');
-  const compileCommandsDir = path.join(rootDir, options.completionDatabase ?? '.vscode/vscodeuehelper');
+  const compileCommandsDir = path.join(
+    rootDir,
+    options.completionDatabase ?? '.vscode/vscodeuehelper',
+  );
   const compileCommandsPath = path.join(compileCommandsDir, 'compile_commands.json');
 
   await fs.writeFile(projectPath, '{"FileVersion": 3}', 'utf-8');
@@ -47,17 +50,20 @@ async function createFixture(options: FixtureOptions = {}): Promise<ProjectFixtu
   if (options.writeClangd ?? true) {
     // Plan Add 收束：directly build YAML text instead of relying on defaultClangdConfig opts.
     const compat = getUeClangdCompatPath(projectPath);
-    const sysFlags = options.addSystemIncludes === false
-      ? []
-      : ['/X', '/imsvc"C:/VS/VC/Tools/MSVC/include"', '-fms-compatibility-version=19.38'];
+    const sysFlags =
+      options.addSystemIncludes === false
+        ? []
+        : ['/X', '/imsvc"C:/VS/VC/Tools/MSVC/include"', '-fms-compatibility-version=19.38'];
     const addFlags = ['/FI' + compat, ...sysFlags];
-    const clangdText = options.clangdText ?? renderClangdConfig({
-      ...defaultClangdConfig({ projectPath }),
-      CompileFlags: {
-        ...defaultClangdConfig({ projectPath }).CompileFlags,
-        Add: addFlags,
-      },
-    });
+    const clangdText =
+      options.clangdText ??
+      renderClangdConfig({
+        ...defaultClangdConfig({ projectPath }),
+        CompileFlags: {
+          ...defaultClangdConfig({ projectPath }).CompileFlags,
+          Add: addFlags,
+        },
+      });
     await fs.writeFile(path.join(rootDir, '.clangd'), clangdText, 'utf-8');
   }
 
@@ -93,9 +99,7 @@ async function removeFixture(fixture: ProjectFixture): Promise<void> {
 }
 
 function failedCheckNames(report: Awaited<ReturnType<typeof diagnoseProject>>): readonly string[] {
-  return report.checks
-    .filter((check) => check.status === 'fail')
-    .map((check) => check.name);
+  return report.checks.filter((check) => check.status === 'fail').map((check) => check.name);
 }
 
 describe('diagnoseProject', () => {

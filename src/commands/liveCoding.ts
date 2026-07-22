@@ -35,7 +35,9 @@ export async function executeLiveCoding(
     silent,
     warningKey: 'liveCoding.noProject',
   });
-  if (!project) {return;}
+  if (!project) {
+    return;
+  }
   await persistSelection(workspace, detection, project, undefined);
 
   const engine = await resolveEngineOrPick({
@@ -44,7 +46,9 @@ export async function executeLiveCoding(
     silent,
     warningKey: 'cmd.noEngineSelected',
   });
-  if (!engine) {return;}
+  if (!engine) {
+    return;
+  }
   await persistSelection(workspace, detection, undefined, engine);
 
   logger.info(`[liveCoding] triggering for ${project.name} on ${engine.version}`);

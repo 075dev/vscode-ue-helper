@@ -66,8 +66,6 @@ function createFakeSpawn(fakeChild: FakeChild): typeof import('node:child_proces
   }) as unknown as typeof import('node:child_process').spawn;
 }
 
-
-
 // ---------------------------------------------------------------------------
 // 测试套件
 // ---------------------------------------------------------------------------
@@ -84,7 +82,9 @@ describe('ProcessBridge — 子进程适配器', () => {
     options = {
       clangdPath: '/fake/clangd.exe',
       clangdArgs: ['--arg1', '--arg2'],
-      log: (msg: string) => { logs.push(msg); },
+      log: (msg: string) => {
+        logs.push(msg);
+      },
       spawnFn: createFakeSpawn(fakeChild),
     };
     bridge = new ProcessBridge(options);
@@ -109,7 +109,9 @@ describe('ProcessBridge — 子进程适配器', () => {
 
   it('stdout 数据通过 onData 回调转发', () => {
     const received: Buffer[] = [];
-    bridge.onData((data) => { received.push(data); });
+    bridge.onData((data) => {
+      received.push(data);
+    });
 
     const chunk = Buffer.from('Content-Length: 15\r\n\r\n{"key":"value"}');
     fakeChild.stdout.emit('data', chunk);
@@ -119,7 +121,9 @@ describe('ProcessBridge — 子进程适配器', () => {
   });
 
   it('stdout 数据不写入日志', () => {
-    bridge.onData(() => { /* 注册回调 */ });
+    bridge.onData(() => {
+      /* 注册回调 */
+    });
 
     const chunk = Buffer.from('Content-Length: 15\r\n\r\n{"key":"value"}');
     fakeChild.stdout.emit('data', chunk);
@@ -207,7 +211,9 @@ describe('ProcessBridge — 子进程适配器', () => {
     const closeArgs: Array<[number | null, string | null]> = [];
     bridge = new ProcessBridge({
       ...options,
-      onChildClose: (code, signal) => { closeArgs.push([code, signal]); },
+      onChildClose: (code, signal) => {
+        closeArgs.push([code, signal]);
+      },
     });
 
     fakeChild.emit('close', 0, null);
@@ -230,7 +236,9 @@ describe('ProcessBridge — 子进程适配器', () => {
     const errors: Error[] = [];
     bridge = new ProcessBridge({
       ...options,
-      onChildError: (err) => { errors.push(err); },
+      onChildError: (err) => {
+        errors.push(err);
+      },
     });
 
     const testErr = new Error('ENOENT');
@@ -253,8 +261,12 @@ describe('ProcessBridge — 子进程适配器', () => {
     const failOptions: ProcessBridgeOptions = {
       clangdPath: '/nonexistent/clangd',
       clangdArgs: [],
-      log: (msg: string) => { logs.push(msg); },
-      spawnFn: (() => { throw new Error('spawn ENOENT'); }) as unknown as typeof import('node:child_process').spawn,
+      log: (msg: string) => {
+        logs.push(msg);
+      },
+      spawnFn: (() => {
+        throw new Error('spawn ENOENT');
+      }) as unknown as typeof import('node:child_process').spawn,
     };
 
     // 不应该抛出异常
@@ -272,7 +284,9 @@ describe('ProcessBridge — 子进程适配器', () => {
     const failOptions: ProcessBridgeOptions = {
       clangdPath: '/nonexistent',
       clangdArgs: [],
-      spawnFn: (() => { throw new Error('fail'); }) as unknown as typeof import('node:child_process').spawn,
+      spawnFn: (() => {
+        throw new Error('fail');
+      }) as unknown as typeof import('node:child_process').spawn,
     };
     const failBridge = new ProcessBridge(failOptions);
     expect(failBridge.pid).toBeUndefined();

@@ -43,7 +43,14 @@ async function createFixture(): Promise<{
   await fs.writeFile(path.join(gameCppDir, 'Game.cpp'), '// game code', 'utf-8');
 
   // 插件 Source
-  const pluginPrivateDir = path.join(tmpDir, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Private');
+  const pluginPrivateDir = path.join(
+    tmpDir,
+    'Plugins',
+    'MyPlugin',
+    'Source',
+    'MyPlugin',
+    'Private',
+  );
   const pluginPublicDir = path.join(tmpDir, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Public');
   await fs.mkdir(pluginPrivateDir, { recursive: true });
   await fs.mkdir(pluginPublicDir, { recursive: true });
@@ -59,12 +66,30 @@ async function createFixture(): Promise<{
     {
       directory: tmpDir,
       file: path.join(tmpDir, 'Source', 'Game', 'Game.cpp'),
-      arguments: ['clang-cl.exe', '-DGAME_TEMPLATE', '-c', path.join(tmpDir, 'Source', 'Game', 'Game.cpp')],
+      arguments: [
+        'clang-cl.exe',
+        '-DGAME_TEMPLATE',
+        '-c',
+        path.join(tmpDir, 'Source', 'Game', 'Game.cpp'),
+      ],
     },
     {
       directory: tmpDir,
-      file: path.join(tmpDir, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Private', 'MyPlugin.cpp'),
-      arguments: ['clang-cl.exe', '-DPLUGIN_TEMPLATE', '-c', path.join(tmpDir, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Private', 'MyPlugin.cpp')],
+      file: path.join(
+        tmpDir,
+        'Plugins',
+        'MyPlugin',
+        'Source',
+        'MyPlugin',
+        'Private',
+        'MyPlugin.cpp',
+      ),
+      arguments: [
+        'clang-cl.exe',
+        '-DPLUGIN_TEMPLATE',
+        '-c',
+        path.join(tmpDir, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Private', 'MyPlugin.cpp'),
+      ],
     },
   ];
 
@@ -96,18 +121,14 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
 
     // 不应为头文件添加条目
     const r = result as { added: string[] };
-    const hasPluginHeader = r.added.some(
-      (f) => f.endsWith('MyPluginComponent.h'),
-    );
+    const hasPluginHeader = r.added.some((f) => f.endsWith('MyPluginComponent.h'));
     expect(hasPluginHeader).toBe(false);
 
     // 读取写回的文件验证
     const content = await fs.readFile(fixture.jsonPath, 'utf-8');
     const entries = JSON.parse(content) as { file: string }[];
 
-    const headerInJson = entries.some(
-      (e) => e.file.endsWith('MyPluginComponent.h'),
-    );
+    const headerInJson = entries.some((e) => e.file.endsWith('MyPluginComponent.h'));
     expect(headerInJson).toBe(false);
   });
 
@@ -137,12 +158,28 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
 
     // 用大写盘符重写 compile_commands.json 的 file 路径
     const gameCpp = path.join(fixture.tmpDir, 'Source', 'Game', 'Game.cpp');
-    const pluginCpp = path.join(fixture.tmpDir, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Private', 'MyPlugin.cpp');
+    const pluginCpp = path.join(
+      fixture.tmpDir,
+      'Plugins',
+      'MyPlugin',
+      'Source',
+      'MyPlugin',
+      'Private',
+      'MyPlugin.cpp',
+    );
 
     // 构造大写盘符版本
     const driveUpper = fixture.tmpDir[0]!.toUpperCase() + fixture.tmpDir.slice(1);
     const gameCppUpper = path.join(driveUpper, 'Source', 'Game', 'Game.cpp');
-    const pluginCppUpper = path.join(driveUpper, 'Plugins', 'MyPlugin', 'Source', 'MyPlugin', 'Private', 'MyPlugin.cpp');
+    const pluginCppUpper = path.join(
+      driveUpper,
+      'Plugins',
+      'MyPlugin',
+      'Source',
+      'MyPlugin',
+      'Private',
+      'MyPlugin.cpp',
+    );
 
     const entries = [
       {
@@ -165,14 +202,14 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
     const finalEntries = JSON.parse(content) as { file: string }[];
 
     // Game.cpp 不应重复（大小写不敏感匹配）
-    const gameCppMatches = finalEntries.filter(
-      (e) => e.file.replace(/\\/g, '/').toLowerCase().includes('game.cpp'),
+    const gameCppMatches = finalEntries.filter((e) =>
+      e.file.replace(/\\/g, '/').toLowerCase().includes('game.cpp'),
     );
     expect(gameCppMatches).toHaveLength(1);
 
     // 插件 header 不应被添加（头文件没有独立编译条目）
-    const pluginHeaderMatches = finalEntries.filter(
-      (e) => e.file.replace(/\\/g, '/').toLowerCase().includes('myplugincomponent.h'),
+    const pluginHeaderMatches = finalEntries.filter((e) =>
+      e.file.replace(/\\/g, '/').toLowerCase().includes('myplugincomponent.h'),
     );
     expect(pluginHeaderMatches).toHaveLength(0);
   });
@@ -187,9 +224,7 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
     const content = await fs.readFile(fixture.jsonPath, 'utf-8');
     const entries = JSON.parse(content) as { file: string; arguments?: string[] }[];
 
-    const pluginHeaderEntry = entries.find(
-      (e) => e.file.endsWith('MyPluginComponent.h'),
-    );
+    const pluginHeaderEntry = entries.find((e) => e.file.endsWith('MyPluginComponent.h'));
     // 头文件不应有独立编译条目
     expect(pluginHeaderEntry).toBeUndefined();
   });
@@ -200,13 +235,26 @@ describe('fillMissingCompileCommands (插件源码补齐)', () => {
 
   it('无模板时返回 skippedReason', async () => {
     // 清空 compile_commands.json 使其不含任何 .cpp 条目
-    await fs.writeFile(fixture.jsonPath, JSON.stringify([
-      {
-        directory: fixture.tmpDir,
-        file: path.join(fixture.tmpDir, 'Source', 'Game', 'Game.h'),
-        arguments: ['clang-cl.exe', '-DGAME_TEMPLATE', '-c', path.join(fixture.tmpDir, 'Source', 'Game', 'Game.h')],
-      },
-    ], null, 2), 'utf-8');
+    await fs.writeFile(
+      fixture.jsonPath,
+      JSON.stringify(
+        [
+          {
+            directory: fixture.tmpDir,
+            file: path.join(fixture.tmpDir, 'Source', 'Game', 'Game.h'),
+            arguments: [
+              'clang-cl.exe',
+              '-DGAME_TEMPLATE',
+              '-c',
+              path.join(fixture.tmpDir, 'Source', 'Game', 'Game.h'),
+            ],
+          },
+        ],
+        null,
+        2,
+      ),
+      'utf-8',
+    );
 
     const result = await fillMissingCompileCommands(fixture.jsonPath, fixture.projectPath);
 

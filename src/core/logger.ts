@@ -92,7 +92,9 @@ export class Logger {
 
   /** 普通日志。记录运行状态、检测到的路径、用户操作等 */
   info(...args: unknown[]): void {
-    if (!this.shouldLog('info')) {return;}
+    if (!this.shouldLog('info')) {
+      return;
+    }
     const line = this.format('info', args);
     this.channel.appendLine(line);
     console.log(line);
@@ -100,7 +102,9 @@ export class Logger {
 
   /** 警告日志。不致命的异常、降级处理、找不到资源等 */
   warn(...args: unknown[]): void {
-    if (!this.shouldLog('warn')) {return;}
+    if (!this.shouldLog('warn')) {
+      return;
+    }
     const line = this.format('warn', args);
     this.channel.appendLine(line);
     console.warn(line);
@@ -108,7 +112,9 @@ export class Logger {
 
   /** 错误日志。命令失败、激活失败、解析错误等 */
   error(...args: unknown[]): void {
-    if (!this.shouldLog('error')) {return;}
+    if (!this.shouldLog('error')) {
+      return;
+    }
     const line = this.format('error', args);
     this.channel.appendLine(line);
     console.error(line);
@@ -116,7 +122,9 @@ export class Logger {
 
   /** 调试日志。仅在 lspLoggingLevel = debug 时记录 */
   debug(...args: unknown[]): void {
-    if (!this.shouldLog('debug')) {return;}
+    if (!this.shouldLog('debug')) {
+      return;
+    }
     const line = this.format('debug', args);
     this.channel.appendLine(line);
   }

@@ -19,10 +19,7 @@ import {
   USER_END_MARKER,
   parseManagedRegions,
 } from '@clangd/completionFiles';
-import {
-  FILENAME_UE_CLANGD_COMPAT,
-  getUeClangdCompatContent,
-} from '@clangd/ueClangdCompat';
+import { FILENAME_UE_CLANGD_COMPAT, getUeClangdCompatContent } from '@clangd/ueClangdCompat';
 
 // ---- 辅助函数 ----
 
@@ -103,7 +100,10 @@ describe('createCompletionFiles (ueClangdCompat.h)', () => {
     const entry = results.find((r) => r.name === FILENAME_UE_CLANGD_COMPAT);
     expect(entry).toBeDefined();
 
-    const fileExists = await fs.access(entry!.path).then(() => true).catch(() => false);
+    const fileExists = await fs
+      .access(entry!.path)
+      .then(() => true)
+      .catch(() => false);
     expect(fileExists).toBe(true);
   });
 
@@ -168,9 +168,7 @@ describe('getAddMacroCompletionsContent (UE 宏 stub)', () => {
     try {
       const results = await createCompletionFiles(setup.projectPath);
 
-      const entry = results.find(
-        (r) => r.name === FILENAME_ADD_MACRO_COMPLETIONS,
-      );
+      const entry = results.find((r) => r.name === FILENAME_ADD_MACRO_COMPLETIONS);
       expect(entry).toBeDefined();
 
       const fileContent = await fs.readFile(entry!.path, 'utf-8');
@@ -416,10 +414,7 @@ describe('parseManagedRegions', () => {
   });
 
   it('只有 managed begin 无 end：hasManagedMarkers=false', () => {
-    const content = [
-      MANAGED_BEGIN_MARKER,
-      'incomplete',
-    ].join('\n');
+    const content = [MANAGED_BEGIN_MARKER, 'incomplete'].join('\n');
 
     const result = parseManagedRegions(content);
 

@@ -57,7 +57,9 @@ export async function discoverSystemIncludes(
   clangdPath?: string,
   logger?: Logger,
 ): Promise<SystemIncludeInfo | null> {
-  if (process.platform !== 'win32') {return null;}
+  if (process.platform !== 'win32') {
+    return null;
+  }
 
   const clangExe = await resolveClangExecutable(clangdPath, logger);
   if (!clangExe) {
@@ -160,7 +162,11 @@ export async function readRecommendedSdkVersion(engineRoot: string): Promise<str
   const sdkConfigPath = path.join(engineRoot, 'Engine', 'Config', 'Windows', 'Windows_SDK.json');
   try {
     const content = await fs.readFile(sdkConfigPath, 'utf-8');
-    const config = JSON.parse(content) as { RecommendedVersion?: string; Version?: string; SDKVersion?: string };
+    const config = JSON.parse(content) as {
+      RecommendedVersion?: string;
+      Version?: string;
+      SDKVersion?: string;
+    };
     // 常见格式：{ "RecommendedVersion": "10.0.26100.0" } 或 { "Version": "10.0.26100" }
     const recommended = config.RecommendedVersion ?? config.Version ?? config.SDKVersion;
     if (recommended && typeof recommended === 'string') {
@@ -175,7 +181,10 @@ export async function readRecommendedSdkVersion(engineRoot: string): Promise<str
 /**
  * 从可用的 SDK 版本中选择：优先使用引擎推荐的版本，否则使用最新版本
  */
-export function selectSdkVersion(availableVersions: string[], recommendedVersion?: string | null): string {
+export function selectSdkVersion(
+  availableVersions: string[],
+  recommendedVersion?: string | null,
+): string {
   if (!recommendedVersion) {
     // 没有推荐版本，选择最新的（按版本号降序排序）
     return availableVersions.sort().reverse()[0] ?? '';
@@ -183,11 +192,15 @@ export function selectSdkVersion(availableVersions: string[], recommendedVersion
 
   // 检查推荐版本是否可用（精确匹配）
   const exactMatch = availableVersions.find((v) => v === recommendedVersion);
-  if (exactMatch) {return exactMatch;}
+  if (exactMatch) {
+    return exactMatch;
+  }
 
   // 前缀匹配（如推荐 "10.0.26100"，匹配 "10.0.26100.0"）
   const prefixMatch = availableVersions.find((v) => v.startsWith(recommendedVersion));
-  if (prefixMatch) {return prefixMatch;}
+  if (prefixMatch) {
+    return prefixMatch;
+  }
 
   // 没有匹配的，使用最新版本
   return availableVersions.sort().reverse()[0] ?? '';
@@ -202,7 +215,9 @@ export async function detectSystemIncludesWithEngineRecommendation(
   clangdPath: string | undefined,
   logger?: Logger,
 ): Promise<string[] | null> {
-  if (process.platform !== 'win32') {return null;}
+  if (process.platform !== 'win32') {
+    return null;
+  }
 
   // Step 1: 自动检测当前的 SDK + MSVC
   const detected = await discoverSystemIncludes(clangdPath, logger);
@@ -264,11 +279,15 @@ async function resolveClangExecutable(
   clangdPath?: string,
   logger?: Logger,
 ): Promise<string | null> {
-  if (process.platform !== 'win32') {return null;}
+  if (process.platform !== 'win32') {
+    return null;
+  }
 
   // Step 1 — find any clangd.exe.
   const clangdExe = await findClangdExecutable(clangdPath, logger);
-  if (!clangdExe) {return null;}
+  if (!clangdExe) {
+    return null;
+  }
   logger?.info(`[windowsSdk] found clangd.exe: ${clangdExe}`);
 
   // Step 2 — read InstalledDir from `clangd --version`.
@@ -407,7 +426,9 @@ function parseIncludePaths(stderr: string): string[] {
   const lines = stderr.split(/\r?\n/);
   const startIdx = lines.findIndex((l) => l.includes('#include <...> search starts here:'));
   const endIdx = lines.findIndex((l) => l.includes('End of search list.'));
-  if (startIdx === -1 || endIdx === -1) {return [];}
+  if (startIdx === -1 || endIdx === -1) {
+    return [];
+  }
   return lines
     .slice(startIdx + 1, endIdx)
     .map((l) => l.trim())
@@ -452,7 +473,9 @@ function identifyRoots(paths: string[]): { msvcRoot: string | null; sdkRoot: str
       }
     }
 
-    if (msvcRoot && sdkRoot) {break;}
+    if (msvcRoot && sdkRoot) {
+      break;
+    }
   }
 
   return { msvcRoot, sdkRoot };

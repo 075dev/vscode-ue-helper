@@ -20,9 +20,7 @@ import {
 
 describe('applyLocalizationToDiagnostic', () => {
   it('应返回翻译结果（append 格式：原文 [翻译]）', () => {
-    const result = applyLocalizationToDiagnostic(
-      "use of undeclared identifier 'Foo'",
-    );
+    const result = applyLocalizationToDiagnostic("use of undeclared identifier 'Foo'");
     // 验证 append 格式：原文 + [翻译]
     expect(result).toContain("use of undeclared identifier 'Foo'");
     expect(result).toMatch(/\[.+\]/);
@@ -30,9 +28,7 @@ describe('applyLocalizationToDiagnostic', () => {
   });
 
   it('不匹配的消息保持不变', () => {
-    const result = applyLocalizationToDiagnostic(
-      'some random diagnostic message',
-    );
+    const result = applyLocalizationToDiagnostic('some random diagnostic message');
     expect(result).toBe('some random diagnostic message');
   });
 
@@ -58,17 +54,17 @@ describe('applyLocalizationToDiagnostic', () => {
       "no matching function for call to 'FooFunc'",
       "'Foo' was not declared in this scope",
       "call to 'FindObject' is ambiguous",
-      "attempting to reference a deleted function",
+      'attempting to reference a deleted function',
       "'UProperty' is deprecated",
-      "expected identifier",
-      "too many arguments to function call",
-      "too few arguments to function call",
+      'expected identifier',
+      'too many arguments to function call',
+      'too few arguments to function call',
       "redefinition of 'MyClass'",
       "'GetName' is ambiguous",
-      "missing type specifier - int assumed",
+      'missing type specifier - int assumed',
       "cannot open file 'path/to/file.h'",
-      "expected expression",
-      "expected class name",
+      'expected expression',
+      'expected class name',
     ];
     for (const input of testCases) {
       const result = applyLocalizationToDiagnostic(input);
@@ -83,9 +79,7 @@ describe('applyLocalizationToDiagnostic', () => {
 
 describe('applyLocalizationToCodeAction', () => {
   it('应本地化代码动作标题', () => {
-    const result = applyLocalizationToCodeAction(
-      "use of undeclared identifier 'Foo'",
-    );
+    const result = applyLocalizationToCodeAction("use of undeclared identifier 'Foo'");
     // 应有翻译
     expect(result).toMatch(/[\u4e00-\u9fff]/);
   });

@@ -148,7 +148,6 @@ export class ClangdProxyManager {
    * 但 B+C 修复后也只在某些 VS Code 实例下生效（target 解析问题），遂完全解耦。
    */
   async enable(): Promise<void> {
-
     // 读取当前 clangd 参数（这些将作为 -- 之后的真实 clangd 参数传递）
     const clangdConfig = vscode.workspace.getConfiguration('clangd');
     const originalArgs = clangdConfig.get<string[]>('arguments') ?? [];
@@ -160,7 +159,9 @@ export class ClangdProxyManager {
     // P1-2: 确保后台索引优先级为 normal（用户未显式设置时注入，可逆）
     const ensuredRealArgs = ensureBackgroundIndexPriority(originalArgs);
     if (ensuredRealArgs.length !== originalArgs.length) {
-      this.logger.info('[proxyManager] injected --background-index-priority=normal into clangd args (P1-2)');
+      this.logger.info(
+        '[proxyManager] injected --background-index-priority=normal into clangd args (P1-2)',
+      );
     }
     await this.settingsManager.enable(proxyArgs, ensuredRealArgs);
     this.logger.info('[proxyManager] proxy enabled');
@@ -272,7 +273,9 @@ export class ClangdProxyManager {
       const editorIdx = targets.findIndex((t) => t.includes('Editor'));
       if (editorIdx > 0) {
         const editor = targets.splice(editorIdx, 1)[0];
-        if (editor) { targets.unshift(editor); }
+        if (editor) {
+          targets.unshift(editor);
+        }
       }
       const first = targets[0];
       if (!first) {
@@ -409,4 +412,3 @@ function buildDefaultClangdSearchRoots(): readonly string[] {
 function assertNever(value: never): never {
   throw new Error(`Unexpected real clangd resolver result: ${JSON.stringify(value)}`);
 }
-

@@ -23,7 +23,9 @@ function listTsFiles(dir: string, results: string[] = []): string[] {
     const p = path.join(dir, entry);
     const s = statSync(p);
     if (s.isDirectory()) {
-      if (entry === 'node_modules' || entry === 'out') {continue;}
+      if (entry === 'node_modules' || entry === 'out') {
+        continue;
+      }
       listTsFiles(p, results);
     } else if (p.endsWith('.ts') && !p.endsWith('.d.ts')) {
       results.push(p);
@@ -84,17 +86,22 @@ describe('SSoT surface regression', () => {
         path.join(SRC_ROOT, 'detection/index.ts'),
         path.join(SRC_ROOT, 'core/workspace.ts'),
       ]);
-      const tsFiles = listTsFiles(path.join(SRC_ROOT, 'commands'))
-        .concat(listTsFiles(path.join(SRC_ROOT, 'ui')));
+      const tsFiles = listTsFiles(path.join(SRC_ROOT, 'commands')).concat(
+        listTsFiles(path.join(SRC_ROOT, 'ui')),
+      );
       const violations: string[] = [];
       for (const file of tsFiles) {
-        if (excluded.has(file)) {continue;}
+        if (excluded.has(file)) {
+          continue;
+        }
         const src = readFileSync(file, 'utf-8');
         // 找 `vscode.workspace.workspaceFile` 但跳过注释
         const lines = src.split('\n');
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i]?.trim() ?? '';
-          if (line.startsWith('*') || line.startsWith('//') || line.startsWith('/*')) {continue;}
+          if (line.startsWith('*') || line.startsWith('//') || line.startsWith('/*')) {
+            continue;
+          }
           if (line.includes('vscode.workspace.workspaceFile')) {
             violations.push(`${path.relative(SRC_ROOT, file)}:${i + 1}: ${line}`);
           }
@@ -106,13 +113,19 @@ describe('SSoT surface regression', () => {
 
   describe('SSoT 锁定文档必须存在', () => {
     it('仓库根 .eslintrc.json 必须包含 no-restricted-syntax SSoT 规则', () => {
-      const eslintConfig = readFileSync(path.resolve(__dirname, '../../..', '.eslintrc.json'), 'utf-8');
+      const eslintConfig = readFileSync(
+        path.resolve(__dirname, '../../..', '.eslintrc.json'),
+        'utf-8',
+      );
       expect(eslintConfig).toMatch(/no-restricted-syntax/);
       expect(eslintConfig).toMatch(/workspaceFile/);
     });
 
     it('仓库根 .eslintrc.json 必须包含 no-restricted-imports SSoT 规则', () => {
-      const eslintConfig = readFileSync(path.resolve(__dirname, '../../..', '.eslintrc.json'), 'utf-8');
+      const eslintConfig = readFileSync(
+        path.resolve(__dirname, '../../..', '.eslintrc.json'),
+        'utf-8',
+      );
       expect(eslintConfig).toMatch(/no-restricted-imports/);
     });
 

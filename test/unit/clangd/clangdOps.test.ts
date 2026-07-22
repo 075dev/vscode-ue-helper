@@ -28,9 +28,11 @@ interface Harness {
   cleanup: () => Promise<void>;
 }
 
-async function setupHarness(opts: {
-  initialConfig?: Record<string, unknown>;
-} = {}): Promise<Harness> {
+async function setupHarness(
+  opts: {
+    initialConfig?: Record<string, unknown>;
+  } = {},
+): Promise<Harness> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clangdOps-test-'));
   const clangdPath = path.join(tmpDir, '.clangd');
 
@@ -166,7 +168,11 @@ describe('ClangdOps.applyAddFlags (Plan B.1 收束后的统一入口)', () => {
       expect(r.ok).toBe(true);
       const cfg = await readClangd(h2);
       expect((cfg as { If: unknown }).If).toBeDefined();
-      const cf = cfg.CompileFlags as { Add: string[]; Compiler: string; CompilationDatabase: string };
+      const cf = cfg.CompileFlags as {
+        Add: string[];
+        Compiler: string;
+        CompilationDatabase: string;
+      };
       expect(cf.CompilationDatabase).toBe('.vscode/vscodeuehelper');
       expect(cf.Compiler).toBe('D:/clang-cl.exe');
       expect(cf.Add).toEqual(['-std=c++20']);

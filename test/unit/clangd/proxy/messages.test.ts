@@ -26,19 +26,19 @@ import {
 // 辅助：构造各类消息的工厂函数
 // =============================================================================
 
-function makeRequest(
-  id: number | string,
-  method: string,
-  params?: unknown,
-): unknown {
+function makeRequest(id: number | string, method: string, params?: unknown): unknown {
   const msg: Record<string, unknown> = { jsonrpc: '2.0', id, method };
-  if (params !== undefined) {msg.params = params;}
+  if (params !== undefined) {
+    msg.params = params;
+  }
   return msg;
 }
 
 function makeNotification(method: string, params?: unknown): unknown {
   const msg: Record<string, unknown> = { jsonrpc: '2.0', method };
-  if (params !== undefined) {msg.params = params;}
+  if (params !== undefined) {
+    msg.params = params;
+  }
   return msg;
 }
 
@@ -46,11 +46,7 @@ function makeResponse(id: number | string, result: unknown): unknown {
   return { jsonrpc: '2.0', id, result };
 }
 
-function makeErrorResponse(
-  id: number | string,
-  code: number,
-  message: string,
-): unknown {
+function makeErrorResponse(id: number | string, code: number, message: string): unknown {
   return { jsonrpc: '2.0', id, error: { code, message } };
 }
 // =============================================================================
@@ -113,7 +109,9 @@ describe('isNotification (通知判定)', () => {
   });
 
   it('有 method 无 id 的消息收窄后类型正确', () => {
-    const msg: unknown = makeNotification('textDocument/didOpen', { textDocument: { uri: 'file:///test.cpp' } });
+    const msg: unknown = makeNotification('textDocument/didOpen', {
+      textDocument: { uri: 'file:///test.cpp' },
+    });
     if (isNotification(msg)) {
       expect(msg.method).toBe('textDocument/didOpen');
       expect(msg.params).toBeDefined();

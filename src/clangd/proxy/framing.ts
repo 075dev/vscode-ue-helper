@@ -229,4 +229,3 @@ export class LspFramingParser {
     return this.buffer;
   }
 }
-

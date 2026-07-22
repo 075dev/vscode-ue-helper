@@ -163,7 +163,9 @@ describe('ProxyOverheadMeter (Phase 7 PLAN B / per CLANGD-01-04)', () => {
     });
 
     it('路径包含 .. 抛出错误（路径安全防御）', async () => {
-      await expect(meter.persistBaseline('/tmp/../etc/passwd.json')).rejects.toThrow(/invalid path/);
+      await expect(meter.persistBaseline('/tmp/../etc/passwd.json')).rejects.toThrow(
+        /invalid path/,
+      );
     });
   });
 

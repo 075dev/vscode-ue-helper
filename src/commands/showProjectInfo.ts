@@ -45,18 +45,22 @@ export async function showProjectInfo(
   const { projects, engines, workspaceFile } = await detection.ready;
 
   // [Phase 9 SSoT] 收敛 selected* 访问
-  const selectedProject = projects.length > 0
-    ? (workspace?.resolveSelectedProject(projects) ?? ((): ProjectInfo | undefined => {
-        const sp = detection.workspaceContext.getSelectedProject();
-        return sp ? projects.find((p) => p.path === sp) : undefined;
-      })())
-    : undefined;
-  const selectedEngine = engines.length > 0
-    ? (workspace?.resolveSelectedEngine(engines) ?? ((): EngineInstall | undefined => {
-        const se = detection.workspaceContext.getSelectedEngine();
-        return se ? engines.find((e) => e.path === se) : undefined;
-      })())
-    : undefined;
+  const selectedProject =
+    projects.length > 0
+      ? (workspace?.resolveSelectedProject(projects) ??
+        ((): ProjectInfo | undefined => {
+          const sp = detection.workspaceContext.getSelectedProject();
+          return sp ? projects.find((p) => p.path === sp) : undefined;
+        })())
+      : undefined;
+  const selectedEngine =
+    engines.length > 0
+      ? (workspace?.resolveSelectedEngine(engines) ??
+        ((): EngineInstall | undefined => {
+          const se = detection.workspaceContext.getSelectedEngine();
+          return se ? engines.find((e) => e.path === se) : undefined;
+        })())
+      : undefined;
   const mcpHost = detectHost();
 
   const lines = [
@@ -135,10 +139,7 @@ export async function showProjectInfo(
   // [Phase 11 SSoT] silent = true 时 (MCP 工具调用) 不弹 information modal。
   const choice = silent
     ? undefined
-    : await vscode.window.showInformationMessage(
-        summary,
-        t('showInfo.openOutput'),
-      );
+    : await vscode.window.showInformationMessage(summary, t('showInfo.openOutput'));
   if (choice === t('showInfo.openOutput')) {
     logger.show();
   }

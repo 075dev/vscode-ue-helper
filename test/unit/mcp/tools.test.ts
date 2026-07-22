@@ -37,7 +37,8 @@ vi.mock('@commands/liveCoding', () => ({
   executeLiveCoding: (...args: unknown[]) => mockExecuteLiveCoding(...args),
 }));
 vi.mock('@commands/generateCompileCommands', () => ({
-  executeGenerateCompileCommands: (...args: unknown[]) => mockExecuteGenerateCompileCommands(...args),
+  executeGenerateCompileCommands: (...args: unknown[]) =>
+    mockExecuteGenerateCompileCommands(...args),
 }));
 vi.mock('@commands/setSystemIncludes', () => ({
   executeSetSystemIncludes: (...args: unknown[]) => mockExecuteSetSystemIncludes(...args),
@@ -50,12 +51,7 @@ vi.mock('@commands/showProjectInfo', () => ({
 // 测试主体 import (hoist 之后)
 // ============================================================
 
-import {
-  MCP_TOOLS,
-  callTool,
-  setMCPContext,
-  getMCPContext,
-} from '@mcp/tools';
+import { MCP_TOOLS, callTool, setMCPContext, getMCPContext } from '@mcp/tools';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { DetectionHandles } from '@detection';
@@ -223,12 +219,14 @@ describe('MCP tools', () => {
   // ============================================================
 
   it('ue_build dispatch 到 executeBuild(mode=rebuild, ..., silent=true)', async () => {
-    await expectDispatched(
-      'ue_build',
-      mockExecuteBuild,
-      { mode: 'rebuild' },
-      ['rebuild', fakeConfig, fakeLogger, fakeDetection, fakeWorkspace, true],
-    );
+    await expectDispatched('ue_build', mockExecuteBuild, { mode: 'rebuild' }, [
+      'rebuild',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
   });
 
   it('ue_build mode 缺省时默认 build', async () => {
@@ -251,48 +249,54 @@ describe('MCP tools', () => {
   });
 
   it('ue_launch_editor dispatch silent=true', async () => {
-    await expectDispatched(
-      'ue_launch_editor',
-      mockExecuteLaunchEditor,
-      {},
-      [fakeConfig, fakeLogger, fakeDetection, fakeWorkspace, true],
-    );
+    await expectDispatched('ue_launch_editor', mockExecuteLaunchEditor, {}, [
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
   });
 
   it('ue_live_coding dispatch silent=true', async () => {
-    await expectDispatched(
-      'ue_live_coding',
-      mockExecuteLiveCoding,
-      {},
-      [fakeConfig, fakeLogger, fakeDetection, fakeWorkspace, true],
-    );
+    await expectDispatched('ue_live_coding', mockExecuteLiveCoding, {}, [
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
   });
 
   it('ue_generate_compile_commands dispatch silent=true', async () => {
-    await expectDispatched(
-      'ue_generate_compile_commands',
-      mockExecuteGenerateCompileCommands,
-      {},
-      [fakeConfig, fakeLogger, fakeDetection, fakeWorkspace, true],
-    );
+    await expectDispatched('ue_generate_compile_commands', mockExecuteGenerateCompileCommands, {}, [
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
   });
 
   it('ue_show_project_info dispatch silent=true', async () => {
-    await expectDispatched(
-      'ue_show_project_info',
-      mockShowProjectInfo,
-      {},
-      [fakeConfig, fakeLogger, fakeDetection, fakeWorkspace, true],
-    );
+    await expectDispatched('ue_show_project_info', mockShowProjectInfo, {}, [
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
   });
 
   it('ue_set_system_includes dispatch silent=true 并透传 clangdOps', async () => {
-    await expectDispatched(
-      'ue_set_system_includes',
-      mockExecuteSetSystemIncludes,
-      {},
-      [fakeConfig, fakeLogger, fakeDetection, fakeWorkspace, fakeClangdOps, true],
-    );
+    await expectDispatched('ue_set_system_includes', mockExecuteSetSystemIncludes, {}, [
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      fakeClangdOps,
+      true,
+    ]);
   });
 
   // ============================================================

@@ -30,9 +30,7 @@ describe('resolvePreparseHeaders', () => {
   });
 
   it('处理 engineRoot 带反斜杠的路径（Windows 风格）', () => {
-    const headers = [
-      '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-    ];
+    const headers = ['$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h'];
     const result = resolvePreparseHeaders(headers, 'E:\\UE_5.8');
 
     expect(result).toHaveLength(1);
@@ -57,18 +55,14 @@ describe('resolvePreparseHeaders', () => {
   });
 
   it('engineRoot 为 undefined 时行为同空字符串', () => {
-    const headers = [
-      '$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h',
-    ];
+    const headers = ['$(EngineRoot)/Source/Runtime/Core/Public/CoreSharedPCH.h'];
     const result = resolvePreparseHeaders(headers, undefined as unknown as string);
 
     expect(result).toHaveLength(0);
   });
 
   it('header 中出现多次 $(EngineRoot) 全部替换', () => {
-    const headers = [
-      '$(EngineRoot)/Plugins/$(EngineRoot)_Compat/SomeHeader.h',
-    ];
+    const headers = ['$(EngineRoot)/Plugins/$(EngineRoot)_Compat/SomeHeader.h'];
     const result = resolvePreparseHeaders(headers, 'E:/UE_5.8');
 
     expect(result).toHaveLength(1);
@@ -86,10 +80,7 @@ describe('toIncludeFlags', () => {
       expect(flags).toEqual(['/FI/path/to/a.h', '/FI/path/to/b.h']);
     } else {
       // 非 Windows: GCC 风格 -include <path>
-      expect(flags).toEqual([
-        '-include', '/path/to/a.h',
-        '-include', '/path/to/b.h',
-      ]);
+      expect(flags).toEqual(['-include', '/path/to/a.h', '-include', '/path/to/b.h']);
     }
   });
 
@@ -126,10 +117,7 @@ describe('resolvePreparseHeaders (adversarial)', () => {
   });
 
   it('所有 header 都含 $(EngineRoot) 且 engineRoot 缺失时返回空', () => {
-    const headers = [
-      '$(EngineRoot)/Source/a.h',
-      '$(EngineRoot)/Source/b.h',
-    ];
+    const headers = ['$(EngineRoot)/Source/a.h', '$(EngineRoot)/Source/b.h'];
     const result = resolvePreparseHeaders(headers, '');
 
     expect(result).toEqual([]);
@@ -137,9 +125,9 @@ describe('resolvePreparseHeaders (adversarial)', () => {
 
   it('混合有效和无效 header 时只保留有效项', () => {
     const headers = [
-      '$(EngineRoot)/Source/a.h',           // 需要 engineRoot
-      '/system/global.h',                    // 绝对路径，不含占位符
-      '$(EngineRoot)/Plugins/b.h',           // 需要 engineRoot
+      '$(EngineRoot)/Source/a.h', // 需要 engineRoot
+      '/system/global.h', // 绝对路径，不含占位符
+      '$(EngineRoot)/Plugins/b.h', // 需要 engineRoot
     ];
     const result = resolvePreparseHeaders(headers, '');
 

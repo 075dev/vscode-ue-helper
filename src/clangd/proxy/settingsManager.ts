@@ -54,7 +54,9 @@ export class ClangdSettingsManager {
    * 是否有备份存在。
    */
   get hasBackup(): boolean {
-    return this.context.workspaceState.get<ClangdSettingsBackup | undefined>(BACKUP_KEY) !== undefined;
+    return (
+      this.context.workspaceState.get<ClangdSettingsBackup | undefined>(BACKUP_KEY) !== undefined
+    );
   }
 
   /**
@@ -114,7 +116,11 @@ export class ClangdSettingsManager {
           } else if (key === 'arguments') {
             await clangdConfig.update('arguments', backup.arguments, target);
           } else {
-            await clangdConfig.update('useScriptAsExecutable', backup.useScriptAsExecutable, target);
+            await clangdConfig.update(
+              'useScriptAsExecutable',
+              backup.useScriptAsExecutable,
+              target,
+            );
           }
         } catch {
           // 单个回滚失败不阻断其余回滚
@@ -176,7 +182,11 @@ export class ClangdSettingsManager {
     // 恢复原始设置
     await clangdConfig.update('path', backup.path, vscode.ConfigurationTarget.Workspace);
     await clangdConfig.update('arguments', backup.arguments, vscode.ConfigurationTarget.Workspace);
-    await clangdConfig.update('useScriptAsExecutable', backup.useScriptAsExecutable, vscode.ConfigurationTarget.Workspace);
+    await clangdConfig.update(
+      'useScriptAsExecutable',
+      backup.useScriptAsExecutable,
+      vscode.ConfigurationTarget.Workspace,
+    );
 
     // 清除备份
     await this.context.workspaceState.update(BACKUP_KEY, undefined);

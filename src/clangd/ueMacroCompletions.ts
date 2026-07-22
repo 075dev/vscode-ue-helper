@@ -32,7 +32,10 @@ type MacroOpening = { readonly macro: UeReflectionMacro; readonly openParen: num
 
 const EMPTY_CONTEXT: UeMacroCompletionContext = { kind: 'empty' };
 
-export function getUeMacroCompletionContext(source: string, offset: number): UeMacroCompletionContext {
+export function getUeMacroCompletionContext(
+  source: string,
+  offset: number,
+): UeMacroCompletionContext {
   if (offset < 0 || offset > source.length || isIgnoredAt(source, offset)) {
     return EMPTY_CONTEXT;
   }
@@ -54,19 +57,21 @@ export function getUeMacroCompletionContext(source: string, offset: number): UeM
   return { kind: 'parameters', macro: opening.macro, prefix };
 }
 
-export function getUeMacroCompletionItems(context: UeMacroCompletionContext): readonly UeMacroCompletionItem[] {
+export function getUeMacroCompletionItems(
+  context: UeMacroCompletionContext,
+): readonly UeMacroCompletionItem[] {
   switch (context.kind) {
     case 'empty':
       return [];
     case 'macroName':
-      return UE_REFLECTION_MACROS
-        .filter((macro) => macro.startsWith(context.prefix.toUpperCase()))
-        .map((macro) => ({
-          label: macro,
-          insertText: `${macro}($1)`,
-          detail: 'UEMacro',
-          documentation: `UE 反射宏: ${macro}`,
-        }));
+      return UE_REFLECTION_MACROS.filter((macro) =>
+        macro.startsWith(context.prefix.toUpperCase()),
+      ).map((macro) => ({
+        label: macro,
+        insertText: `${macro}($1)`,
+        detail: 'UEMacro',
+        documentation: `UE 反射宏: ${macro}`,
+      }));
     case 'parameters':
       return MACRO_COMPLETIONS[context.macro];
     case 'meta':
@@ -142,7 +147,10 @@ function isInsideMeta(source: string, start: number, offset: number): boolean {
   while (index < offset) {
     if (isCode(state) && isMetaKeyword(source, index)) {
       const equals = nextNonSpace(source, index + 4, offset);
-      const open = equals !== undefined && source[equals] === '=' ? nextNonSpace(source, equals + 1, offset) : undefined;
+      const open =
+        equals !== undefined && source[equals] === '='
+          ? nextNonSpace(source, equals + 1, offset)
+          : undefined;
       if (open !== undefined && source[open] === '(') {
         metaOpen = open;
       }
@@ -225,7 +233,9 @@ function scanStep(source: string, index: number, state: ScanState): ScanStep {
     if (char === '\\') {
       return { state: { ...state, escaped: true }, width: 1 };
     }
-    return char === state.quote ? { state: { ...state, quote: '' }, width: 1 } : { state, width: 1 };
+    return char === state.quote
+      ? { state: { ...state, quote: '' }, width: 1 }
+      : { state, width: 1 };
   }
   if (char === '/' && next === '/') {
     return { state: { ...state, lineComment: true }, width: 2 };

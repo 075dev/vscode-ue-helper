@@ -113,23 +113,21 @@ describe('PerfStatusBar.update 渲染三段 (per D-04 + D-05)', () => {
   beforeEach(() => {
     // 清空之前 mock 中的 items
     items = [];
-    (vscode.window.createStatusBarItem as ReturnType<typeof vi.fn>).mockImplementation(
-      () => {
-        // 每次调用返回新 mock 对象，添加到 items 列表
-        const item = {
-          text: '',
-          tooltip: '',
-          command: undefined,
-          backgroundColor: undefined,
-          name: '',
-          show: vi.fn(),
-          hide: vi.fn(),
-          dispose: vi.fn(),
-        };
-        items.push(item as unknown as vscode.StatusBarItem);
-        return item as unknown as vscode.StatusBarItem;
-      },
-    );
+    (vscode.window.createStatusBarItem as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      // 每次调用返回新 mock 对象，添加到 items 列表
+      const item = {
+        text: '',
+        tooltip: '',
+        command: undefined,
+        backgroundColor: undefined,
+        name: '',
+        show: vi.fn(),
+        hide: vi.fn(),
+        dispose: vi.fn(),
+      };
+      items.push(item as unknown as vscode.StatusBarItem);
+      return item as unknown as vscode.StatusBarItem;
+    });
 
     bar = new PerfStatusBar();
   });

@@ -33,7 +33,13 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 export { UprojectScanner, EngineDiscovery, VsBuildTools, WorkspaceContext };
-export type { ProjectInfo, EngineInstall, VSInstallation, WorkspaceSelection, WorkspaceFolderInfo } from './types';
+export type {
+  ProjectInfo,
+  EngineInstall,
+  VSInstallation,
+  WorkspaceSelection,
+  WorkspaceFolderInfo,
+} from './types';
 export { readBuildVersion, type ClassifiedFolder } from './workspaceFolders';
 
 export interface DetectionHandles {
@@ -103,99 +109,115 @@ export function activateDetection(
         return;
       }
 
-        const workspaceFilePath = workspaceFile.fsPath;
-        const workspaceRootDir = path.dirname(workspaceFilePath);
+      const workspaceFilePath = workspaceFile.fsPath;
+      const workspaceRootDir = path.dirname(workspaceFilePath);
 
-        // 读取 .code-workspace 并解析 folders 配置
-        const workspaceRaw = await fs.readFile(workspaceFilePath, 'utf-8');
-        const wsData = JSON.parse(workspaceRaw) as { folders?: Array<{ name?: string; path?: string }> };
-        const rawEntries: Array<{ name: string; path: string }> = (wsData.folders ?? []).map(
-          (f: { name?: string; path?: string }) => ({ name: f.name ?? '', path: f.path ?? '' }),
+      // 读取 .code-workspace 并解析 folders 配置
+      const workspaceRaw = await fs.readFile(workspaceFilePath, 'utf-8');
+      const wsData = JSON.parse(workspaceRaw) as {
+        folders?: Array<{ name?: string; path?: string }>;
+      };
+      const rawEntries: Array<{ name: string; path: string }> = (wsData.folders ?? []).map(
+        (f: { name?: string; path?: string }) => ({ name: f.name ?? '', path: f.path ?? '' }),
+      );
+
+      // [Phase 8] 解析 folders[] 为 WorkspaceFolderInfo（含 role + absPath）
+      // 角色识别规则（硬规则，用户不允许自定义）：
+      //   - path === '.'  → project
+      //   - name === 'UE5' → engine
+      //   - 其余 → unknown
+      const workspaceFolders: WorkspaceFolderInfo[] = rawEntries.map((e) => {
+        const absPath = path.resolve(workspaceRootDir, e.path);
+        let role: 'project' | 'engine' | 'unknown' = 'unknown';
+        if (e.path === '.') {
+          role = 'project';
+        } else if (e.name === 'UE5') {
+          role = 'engine';
+        }
+        return { name: e.name, path: e.path, role, absPath };
+      });
+
+      // 调试日志
+      logger.info(`[detection] workspaceFile = ${workspaceFilePath}`);
+      logger.info(`[detection] workspaceRoot  = ${workspaceRootDir}`);
+      logger.info(`[detection] entries (count=${workspaceFolders.length}):`);
+      for (let i = 0; i < workspaceFolders.length; i++) {
+        const e = workspaceFolders[i];
+        if (!e) {
+          continue;
+        }
+        logger.info(
+          `[detection]   [${i}] role=${e.role} name="${e.name}" path="${e.path}" absPath=${e.absPath}`,
+        );
+      }
+
+      // ===== 项目识别（path === '.'）=====
+      const projectFolder = workspaceFolders.find((e) => e.role === 'project') ?? null;
+      const projects: ProjectInfo[] = [];
+
+      if (!projectFolder) {
+        logger.error(
+          '[detection] no project folder declared: .code-workspace folders[] has no entry with path="."',
+        );
+      } else {
+        const uprojectPath = path.join(projectFolder.absPath, `${projectFolder.name}.uproject`);
+        const project = await handles.scanner.parseFromPath(uprojectPath);
+        if (!project) {
+          logger.error(
+            `[detection] project .uproject not found or unreadable at ${uprojectPath}. ` +
+              `Check that folders[] in your .code-workspace has an entry with path="." ` +
+              `pointing to a folder containing "<name>.uproject".`,
+          );
+        } else {
+          projects.push(project);
+          logger.info(`[detection] project: name="${project.name}" path="${project.path}"`);
+        }
+      }
+
+      // ===== 引擎识别（name === 'UE5'）=====
+      const engineFolder = workspaceFolders.find((e) => e.role === 'engine') ?? null;
+      const engines: EngineInstall[] = [];
+
+      if (!engineFolder) {
+        logger.error(
+          '[detection] no engine folder declared: .code-workspace folders[] has no entry with name="UE5". ' +
+            'Add a folder entry with name="UE5" pointing to the UE engine root.',
+        );
+      } else {
+        const buildVersionPath = path.join(
+          engineFolder.absPath,
+          'Engine',
+          'Build',
+          'Build.version',
         );
 
-        // [Phase 8] 解析 folders[] 为 WorkspaceFolderInfo（含 role + absPath）
-        // 角色识别规则（硬规则，用户不允许自定义）：
-        //   - path === '.'  → project
-        //   - name === 'UE5' → engine
-        //   - 其余 → unknown
-        const workspaceFolders: WorkspaceFolderInfo[] = rawEntries.map((e) => {
-          const absPath = path.resolve(workspaceRootDir, e.path);
-          let role: 'project' | 'engine' | 'unknown' = 'unknown';
-          if (e.path === '.') {role = 'project';}
-          else if (e.name === 'UE5') {role = 'engine';}
-          return { name: e.name, path: e.path, role, absPath };
+        try {
+          await fs.access(buildVersionPath);
+        } catch {
+          logger.error(
+            `[detection] engine Build.version not found at ${buildVersionPath}. ` +
+              `Check that the folder with name="UE5" points to a UE engine root.`,
+          );
+        }
+
+        const version = await readBuildVersion(engineFolder.absPath);
+        engines.push({
+          path: engineFolder.absPath,
+          version: version ?? 'unknown',
+          isLauncherInstall: false,
         });
+        logger.info(
+          `[detection] engine: name="${engineFolder.name}" path="${engineFolder.absPath}" version=${version ?? 'unknown'}`,
+        );
+      }
 
-        // 调试日志
-        logger.info(`[detection] workspaceFile = ${workspaceFilePath}`);
-        logger.info(`[detection] workspaceRoot  = ${workspaceRootDir}`);
-        logger.info(`[detection] entries (count=${workspaceFolders.length}):`);
-        for (let i = 0; i < workspaceFolders.length; i++) {
-          const e = workspaceFolders[i];
-          if (!e) { continue; }
-          logger.info(`[detection]   [${i}] role=${e.role} name="${e.name}" path="${e.path}" absPath=${e.absPath}`);
-        }
+      handles.discovery = new EngineDiscovery({ candidates: engines.map((e) => e.path) });
 
-        // ===== 项目识别（path === '.'）=====
-        const projectFolder = workspaceFolders.find((e) => e.role === 'project') ?? null;
-        const projects: ProjectInfo[] = [];
+      const projectNames = projects.map((p) => p.name).join(', ') || '(none)';
+      const engineVersions = engines.map((e) => e.version).join(', ') || '(none)';
+      logger.info(`[detection] projects: ${projectNames} | engines: ${engineVersions}`);
 
-        if (!projectFolder) {
-          logger.error(
-            '[detection] no project folder declared: .code-workspace folders[] has no entry with path="."',
-          );
-        } else {
-          const uprojectPath = path.join(projectFolder.absPath, `${projectFolder.name}.uproject`);
-          const project = await handles.scanner.parseFromPath(uprojectPath);
-          if (!project) {
-            logger.error(
-              `[detection] project .uproject not found or unreadable at ${uprojectPath}. ` +
-                `Check that folders[] in your .code-workspace has an entry with path="." ` +
-                `pointing to a folder containing "<name>.uproject".`,
-            );
-          } else {
-            projects.push(project);
-            logger.info(`[detection] project: name="${project.name}" path="${project.path}"`);
-          }
-        }
-
-        // ===== 引擎识别（name === 'UE5'）=====
-        const engineFolder = workspaceFolders.find((e) => e.role === 'engine') ?? null;
-        const engines: EngineInstall[] = [];
-
-        if (!engineFolder) {
-          logger.error(
-            '[detection] no engine folder declared: .code-workspace folders[] has no entry with name="UE5". ' +
-              'Add a folder entry with name="UE5" pointing to the UE engine root.',
-          );
-        } else {
-          const buildVersionPath = path.join(engineFolder.absPath, 'Engine', 'Build', 'Build.version');
-
-          try {
-            await fs.access(buildVersionPath);
-          } catch {
-            logger.error(
-              `[detection] engine Build.version not found at ${buildVersionPath}. ` +
-                `Check that the folder with name="UE5" points to a UE engine root.`,
-            );
-          }
-
-          const version = await readBuildVersion(engineFolder.absPath);
-          engines.push({
-            path: engineFolder.absPath,
-            version: version ?? 'unknown',
-            isLauncherInstall: false,
-          });
-          logger.info(`[detection] engine: name="${engineFolder.name}" path="${engineFolder.absPath}" version=${version ?? 'unknown'}`);
-        }
-
-        handles.discovery = new EngineDiscovery({ candidates: engines.map((e) => e.path) });
-
-        const projectNames = projects.map((p) => p.name).join(', ') || '(none)';
-        const engineVersions = engines.map((e) => e.version).join(', ') || '(none)';
-        logger.info(`[detection] projects: ${projectNames} | engines: ${engineVersions}`);
-
-        resolveReady({
+      resolveReady({
         projects,
         engines,
         workspaceFile: workspaceFilePath,

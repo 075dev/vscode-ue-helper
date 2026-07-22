@@ -40,8 +40,12 @@ describe('E2E: CLI fake-child 重启循环回归', () => {
     stderrLines = [];
     exitCodes = [];
     io = {
-      stderrWrite: (message: string) => { stderrLines.push(message); },
-      exit: (code: number) => { exitCodes.push(code); },
+      stderrWrite: (message: string) => {
+        stderrLines.push(message);
+      },
+      exit: (code: number) => {
+        exitCodes.push(code);
+      },
     };
   });
 
@@ -64,11 +68,14 @@ describe('E2E: CLI fake-child 重启循环回归', () => {
     expect(forwarded).toHaveLength(1);
     expect(forwarded[0]?.method).toBe('initialize');
 
-    fakeChild.stdout.emit('data', encodeMessage({
-      jsonrpc: '2.0',
-      id: 1,
-      result: { capabilities: { hoverProvider: true } },
-    }));
+    fakeChild.stdout.emit(
+      'data',
+      encodeMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { capabilities: { hoverProvider: true } },
+      }),
+    );
 
     const stdoutText = Buffer.concat(stdio.stdoutFrames).toString('utf-8');
     expect(stdoutText).toContain('Content-Length:');

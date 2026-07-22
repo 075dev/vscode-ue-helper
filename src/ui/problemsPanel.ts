@@ -24,7 +24,9 @@ export function getDiagnosticCollection(): vscode.DiagnosticCollection {
 }
 
 export function pushDiagnostics(parsed: ParsedDiagnostic[]): void {
-  if (parsed.length === 0) {return;}
+  if (parsed.length === 0) {
+    return;
+  }
   const c = getDiagnosticCollection();
   const byFile = new Map<string, vscode.Diagnostic[]>();
   for (const d of parsed) {

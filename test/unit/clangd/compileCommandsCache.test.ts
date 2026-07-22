@@ -77,7 +77,10 @@ describe('CompileCommandsCache', () => {
     expect(stat.isFile()).toBe(true);
 
     // .tmp 文件不存在（已被 rename）
-    const tmpExists = await fs.access(`${ccFile}.tmp`).then(() => true).catch(() => false);
+    const tmpExists = await fs
+      .access(`${ccFile}.tmp`)
+      .then(() => true)
+      .catch(() => false);
     expect(tmpExists).toBe(false);
   });
 

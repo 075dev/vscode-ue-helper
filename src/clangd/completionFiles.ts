@@ -41,10 +41,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { EOL } from 'node:os';
-import {
-  FILENAME_UE_CLANGD_COMPAT,
-  getUeClangdCompatContent,
-} from '@clangd/ueClangdCompat';
+import { FILENAME_UE_CLANGD_COMPAT, getUeClangdCompatContent } from '@clangd/ueClangdCompat';
 
 // ---- 文件名常量 ----
 
@@ -100,12 +97,7 @@ export function parseManagedRegions(content: string): ManagedRegions {
   const userEndIdx = content.indexOf(USER_END_MARKER);
 
   // 需要四个标记都存在才算有效托管文件
-  if (
-    managedBeginIdx === -1 ||
-    managedEndIdx === -1 ||
-    userBeginIdx === -1 ||
-    userEndIdx === -1
-  ) {
+  if (managedBeginIdx === -1 || managedEndIdx === -1 || userBeginIdx === -1 || userEndIdx === -1) {
     return { hasManagedMarkers: false, managedContent: '', userContent: content };
   }
 
@@ -176,13 +168,19 @@ function extractLegacyUserContent(content: string): string {
     return content.trimEnd();
   }
 
-  const headerEndIndex = lines.findIndex((line, index) => index > titleIndex && line.trim() === '*/');
+  const headerEndIndex = lines.findIndex(
+    (line, index) => index > titleIndex && line.trim() === '*/',
+  );
   if (headerEndIndex === -1) {
     return content.trimEnd();
   }
 
   // allow: SIZE_OK — T3 只在既有 completionFiles 模块内实现区域迁移，避免为一个私有迁移流程引入新文件扩大范围。
-  return lines.slice(headerEndIndex + 1).join('\n').trimStart().trimEnd();
+  return lines
+    .slice(headerEndIndex + 1)
+    .join('\n')
+    .trimStart()
+    .trimEnd();
 }
 
 /**
@@ -211,10 +209,7 @@ function getCompletionHelperContent(): string {
     '* 如需添加非宏补全头文件，请编辑 addCompletions.h',
     '*/',
   ].join(EOL);
-  const includes = [
-    '#include "defaultCompletions.h"',
-    '#include "addCompletions.h"',
-  ].join(EOL);
+  const includes = ['#include "defaultCompletions.h"', '#include "addCompletions.h"'].join(EOL);
   return doNotModify + EOL + EOL + includes + EOL;
 }
 

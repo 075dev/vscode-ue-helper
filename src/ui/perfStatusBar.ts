@@ -49,10 +49,7 @@ export class PerfStatusBar implements vscode.Disposable {
 
   constructor() {
     // priority 200 在最左（高 priority = 更左），依次 199、198
-    this.clangdGenItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Left,
-      200,
-    );
+    this.clangdGenItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 200);
     this.clangdGenItem.name = 'UE Helper: Perf Clangd Gen';
     this.clangdGenItem.command = {
       title: 'Show Output',
@@ -60,10 +57,7 @@ export class PerfStatusBar implements vscode.Disposable {
       arguments: ['VSCodeUEHelper'],
     };
 
-    this.preparseCacheItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Left,
-      199,
-    );
+    this.preparseCacheItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 199);
     this.preparseCacheItem.name = 'UE Helper: Perf PI Cache';
     this.preparseCacheItem.command = {
       title: 'Show Output',
@@ -82,11 +76,7 @@ export class PerfStatusBar implements vscode.Disposable {
       arguments: ['VSCodeUEHelper'],
     };
 
-    this.disposables.push(
-      this.clangdGenItem,
-      this.preparseCacheItem,
-      this.incrementalScanItem,
-    );
+    this.disposables.push(this.clangdGenItem, this.preparseCacheItem, this.incrementalScanItem);
   }
 
   /**
@@ -103,7 +93,9 @@ export class PerfStatusBar implements vscode.Disposable {
       const seconds = (metrics.genMs / 1000).toFixed(1);
       this.clangdGenItem.text = `${t1.icon} Clangd: ${seconds}s`;
       this.clangdGenItem.backgroundColor = t1.color;
-      this.clangdGenItem.tooltip = t('perf.clangdGen.tooltip', { ms: String(Math.round(metrics.genMs)) });
+      this.clangdGenItem.tooltip = t('perf.clangdGen.tooltip', {
+        ms: String(Math.round(metrics.genMs)),
+      });
     }
 
     // 第 2 段：PI cache 命中率（>=80% 绿 / 60-80% 黄 / <60% 红，inverted）
@@ -121,7 +113,9 @@ export class PerfStatusBar implements vscode.Disposable {
       const t3 = this.thresholdFor(metrics.incrMs, { green: 100, yellow: 200 });
       this.incrementalScanItem.text = `${t3.icon} Incr: ${Math.round(metrics.incrMs)}ms`;
       this.incrementalScanItem.backgroundColor = t3.color;
-      this.incrementalScanItem.tooltip = t('perf.incrementalScan.tooltip', { ms: String(Math.round(metrics.incrMs)) });
+      this.incrementalScanItem.tooltip = t('perf.incrementalScan.tooltip', {
+        ms: String(Math.round(metrics.incrMs)),
+      });
     }
   }
 

@@ -42,7 +42,9 @@ export async function collectIntermediateUhtDirs(
   }
 
   for (const pc of platformEntries) {
-    if (!pc.isDirectory()) { continue; }
+    if (!pc.isDirectory()) {
+      continue;
+    }
     const platformCfgDir = path.join(buildDir, pc.name);
 
     let targetEntries: Dirent[];
@@ -53,7 +55,9 @@ export async function collectIntermediateUhtDirs(
     }
 
     for (const target of targetEntries) {
-      if (!target.isDirectory()) { continue; }
+      if (!target.isDirectory()) {
+        continue;
+      }
       const incDir = path.join(platformCfgDir, target.name, 'Inc');
 
       let moduleEntries: Dirent[];
@@ -64,11 +68,15 @@ export async function collectIntermediateUhtDirs(
       }
 
       for (const mod of moduleEntries) {
-        if (!mod.isDirectory()) { continue; }
+        if (!mod.isDirectory()) {
+          continue;
+        }
         const uhtDir = path.join(incDir, mod.name, 'UHT');
         try {
           const stat = await fs.stat(uhtDir);
-          if (stat.isDirectory()) { dirs.push(uhtDir); }
+          if (stat.isDirectory()) {
+            dirs.push(uhtDir);
+          }
         } catch {
           /* UHT 目录不存在（该模块没有 UCLASS）跳过 */
         }

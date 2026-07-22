@@ -49,12 +49,16 @@ export async function executeSetSystemIncludes(
 
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅 project,engine 路径直接读缓存）
   const project = await resolveProjectOrPick({ detection, workspace, silent });
-  if (!project) {return;}
+  if (!project) {
+    return;
+  }
   await persistSelection(workspace, detection, project, undefined);
 
   // 引擎已经在工作区中选择过，直接读取
   const enginePath = workspace?.selectedEngine ?? detection.workspaceContext.getSelectedEngine();
-  logger.info(`[setSystemIncludes] project: ${project.path}, engine: ${enginePath ?? 'not selected'}`);
+  logger.info(
+    `[setSystemIncludes] project: ${project.path}, engine: ${enginePath ?? 'not selected'}`,
+  );
 
   // Discover what clangd currently sees.
   const detected = await discoverSystemIncludes(config.clangdPath, logger);
@@ -111,9 +115,13 @@ export async function executeSetSystemIncludes(
   }
   const defaultSdkVersion = selectSdkVersion(sdkVersions, recommendedSdk);
   if (recommendedSdk) {
-    logger.info(`[setSystemIncludes] engine recommends SDK: ${recommendedSdk}, selected: ${defaultSdkVersion}`);
+    logger.info(
+      `[setSystemIncludes] engine recommends SDK: ${recommendedSdk}, selected: ${defaultSdkVersion}`,
+    );
   } else {
-    logger.info(`[setSystemIncludes] no SDK recommendation from engine, using latest: ${defaultSdkVersion}`);
+    logger.info(
+      `[setSystemIncludes] no SDK recommendation from engine, using latest: ${defaultSdkVersion}`,
+    );
   }
 
   // ── QuickPick 1: MSVC version ──
@@ -125,7 +133,9 @@ export async function executeSetSystemIncludes(
     })),
     { placeHolder: 'Select MSVC version', title: 'MSVC' },
   );
-  if (!msvcChoice) {return;}
+  if (!msvcChoice) {
+    return;
+  }
   const msvcRoot = path.join(msvcParent, msvcChoice.label);
 
   // ── QuickPick 2: Windows SDK version ──
@@ -143,7 +153,9 @@ export async function executeSetSystemIncludes(
       title: 'Windows SDK',
     },
   );
-  if (!sdkChoice) {return;}
+  if (!sdkChoice) {
+    return;
+  }
   const sdkRoot = path.join(sdkParent, sdkChoice.label);
 
   // Render flags and splice into .clangd.

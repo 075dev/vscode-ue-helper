@@ -126,13 +126,7 @@ function platformString(): string {
 async function resolveDotnet(
   engineRoot: string,
 ): Promise<{ dotnetExe: string; dotnetVersionDir: string }> {
-  const dotnetBaseDir = path.join(
-    engineRoot,
-    'Engine',
-    'Binaries',
-    'ThirdParty',
-    'DotNet',
-  );
+  const dotnetBaseDir = path.join(engineRoot, 'Engine', 'Binaries', 'ThirdParty', 'DotNet');
   let versions: string[];
   try {
     versions = await fs.readdir(dotnetBaseDir);
@@ -213,15 +207,7 @@ function describeExit(exitCode: number | null, aborted: boolean): string | undef
  * @throws {import('./proxy/ueDiagnosticWatcher').UBTArgsValidationError} buildTargetName / project 白名单校验失败时
  */
 export async function runUhtCodegen(opts: RunUhtCodegenOptions): Promise<UhtResult> {
-  const {
-    project,
-    engineRoot,
-    buildTargetName,
-    buildType,
-    logger,
-    signal,
-    timeoutMs,
-  } = opts;
+  const { project, engineRoot, buildTargetName, buildType, logger, signal, timeoutMs } = opts;
   const spawnFn: typeof spawn = opts.spawnFn ?? spawn;
 
   // [T5.2] UBT 参数白名单校验 —— 防止 UBT ParseCommandLine 被恶意值诱导
@@ -372,9 +358,7 @@ export async function runUhtCodegen(opts: RunUhtCodegenOptions): Promise<UhtResu
         logger.warn(
           `[uhtGeneration] UBT exited with code ${code}. Output head:\n${combined.slice(0, UBT_OUTPUT_LOG_HEAD)}`,
         );
-        logger.warn(
-          `[uhtGeneration] UBT output tail:\n${combined.slice(-UBT_OUTPUT_LOG_TAIL)}`,
-        );
+        logger.warn(`[uhtGeneration] UBT output tail:\n${combined.slice(-UBT_OUTPUT_LOG_TAIL)}`);
       }
       resolve({ exitCode: code, aborted, spawnError: null });
     });
