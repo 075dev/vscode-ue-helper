@@ -232,11 +232,25 @@ export async function runUhtCodegen(opts: RunUhtCodegenOptions): Promise<UhtResu
   // - UHT 模式只把 `-Target=...` 这一个 argv 传给 ParseCommandLine，
   //   内部 Split 空格 → Name / Platform / Config / `-Project=...`。
   // - `-Project=` 必须在 `-Target=` 值里，否则 ProjectFile=null → 找不到 target rules。
+  //
+  // H1-P0: InputCache 让 UHT 第二次跑时只 parse 变更的 .h（其他走缓存读）。
+  //   验证：UE 5.8 `Engine/Source/Programs/UnrealBuildTool/Modes/UnrealHeaderToolMode.cs:593-600`
+  //   的 [CommandLine] attribute + `UhtSession.cs:2141-2178` 的 StepParseHeaders
+  //   `headerFile.ReadFromCache() if (!headerFile.WasCached) ... Parse()` 流程。
+  //   日志会区分 `Source Files Read (disk/cache): N/M` 与 `Cache Skipped (fnf/version/...)`。
+  // -EnableInputCacheRead  读已缓存（cache hit 跳解析，节省大头）
+  // -EnableInputCacheWrite 写新缓存（持续累积，未来更快）
+  // -NoGoWide               关闭并发 parse/codegen——开发期 1 次只改 1 个 .h，
+  //                         并发反而拖慢（小任务调度开销大于收益）。引擎头通常
+  //                         全部 cache hit，无需并发；并发对全 cache miss 才有意义。
   const args: string[] = [
     ubtDll,
     '-Mode=UnrealHeaderTool',
     `-Target=${buildTargetName} ${platform} ${buildType} -Project=${project}`,
     '-waitmutex',
+    '-EnableInputCacheRead',
+    '-EnableInputCacheWrite',
+    '-NoGoWide',
   ];
 
   // bundled dotnet 需要的环境变量（per GetDotnetPath.bat）
