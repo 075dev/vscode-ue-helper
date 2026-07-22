@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import { WorkspaceState } from '@core/workspace';
 import { WorkspaceContext } from '@detection/workspaceContext';
+import type { DetectionResult } from '@detection';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
 
 const noopLogger = new Logger('ssot-workspace-test');
@@ -137,6 +138,70 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       expect(workspace.selectedEngine).toBe(fakeEngine2.path);
       await workspace.setSelectedEngine(undefined);
       expect(workspace.selectedEngine).toBeNull();
+    });
+  });
+
+  describe('detection.ready 时序', () => {
+    it('ready 前访问派生 getter 不误报，ready 后恢复真实项目和引擎信息', async () => {
+      let resolveReady!: (result: DetectionResult) => void;
+      const ready = new Promise<DetectionResult>((resolve) => {
+        resolveReady = resolve;
+      });
+      const warningSpy = vi.spyOn(vscode.window, 'showWarningMessage');
+      warningSpy.mockClear();
+      const workspace = new WorkspaceState({ detection: { ready }, logger: noopLogger });
+
+      try {
+        expect(workspace.projectFile).toBeNull();
+        expect(workspace.engineRoot).toBeNull();
+        expect(warningSpy).not.toHaveBeenCalled();
+
+        resolveReady({
+          projects: [fakeProject],
+          engines: [fakeEngine],
+          workspaceFile: 'D:/proj/MyGame/MyGame.code-workspace',
+          workspaceRoot: 'D:/proj/MyGame',
+          workspaceFolders: [],
+          projectFolder: null,
+          engineFolder: null,
+        });
+        await ready;
+        await Promise.resolve();
+
+        expect(workspace.projectFile).toBe(fakeProject.path);
+        expect(workspace.engineRoot).toBe(fakeEngine.path);
+        expect(warningSpy).not.toHaveBeenCalled();
+      } finally {
+        warningSpy.mockRestore();
+      }
+    });
+
+    it('ready 后确实缺失时仍提示重新生成工作区', async () => {
+      const warningSpy = vi.spyOn(vscode.window, 'showWarningMessage');
+      warningSpy.mockClear();
+      const workspace = new WorkspaceState({
+        detection: {
+          ready: Promise.resolve({
+            projects: [],
+            engines: [],
+            workspaceFile: undefined,
+            workspaceRoot: undefined,
+            workspaceFolders: [],
+            projectFolder: null,
+            engineFolder: null,
+          }),
+        },
+        logger: noopLogger,
+      });
+
+      try {
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(workspace.project).toBeNull();
+        expect(warningSpy).toHaveBeenCalledWith('从 .uproject 重新生成工作区');
+      } finally {
+        warningSpy.mockRestore();
+      }
     });
   });
 

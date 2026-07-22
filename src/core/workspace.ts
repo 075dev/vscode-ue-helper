@@ -380,12 +380,18 @@ export class WorkspaceState implements vscode.Disposable {
    * 不做自我重试——根源信息缺失就是缺失，需要用户手动从 .uproject 重新生成工作区。
    */
   private _resolve<T>(field: WorkspaceField, resolver: () => T | null): T | null {
-    if (this._notifiedFields.has(field)) {
+    // detection.ready 完成前，根源字段尚未注入，不能把暂时为空误判为真实缺失。
+    if (!this._injected) {
       return null;
     }
     const value = resolver();
     if (value !== null && value !== undefined) {
+      // 字段可能在早期检测失败后恢复，成功解析时解除旧的通知锁。
+      this._notifiedFields.delete(field);
       return value;
+    }
+    if (this._notifiedFields.has(field)) {
+      return null;
     }
     this._notifyMissing(field);
     return null;
