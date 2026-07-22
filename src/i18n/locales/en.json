@@ -219,6 +219,10 @@
   "cmd.noUnrealEngineSelected": "No Unreal Engine installation selected.",
   "cmd.noWorkspaceRoot": "No workspace root found.",
 
+  "projectExplorer.name": "Project Explorer",
+  "projectExplorer.openFailed": "Failed to open project file: {error}",
+  "projectExplorer.noProject": "No Unreal project selected. Open a .code-workspace with a UE project first.",
+
   "liveCoding.windowsOnly": "Live Coding is currently Windows-only. Use Rebuild instead.",
   "liveCoding.noProject": "No .uproject to live-code.",
   "liveCoding.triggered": "Live Coding triggered for {0}",

@@ -58,7 +58,16 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // [Phase 8] headerWatcher removed — UBT triggered by proxy-side UeDiagnosticWatcher only
     const ui = activateUI(context, config, logger, detection, workspace);
     // [Plan Add 收束] 把 clangdOps 沿 commands 链透传给 createProject / setSystemIncludes
-    activateCommands(context, config, logger, detection, clangd, workspace, clangdOps);
+    activateCommands(
+      context,
+      config,
+      logger,
+      detection,
+      clangd,
+      workspace,
+      clangdOps,
+      ui.projectExplorer,
+    );
 
     // [first-time-init] 首次打开插件时检测 + 弹窗 + 初始化编排
     // fire-and-forget：内部会 await，但激活主流程不应被阻塞

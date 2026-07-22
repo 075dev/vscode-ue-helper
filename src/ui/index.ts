@@ -35,6 +35,9 @@ import {
 } from './statusBar';
 import { disposeOutputChannel } from './outputChannel';
 import { disposeDiagnosticCollection } from './problemsPanel';
+import { ProjectExplorerProvider } from './projectExplorer';
+import { VscodeProjectExplorerFs } from './projectExplorerFs';
+import { t } from '@i18n';
 
 export {
   StatusBarManager,
@@ -54,6 +57,7 @@ export { pickProject, pickEngine, pickConfiguration, pickTarget, pickPlatform } 
 
 export interface UIHandles {
   statusBar: StatusBarManager;
+  projectExplorer: ProjectExplorerProvider;
 }
 
 export function activateUI(
@@ -65,6 +69,43 @@ export function activateUI(
   workspace?: WorkspaceState,
 ): UIHandles {
   const statusBar = new StatusBarManager();
+  const projectExplorer = new ProjectExplorerProvider(
+    workspace ?? ({} as WorkspaceState),
+    new VscodeProjectExplorerFs(),
+    logger,
+  );
+  const treeView = vscode.window.createTreeView(ProjectExplorerProvider.viewType, {
+    treeDataProvider: projectExplorer,
+    showCollapseAll: true,
+  });
+  context.subscriptions.push(treeView);
+  context.subscriptions.push(projectExplorer);
+  if (workspace) {
+    const scheduleRefresh = (): void => {
+      // 等待 WorkspaceState 注入完成（detection.ready 完成）后再请求刷新，
+      // 避免在 ready 之前误报"工作区缺失"。
+      void detection.ready.then(() => projectExplorer.refresh());
+    };
+    void detection.ready.then(() => projectExplorer.refresh());
+    context.subscriptions.push(
+      config.onDidChange(() => {
+        scheduleRefresh();
+      }),
+    );
+    // [Project Explorer] 同步 panel/context 可见性：检测到项目后
+    // `setContext('vscodeUEHelper.projectDetected', true)`，从而让
+    // package.json 里 `view.when` 条件生效，Tree View 才会出现在 Activity Bar。
+    // 仅在 detection.ready 解析时同步一次，session 期间不持续监听。
+    void detection.ready.then((result) => {
+      void vscode.commands.executeCommand(
+        'setContext',
+        'vscodeUEHelper.projectDetected',
+        result.projects.length > 0,
+      );
+    });
+  } else {
+    logger.warn(t('projectExplorer.noProject'));
+  }
 
   const renderOnce = async (): Promise<void> => {
     try {
@@ -135,5 +176,5 @@ export function activateUI(
   });
 
   logger.info('[ui] activated (status bar ready)');
-  return { statusBar };
+  return { statusBar, projectExplorer };
 }

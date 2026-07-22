@@ -27,6 +27,9 @@ import { executeDisableClangdProxy } from './disableClangdProxy';
 import { executeShowClangdProxyStatus } from './showClangdProxyStatus';
 import { executeDiagnoseProject } from './diagnoseProject';
 import { executeShowControlPanel } from './showControlPanel';
+import { executeRefreshProjectExplorer } from './refreshProjectExplorer';
+import { executeOpenProjectExplorerFile } from './openProjectExplorerFile';
+import type { ProjectExplorerProvider } from '@ui/projectExplorer';
 
 export function activateCommands(
   context: vscode.ExtensionContext,
@@ -37,6 +40,7 @@ export function activateCommands(
   // [Phase 8 + Plan Add 收束] workspace 与 clangdOps 一并向下游命令透传
   workspace?: WorkspaceState,
   clangdOps?: ClangdOps,
+  projectExplorer?: ProjectExplorerProvider,
 ): void {
   // [Plan D] 把 Config 注入 CompletionModeController，让 rewriteClangd 能读 userAddFlags
   if (clangd?.completionMode && typeof clangd.completionMode.setConfig === 'function') {
@@ -85,5 +89,13 @@ export function activateCommands(
     executeShowClangdProxyStatus(config, logger, clangd),
   );
   track('vscodeUEHelper.showControlPanel', () => executeShowControlPanel());
+  if (projectExplorer) {
+    track('vscodeUEHelper.refreshProjectExplorer', () =>
+      executeRefreshProjectExplorer(projectExplorer),
+    );
+    track('vscodeUEHelper.openProjectExplorerFile', (uri) =>
+      executeOpenProjectExplorerFile(uri as vscode.Uri | undefined, logger),
+    );
+  }
   logger.info(`[commands] registered ${commandCount} commands`);
 }

@@ -169,6 +169,19 @@
         "title@zh": "显示控制面板",
         "category": "UE Helper",
         "icon": "$(dashboard)"
+      },
+      {
+        "command": "vscodeUEHelper.refreshProjectExplorer",
+        "title": "Refresh Project Explorer",
+        "title@zh": "刷新项目目录",
+        "category": "UE Helper",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vscodeUEHelper.openProjectExplorerFile",
+        "title": "Open Project File",
+        "title@zh": "打开项目文件",
+        "category": "UE Helper"
       }
     ],
     "viewsContainers": {
@@ -187,6 +200,56 @@
           "id": "vscodeUEHelper.controlPanel",
           "name": "Control Panel",
           "name@zh": "控制面板"
+        },
+        {
+          "type": "tree",
+          "id": "vscodeUEHelper.projectExplorer",
+          "name": "Project Explorer",
+          "name@zh": "项目目录",
+          "when": "vscodeUEHelper.projectDetected"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vscodeUEHelper.refreshProjectExplorer",
+          "when": "view == vscodeUEHelper.projectExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vscodeUEHelper.build",
+          "when": "view == vscodeUEHelper.projectExplorer && viewItem == uprojectFile",
+          "group": "ue5@1"
+        },
+        {
+          "command": "vscodeUEHelper.launchEditor",
+          "when": "view == vscodeUEHelper.projectExplorer && viewItem == uprojectFile",
+          "group": "ue5@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vscodeUEHelper.liveCoding",
+          "when": "isWindows"
+        },
+        {
+          "command": "vscodeUEHelper.setSystemIncludes",
+          "when": "isWindows"
+        },
+        {
+          "command": "vscodeUEHelper.enableClangdProxy"
+        },
+        {
+          "command": "vscodeUEHelper.disableClangdProxy"
+        },
+        {
+          "command": "vscodeUEHelper.showClangdProxyStatus"
+        },
+        {
+          "command": "vscodeUEHelper.diagnoseProject"
         }
       ]
     },
@@ -369,30 +432,6 @@
           "markdownDescription@zh": "## 自定义 Add Flags\n\n勾选要写入 `.clangd` `CompileFlags.Add` 的 flag id。**默认空数组 = Add 完全为空 (系统零默认注入)**。需要默认 flag 时,请在面板中显式勾选,或运行 `Set System Includes` 让 SDK flag 自动加入。\n\n**id 含义**\n- `compat-header` —— 强制包含 UE Clangd 兼容头 (/FI<ueClangdCompat.h>)\n- `macro-helper` —— 强制包含宏补全 helper\n- `std-cxx20` —— C++20 标准\n- `preparse-headers` —— 预解析 SharedPCH + addMacroCompletions.h\n- `uht-include-dirs` —— UHT 生成头目录 (/I)\n- `system-include-windows` —— Windows SDK / MSVC (/X /imsvc /fms-compatibility-version),由 `Set System Includes` 命令管理"
         }
       }
-    },
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "vscodeUEHelper.liveCoding",
-          "when": "isWindows"
-        },
-        {
-          "command": "vscodeUEHelper.setSystemIncludes",
-          "when": "isWindows"
-        },
-        {
-          "command": "vscodeUEHelper.enableClangdProxy"
-        },
-        {
-          "command": "vscodeUEHelper.disableClangdProxy"
-        },
-        {
-          "command": "vscodeUEHelper.showClangdProxyStatus"
-        },
-        {
-          "command": "vscodeUEHelper.diagnoseProject"
-        }
-      ]
     },
     "problemMatchers": [
       {

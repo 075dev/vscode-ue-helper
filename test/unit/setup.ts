@@ -13,6 +13,17 @@ vi.mock('vscode', () => ({
     workspaceFolders: [],
     workspaceFile: undefined,
     onDidChangeConfiguration: vi.fn(),
+    fs: {
+      readDirectory: vi.fn(() => Promise.resolve([])),
+      readFile: vi.fn(() => Promise.resolve(new Uint8Array())),
+      stat: vi.fn(),
+      writeFile: vi.fn(),
+      delete: vi.fn(),
+      rename: vi.fn(),
+      copy: vi.fn(),
+      createDirectory: vi.fn(),
+      isWritableFileSystem: vi.fn(() => true),
+    },
     onDidChangeTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
     onDidSaveTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
     onDidCloseTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
@@ -49,6 +60,12 @@ vi.mock('vscode', () => ({
       Promise.resolve(task({ report: vi.fn() })),
     ),
     registerWebviewViewProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    createTreeView: vi.fn(() => ({
+      dispose: vi.fn(),
+      title: '',
+      description: '',
+      visible: true,
+    })),
     createWebviewPanel: vi.fn(() => ({
       webview: {
         html: '',
@@ -109,6 +126,21 @@ vi.mock('vscode', () => ({
   ThemeColor: class {
     constructor(public readonly id: string) {}
   },
+  ThemeIcon: class {
+    constructor(public readonly id: string) {}
+  },
+  TreeItem: class {
+    resourceUri: unknown;
+    contextValue: string | undefined;
+    tooltip: unknown;
+    iconPath: unknown;
+    command: unknown;
+    constructor(
+      public readonly label: string,
+      public readonly collapsibleState: number,
+    ) {}
+  },
+  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   CompletionItemKind: { Property: 9 },
   CompletionItem: class {
     label: string;
@@ -178,6 +210,7 @@ vi.mock('vscode', () => ({
   StatusBarAlignment: { Left: 1, Right: 2 },
   ProgressLocation: { Notification: 10, Window: 15 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+  FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
   ExtensionMode: { Production: 1, Development: 2, Test: 3 },
   Disposable: class {
     private readonly callOnce: () => void;
