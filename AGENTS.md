@@ -47,6 +47,11 @@ npm run perf:diff     # 对比两个 JSON，< 1% 偏差算通过
 
 调试：VS Code 里按 `F5` 启动 Extension Development Host（`launch.json` 配置 `Run Extension`）。
 
+### 真实 UE 项目验证
+
+- Windows 本机存在可用于测试的真实 UE 项目：`E:\Dream\XianDreamwalking`（项目文件：`XianDreamwalking.uproject`）。需要真实 UE 项目的 smoke/UAT 时可使用该路径。
+- 使用前仍须检查项目路径及 `.uproject` 是否存在；不得假设 UE 引擎、UBT 或 Extension Development Host 一定可用，应分别检查所需运行环境后再执行验证。
+
 ## 关键架构（agent 容易踩坑的地方）
 
 ### 入口与激活顺序
