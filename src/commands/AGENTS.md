@@ -27,8 +27,17 @@
 | `disableClangdProxy` | `disableClangdProxy.ts` | 禁用 Clangd LSP 代理 |
 | `showClangdProxyStatus` | `showClangdProxyStatus.ts` | 显示 Clangd 代理状态 |
 | `showControlPanel` | `showControlPanel.ts` | 打开控制面板 webview |
+| `refreshProjectExplorer` | `refreshProjectExplorer.ts` | 手动刷新项目目录树 |
+| `openProjectExplorerFile` | `openProjectExplorerFile.ts` | 项目目录树触发的文件打开 |
 
 **`toggleCompletionMode` 已删除**（H4-B 决策 + Plan B 收束）：fast/slow 模式合并后无需切换。`src/commands/index.ts` 中不注册此命令；package.json 也不再有此定义。
+
+## 支持文件（非命令）
+
+| 文件 | 职责 |
+|---|---|
+| `_resolve.ts` | 命令链选择项目/引擎的公共 helper（Phase 11 包 1 引入），收敛 6 处重复的"读 selection → auto-pick → picker fallback"模式 |
+| `firstRunInit.ts` | 首次打开插件的一次性初始化编排（`.code-workspace#settings.vscodeUEHelper.initialized` 标记） |
 
 ## 实现模式
 

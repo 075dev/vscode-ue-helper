@@ -10,6 +10,7 @@
 | `config.ts` | 22 import | `vscodeUEHelper.*` 设置的读/写代理（带 refresh） |
 | `workspace.ts` | 13 import / 36 callers | **[Phase 8]** `WorkspaceState` —— 项目/引擎路径单一真相源 |
 | `command-registry.ts` | — | `vscode.commands.registerCommand` 包装，自动 push 到 `context.subscriptions` |
+| `runtime-detect.ts` | — | AI 编辑器宿主检测（Cursor / Claude Code），供 MCP / commands 共用 |
 
 ## Logger 约定
 

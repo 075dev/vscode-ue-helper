@@ -35,7 +35,11 @@
 | `flagGlossary.ts` | clangd flag 词典（hover 提示） |
 | `perfLog.ts` | 轻量 perf 埋点单例（activation.elapsed 等事件） |
 | `perfProxy.ts` | LSP proxy 开销测量（P50/P95/P99 + RSS） |
-
+| `types.ts` | clangd 模块公共类型（CompileCommandsEntry / ClangdConfig） |
+| `modifyRspFiles.ts` | 监听 .rsp 改动并写 .clangd ModifyFile 块（P2-1，Phase 11 引入） |
+| `createRspMatchers.ts` | 构造 .rsp → .clangd 转换的 matchers |
+| `proxyLogChannel.ts` | proxy 输出 channel 包装（轻量占位） |
+| `proxyLogTailer.ts` | tail 真实 clangd 日志，UI 显示用 |
 ## 子目录
 
 - **`proxy/`** —— 独立 LSP 代理 CLI 进程（17 文件）。详见 `src/clangd/proxy/AGENTS.md`。

@@ -19,8 +19,12 @@
 | `problemsPanel.ts` | Problems 面板诊断管理 |
 | `outputChannel.ts` | Output Channel 日志输出封装 |
 | `controlPanel.ts` | ControlPanelProvider —— Webview 控制面板（侧边栏） |
+| `controlPanel.html.ts` | 控制面板 HTML 模板（~640 行，从 controlPanel.ts 拆出便于热更新） |
+| `controlPanelMessages.ts` | 控制面板 host ↔ webview 双向消息协议 |
+| `perfStatusBar.ts` | perf 埋点状态栏（[Phase 7 PLAN A / D-06]） |
+| `projectExplorer.ts` | 项目目录树 TreeDataProvider |
+| `projectExplorerFs.ts` | 项目目录树 fs 扫描（与 provider 解耦） |
 | `index.ts` | UI 激活入口 |
-
 ## 状态栏设计
 
 ### 按钮布局（从左到右）

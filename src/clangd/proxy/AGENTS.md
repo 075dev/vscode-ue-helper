@@ -34,7 +34,7 @@
 | `settingsReader.ts` / `settingsManager.ts` | 读 .vscode/settings.json + 备份恢复 clangd.path 防被代理覆盖 |
 | `realClangdResolver.ts` | 找真实 clangd 二进制（排除我们自己的 launcher） |
 | `status.ts` | ClangdProxyStatus 状态机 + buildStatus() |
-
+| `cliRuntime.ts` | 进程运行时辅助（信号处理、退出码） |
 ## stdio 协议
 
 ```
