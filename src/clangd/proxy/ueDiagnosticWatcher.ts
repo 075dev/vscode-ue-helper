@@ -316,16 +316,8 @@ export class UeDiagnosticWatcher {
     // ubtPath 不再用——绕过 Build.bat 直接 spawn dotnet（见下）。buildTargetName 来自 extension。
     const { buildTargetName } = this.options;
 
-    // 平台字符串（Win64/Mac/Linux）— 不依赖 vscode，纯 Node.js
-    const platformMap: Record<string, string> = {
-      win32: 'Win64',
-      darwin: 'Mac',
-      linux: 'Linux',
-    };
-    const platform = platformMap[process.platform];
-    if (!platform) {
-      throw new Error(`Unsupported platform: ${process.platform}`);
-    }
+    // 平台字符串（Windows-only：Win64）— 不依赖 vscode，纯 Node.js
+    const platform = 'Win64';
 
     // 扫描 projectDir 找 .uproject（不假设文件名 = 目录名）
     const projectFile = await this.findUprojectFile();

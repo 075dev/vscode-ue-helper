@@ -114,15 +114,8 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
       Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     });
 
-    it('非 Windows 平台使用 .sh 后缀', () => {
-      const origPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-
-      const manager = new ClangdProxyManager(context, createConfigMock() as never, logger as never);
-      expect(manager.launcherPath).toBe('/fake/extension/out/launcher/proxy-launcher.sh');
-
-      Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
-    });
+    // 注：原"非 Windows 平台使用 .sh 后缀"case 已删除——本插件仅支持 Windows，
+    //      launcher 固定为 .bat。N1 死代码清理后该 case 失去意义。
 
     it('创建时不修改 clangd 设置', () => {
       const updateMock = vi.fn();

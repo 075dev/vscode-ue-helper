@@ -67,11 +67,8 @@ export class ClangdProxyManager {
     private readonly logger: Logger,
     private readonly deps: ClangdProxyManagerDependencies = {},
   ) {
-    // 计算 launcher 路径：Windows 使用 .bat，其他平台使用 .sh
-    const isWin = process.platform === 'win32';
-    this.launcherPath = this.context.asAbsolutePath(
-      `out/launcher/proxy-launcher${isWin ? '.bat' : '.sh'}`,
-    );
+    // Windows-only：launcher 固定为 .bat（其他平台不在本插件支持范围）
+    this.launcherPath = this.context.asAbsolutePath('out/launcher/proxy-launcher.bat');
     this.settingsManager = new ClangdSettingsManager(this.context, this.launcherPath);
 
     // 默认日志路径：VS Code 每次启动给扩展的带时间戳日志目录，按会话隔离不累积
@@ -398,10 +395,7 @@ export function ensureBackgroundIndexPriority(args: string[]): string[] {
 }
 
 function buildDefaultClangdSearchRoots(): readonly string[] {
-  if (process.platform !== 'win32') {
-    return [];
-  }
-
+  // Windows-only：默认 clangd 搜索根（VS 2022 + LLVM 标准安装路径）
   return [
     path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'LLVM', 'bin'),
     path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'LLVM', 'bin'),

@@ -92,26 +92,10 @@ export interface UhtResult {
 }
 
 /**
- * `node:process` 平台 → UE 平台字符串映射。
- *
- * 沿用 `src/clangd/proxy/ueDiagnosticWatcher.ts:317-325` 的策略，
- * 不依赖 vscode（纯 Node `process.platform`）。
- *
- * 注：刻意不用 `Record<NodeJS.Platform, string>`——`NodeJS.Platform` 包含
- * `aix / android / freebsd / haiku / openbsd / sunos / cygwin / netbsd` 等
- * UE 不支持的平台，做不到穷举；`string` 索引 + 运行时校验更安全。
+ * `process.platform` → UE 平台字符串。Windows-only：本插件仅服务 Win64。
  */
 function platformString(): string {
-  const map: Record<string, string> = {
-    win32: 'Win64',
-    darwin: 'Mac',
-    linux: 'Linux',
-  };
-  const p = map[process.platform];
-  if (!p) {
-    throw new Error(`Unsupported platform: ${process.platform}`);
-  }
-  return p;
+  return 'Win64';
 }
 
 /**

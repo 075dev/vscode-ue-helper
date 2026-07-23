@@ -153,10 +153,8 @@ export function resolvePreparseHeaders(headers: string[], engineRoot: string): s
 }
 
 /**
- * Render a list of headers as clangd `.clangd` Add flags.
+ * Render a list of headers as clangd `.clangd` Add flags (Windows-only)。
  * Each header becomes a forced-include flag prepended to every compile command.
- *
- * Returns an array of strings (one per header on Windows) ready to splice.
  *
  * Windows / clang-cl: use MSVC-style `/FI<path>` (single token), because:
  *   - `-include <path>` is GCC-style and makes clang-cl treat the header as
@@ -165,17 +163,7 @@ export function resolvePreparseHeaders(headers: string[], engineRoot: string): s
  *     "Cannot specify '/Fo…obj' when compiling multiple source files".
  *   - `/FI` is the MSVC-native forced-include flag and is intentionally
  *     compatible with `/Fo` (designed to be a header, not a source).
- *
- * Non-Windows: keep `-include <path>` (GCC-style, clang-native).
  */
 export function toIncludeFlags(headers: string[]): string[] {
-  const isWindows = process.platform === 'win32';
-  if (isWindows) {
-    return headers.map((h) => `/FI${h}`);
-  }
-  const flags: string[] = [];
-  for (const header of headers) {
-    flags.push(`-include`, header);
-  }
-  return flags;
+  return headers.map((h) => `/FI${h}`);
 }

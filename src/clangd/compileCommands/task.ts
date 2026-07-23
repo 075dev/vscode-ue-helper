@@ -19,7 +19,10 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
-import { getUbtPath, getUnrealPlatform, getBuildTargetNames } from '../ueHelpers';
+import { getUbtPath, getBuildTargetNames } from '../ueHelpers';
+
+/** Windows-only：本插件唯一支持的 Unreal 平台。 */
+const WIN64_PLATFORM = 'Win64';
 
 const execFileAsync = promisify(execFile);
 
@@ -228,14 +231,8 @@ export async function buildNonNativeArgs(opts: BuildArgsOptions): Promise<string
     throw new Error('未找到可用的构建目标');
   }
 
-  // 2. Unreal platform
-  const unrealPlatform = opts.platform ?? getUnrealPlatform(process.platform);
-  if (!unrealPlatform) {
-    throw new Error(
-      `Unsupported platform: ${process.platform}. ` +
-        'Please specify "platform" in GenerateOptions.',
-    );
-  }
+  // 2. Unreal platform（Windows-only）
+  const unrealPlatform = opts.platform ?? WIN64_PLATFORM;
 
   // buildType 联动 config.configuration（默认 Development）
   const buildType = opts.buildType ?? UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT;

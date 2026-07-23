@@ -174,8 +174,7 @@ export function resolveFlags(ids: readonly string[], ctx: ResolveContext = {}): 
         break;
       }
       case 'std-cxx20': {
-        const std = process.platform === 'win32' ? '/std:c++20' : '-std=c++20';
-        out.push(std);
+        out.push('/std:c++20');
         break;
       }
       case 'preparse-headers': {
@@ -185,9 +184,8 @@ export function resolveFlags(ids: readonly string[], ctx: ResolveContext = {}): 
       }
       case 'uht-include-dirs': {
         const dirs = ctx.intermediateUhtDirs ?? [];
-        const prefix = process.platform === 'win32' ? '/I' : '-I';
         for (const dir of dirs) {
-          out.push(`${prefix}${dir}`);
+          out.push(`/I${dir}`);
         }
         break;
       }
@@ -201,21 +199,11 @@ export function resolveFlags(ids: readonly string[], ctx: ResolveContext = {}): 
 }
 
 /**
- * 把 preparse header 列表按平台转成 .clangd Add flag。
+ * 把 preparse header 列表按平台转成 .clangd Add flag（Windows-only）。
  * 与 preparseIncludes.toIncludeFlags 行为一致；为避免循环依赖，本函数独立实现。
  */
 function preparseAsFlags(headers: readonly string[]): string[] {
-  if (headers.length === 0) {
-    return [];
-  }
-  if (process.platform === 'win32') {
-    return headers.map((h) => `/FI${h}`);
-  }
-  const out: string[] = [];
-  for (const h of headers) {
-    out.push('-include', h);
-  }
-  return out;
+  return headers.map((h) => `/FI${h}`);
 }
 
 /**
