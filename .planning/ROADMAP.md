@@ -79,7 +79,7 @@
 
 ## **决策记录:** 详见 `.planning/phases/02-代码规范化与流程清晰化/02-CONTEXT.md` §Implementation Decisions(12 项 D-01~D-23)
 
-## Phase 3: compileCommands 重构 — **COMPLETE 2026-07-23**
+## Phase 3: compileCommands 重构 — **IMPLEMENTED; HUMAN VERIFICATION PENDING**
 
 **Goal:** 将实测约 929 行的 `compileCommands.ts` 按职责拆为 4 个子模块，公共 API 保持。
 
@@ -103,7 +103,7 @@
 - [x] Plan 3.4: 提取 fillMissing（避开既有 fingerprint 命名）— `e501754`
 - [x] Plan 3.5: 顶层 index 重导出与集成验证 — `bd36b79`，见 `03-05-SUMMARY.md`
 
-**Verification:** 自动化目标通过；真实 UE / Extension Host smoke 标记为环境阻塞的人工 verification debt，详见 `03-VERIFICATION.md`。
+**Verification:** 5/5 PLAN 均有 SUMMARY；自动化目标通过。`03-VERIFICATION.md` 状态为 `human_needed`，真实 UE / Extension Host smoke 为环境阻塞的 verification debt；未伪造通过。
 
 **Risks:** 公共 API、caller、perf 事件链、循环依赖均已验证；剩余风险仅为未在真实 UE 环境执行命令路径。
 
@@ -259,4 +259,4 @@ Phase 6 (i18n) → 最后,独立
 ---
 
 _Roadmap defined: 2026-07-23_
-_Last updated: 2026-07-23 after Phase 3 complete (5 plans done; PERF-01 automated acceptance passed; real UE smoke remains environment-blocked verification debt)_
+_Last updated: 2026-07-24 after Phase 3 artifact audit (5/5 summaries complete; automated acceptance passed; real UE smoke pending human verification)_

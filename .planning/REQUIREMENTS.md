@@ -29,7 +29,7 @@
 
 ### Refactor / 重构 god 文件 (P1,大型任务)
 
-- [x] **PERF-01**: 拆分 `src/clangd/compileCommands.ts` god 文件为 4 个子模块 — `compileCommands/{task,cache,symlink,fillMissing}.ts`，公共 API 保持（Phase 3 complete 2026-07-23；原规划中的 `fingerprint` 与既有顶层 SHA256 模块冲突，按研究决策改为 `fillMissing`）
+- [ ] **PERF-01**: 拆分 `src/clangd/compileCommands.ts` god 文件为 4 个子模块 — `compileCommands/{task,cache,symlink,fillMissing}.ts`，公共 API 保持（实现与自动化验收完成；真实 UE command smoke 尚未完成，因此按 execute-phase 工作流保持未勾选）
 - [ ] **PERF-02**: 拆分 4 个中型 god 文件:
   - `src/core/workspace.ts` 307 行
   - `src/core/config.ts` 317 行
@@ -82,7 +82,7 @@
 | DEBT-01     | Phase 2 | Pending                                           |
 | DEBT-02     | Phase 2 | Pending                                           |
 | DEBT-03     | Phase 2 | Pending                                           |
-| PERF-01     | Phase 3 | Complete (automated); real UE smoke debt recorded |
+| PERF-01     | Phase 3 | Implemented; human verification pending            |
 | PERF-02     | Phase 4 | Pending                                           |
 | LIVE-01     | Phase 5 | Pending                                           |
 | LIVE-02     | Phase 6 | Pending                                           |
@@ -96,4 +96,4 @@
 ---
 
 _Requirements defined: 2026-07-23_
-_Last updated: 2026-07-23 after Phase 3 complete (PERF-01 automated acceptance passed; real UE smoke environment-blocked)_
+_Last updated: 2026-07-24 after Phase 3 artifact audit (automated acceptance passed; real UE smoke pending)_

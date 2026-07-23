@@ -66,15 +66,15 @@ VSCodeUEHelper 是一款 **Windows-only 的 VS Code 扩展**,为 Unreal Engine 5
 - ✓ **ARCH-03**: 双 esbuild bundle (`out/extension.js` + `out/clangdProxy.js`) — `esbuild.config.mjs`
 - ✓ **ARCH-04**: 13 个 SSoT 回归守卫 + 12 个 WorkspaceState 行为测试 — `test/unit/core/ssot.test.ts` + `test/unit/core/workspace.test.ts`
 
-#### Phase 3 / 可维护性
+#### Phase 3 / 可维护性（实现完成，验证待闭环）
 
-- ✓ **REQ-PERF-01**: `compileCommands.ts` 从实测约 929 行降至 492 行，提取 `task/cache/symlink/fillMissing` 四子模块并保持公共 API — Phase 3（真实 UE command smoke 因环境不可用保留 verification debt）
+- ◷ **REQ-PERF-01**: `compileCommands.ts` 从实测约 929 行降至 492 行，提取 `task/cache/symlink/fillMissing` 四子模块并保持公共 API；自动化验收通过，真实 UE command smoke 尚未完成
 
 ### Active
 
 <!-- 当前 scope,下一阶段要交付的。Roadmap 会映射到 phase -->
 
-- [ ] **REQ-LIVE-01**: Live Coding 后命中 P0 错误时一键修复流程(AI 自动建议 + 用户确认,基于 MCP 工具链)
+- [ ] **REQ-PERF-01**: 在真实 UE / Extension Host 环境完成 `Generate Compile Commands` 首次生成、symlink/copy、第二次 cache fast-path 与事件名 smoke，闭环 Phase 3 verification debt
 - [ ] **REQ-LIVE-02**: 汉化功能在 Completion/SignatureHelp/InlayHint 上**修齐**(6 个僵尸 TODO 落地或下架)
 - [ ] **REQ-PERF-02**: 解决 `src/core/workspace.ts` 307 / `config.ts` 317 / `controlPanel.html.ts` 615 / `proxy/bridge.ts` 692 行 4 个 god 文件拆分
 - [ ] **REQ-DEBT-01**: `Config.completionMode` 死分支 API 收口(caller 改读静态常量,删 getter)
@@ -165,7 +165,7 @@ VSCodeUEHelper 是一款 **Windows-only 的 VS Code 扩展**,为 Unreal Engine 5
 
 ---
 
-_Last updated: 2026-07-23 after Phase 3 complete (5 plans; PERF-01 automated acceptance passed; real UE smoke environment-blocked)_
+_Last updated: 2026-07-24 after Phase 3 artifact audit (implementation complete; real UE smoke pending human verification)_
 
 ## Evolution
 
@@ -212,9 +212,9 @@ This document evolves at phase transitions and milestone boundaries.
 
 ### Phase 3 evolution (2026-07-23)
 
-**Status:** Phase 3 落地（03-01 至 03-05 全 5 plans 完成）。
+**Status:** Phase 3 实现落地（03-01 至 03-05 全 5 plans 完成），真实 UE 验证待闭环。
 
-1. **新验证的 REQ:** REQ-PERF-01 — 主入口 492 行，四子模块和公共 API/callers 自动化验证通过。
+1. **实现完成的 REQ:** REQ-PERF-01 — 主入口 492 行，四子模块和公共 API/callers 自动化验证通过。
 2. **设计校正:** 原规划的第四模块 `fingerprint` 与既有 SHA256 `src/clangd/fingerprint.ts` 冲突，按研究结果改为 `fillMissing.ts`。
 3. **验证债务:** 真实 UE / Extension Host `Generate Compile Commands` smoke 因本环境无可运行 `.uproject` / UE / UBT 未执行；未伪造通过。
-4. **下一焦点:** Phase 4 — 4 个中型 god 文件拆分（REQ-PERF-02）。
+4. **下一焦点:** 完成 Phase 3 人工 UAT 后，才进入 Phase 4 — 4 个中型 god 文件拆分（REQ-PERF-02）。

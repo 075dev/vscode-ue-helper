@@ -1,6 +1,37 @@
+---
+phase: 03-compileCommands重构
+plan: 05
+subsystem: clangd
+tags: [compile-commands, barrel, api-compatibility, integration]
+requires:
+  - phase: 03-01..03-04
+    provides: "task/cache/symlink/fillMissing 四子模块与主入口接线"
+provides:
+  - "顶层 @clangd FillResult 类型重导出"
+  - "Phase 3 自动化集成验证证据"
+affects: [compileCommands, phase-04]
+tech-stack:
+  added: []
+  patterns:
+    - "公共 barrel 由运行时导出断言与类型使用共同守卫"
+key-files:
+  created: []
+  modified:
+    - src/clangd/index.ts
+    - test/unit/clangd/index.test.ts
+key-decisions:
+  - "FillResult 加入顶层 @clangd；GenerateOptions 不扩大顶层契约"
+patterns-established:
+  - "重构收口时同时核对主入口、顶层 barrel 与直接 caller"
+requirements-completed:
+  - PERF-01
+completed: 2026-07-23
+status: complete
+---
+
 # Plan 03-05: index 重导出与集成验证
 
-**Status:** COMPLETE（自动化与可执行 smoke 已完成；真实 UE / Extension Host 因环境不可用未执行）
+**Status:** COMPLETE（计划交付完成；自动化与 build smoke 已完成；真实 UE / Extension Host 人工验证仍 pending）
 **Date:** 2026-07-23
 **Wave:** 5（depends on 03-01..03-04）
 **Code commit:** `bd36b79 chore(clangd): phase 3.5 verify index re-exports`
@@ -47,7 +78,7 @@
 3. 第二次运行的 cache fast-path；
 4. 真实 symlink/copy 目标。
 
-`npm run build` 是本环境可执行的 smoke，已通过。真实 UE 命令保留为人工验证债务，记录在 Phase 3 verification 中。
+`npm run build` 是本环境可执行的 smoke，已通过。真实 UE 命令保留为 `03-VERIFICATION.md` 中的人工 verification debt，未伪造通过。
 
 ## Deviations from Plan
 
