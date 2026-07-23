@@ -7,14 +7,14 @@
 
 ## Phase 概览
 
-| # | Phase | Goal | REQ-IDs | 估算 |
-|---|-------|------|---------|------|
-| 1 | 文档质量校正 | 仓库知识库与实测同步,反漂移 | DOC-01, DOC-02, DOC-03 | 2-3h |
-| 2 | 代码规范化 + 流程清晰化 | 12 项子交付物(规范 8 + 流程 4) | — | 6-10h |
-| 3 | compileCommands 重构 | 拆 1002 行 god 文件 | PERF-01 | 6-8h |
-| 4 | 4 个中型 god 文件拆分 | workspace / config / controlPanel / bridge | PERF-02 | 8-10h |
-| 5 | Live Coding AI 集成 | 一键修复 prototype | LIVE-01 | 8-12h |
-| 6 | 汉化 TODO 决断 | 选项 A (下架) 或 选项 B (填充) | LIVE-02 | 2h / 2-3d |
+| #   | Phase                   | Goal                                       | REQ-IDs                | 估算      |
+| --- | ----------------------- | ------------------------------------------ | ---------------------- | --------- |
+| 1   | 文档质量校正            | 仓库知识库与实测同步,反漂移                | DOC-01, DOC-02, DOC-03 | 2-3h      |
+| 2   | 代码规范化 + 流程清晰化 | 12 项子交付物(规范 8 + 流程 4)             | —                      | 6-10h     |
+| 3   | compileCommands 重构    | 拆 1002 行 god 文件                        | PERF-01                | 6-8h      |
+| 4   | 4 个中型 god 文件拆分   | workspace / config / controlPanel / bridge | PERF-02                | 8-10h     |
+| 5   | Live Coding AI 集成     | 一键修复 prototype                         | LIVE-01                | 8-12h     |
+| 6   | 汉化 TODO 决断          | 选项 A (下架) 或 选项 B (填充)             | LIVE-02                | 2h / 2-3d |
 
 **总计:** 6 phases, 10 requirements, 30-40h (选项 A 路径) / 50-60h (选项 B 路径)
 
@@ -27,6 +27,7 @@
 **Mode:** standard
 
 **Success Criteria:**
+
 1. `resources/README.md` 不再提及已删的 `ue5-fast.json` / `banner.png`
 2. AGENTS.md 仓库陷阱 #1 / #7 / #10 / #11 / #12 措辞更新,反映 2026-07-23 实际状态(`test:integration` 已删、MSVC 正则已同步、`Config.update` 已内置 refresh、`Config.completionMode` 已死分支、`populateAddCompletions` 已删并有 13 守卫)
 3. 8 个模块 `src/<module>/AGENTS.md` 数字校正:WorkspaceState 38 callers / ClangdOps 9 / 72 测试 / 16.3k 行 / 9 别名 / 22 命令 / `.sh` 已删 / DDD 不活跃
@@ -34,6 +35,7 @@
 **Requirements:** DOC-01, DOC-02, DOC-03
 
 **Plans:**
+
 - [x] Plan 1.1: ~~读 7 份 codebase 文档,生成 AGENTS.md 修订 diff(纯文档,1h)~~ **DONE** (4 处仓库陷阱 #1/#2/#7/#10 末尾追加斜体注释,2026-07-23) — see `01-01-SUMMARY.md`
 - [ ] Plan 1.2: ~~重写 `resources/README.md`(纯文档,30min)~~ **DEFERRED → Phase 2**(per CONTEXT.md §Deferred Ideas,DOC-01 续做)
 - [ ] Plan 1.3: ~~8 个模块 AGENTS.md 数字校正批处理(30min)~~ **DEFERRED → Phase 2**(per CONTEXT.md §Deferred Ideas,DOC-03 续做)
@@ -51,9 +53,10 @@
 **Scope 重定义(2026-07-23 D-01):** 原 Phase 2 (DEBT-01/02/03 + DOC 续做) 全部退入 backlog;新范围按轴划分,Plan 2.1 / 2.2 代码规范,Plan 2.3 流程清晰化。
 
 **Success Criteria:**
+
 1. **ESLint 硬约束**:`@typescript-eslint/no-explicit-any` 升 `error`;`consistent-type-imports` 配置;`npm run lint` 0 错 0 警
 2. **目录与别名**:8 模块 `src/<module>/AGENTS.md` 与 `ls` 实际文件列表同步(差异 ≤ 1/模块);`@platform` / `@rules` 死别名在 3 个 configs 全部清理;DDD `application/` `infrastructure/` 确认不存在
-3. **类型层**:`any` / `as any` / `<any>` / `@ts-ignore` 0 匹配;`@core/result` (Result<T,E>) 与 `@core/errors` (VSCodeUEHelperError + 4 个 E_*) 新基础设施就位;index 重导出完整
+3. **类型层**:`any` / `as any` / `<any>` / `@ts-ignore` 0 匹配;`@core/result` (Result<T,E>) 与 `@core/errors` (VSCodeUEHelperError + 4 个 E\_\*) 新基础设施就位;index 重导出完整
 4. **API surface**:logger 前缀约定文档化(已在 ESLint 锁 `new Logger()`);所有 `logger.X('...')` 调用首参数含 `[moduleName]`
 5. **开发流程**:`CONTRIBUTING.md` ≥ 100 行含 8 章节;`.github/PULL_REQUEST_TEMPLATE.md` 含 Phase / 模块 / 测试 / Screenshots / Breaking Changes / Checklist 6 字段;`AGENTS.md` §风格与约定 段追加 commit msg 规范
 6. **调试/发布**:`docs/DEBUG.md` ≥ 50 行含 5 段;`docs/RELEASE.md` ≥ 50 行含 7 段(手动 CHANGELOG, 不引入 release-please);`.vscodeignore` 覆盖 .github/ / .cursor/
@@ -68,35 +71,41 @@
 - [x] **Pre-plan 0: ueLinkManager 收尾** (Phase 2 启动前置 gate, 用户决策)— 修 Windows 路径分隔符 + activateClangd 早退; 详见 `00-SUMMARY.md` (DONE 2026-07-23)
 
 **Risks:**
+
 - 升级 `no-explicit-any` warn→error 触发 ≥ 5 处新错误 → Plan 2.1 Step 1.2 显式回退 + 延后到独立 phase
 - 8 模块 AGENTS.md 同步漏模块 → verify 步骤对 8 模块逐一 grep `comm -23`
 - DDD 空壳意外复活 → Plan 2.1 Step 2.1 显式 `rmdir` 兜底
 - ADR 数字引用漂移 → 写时 grep 验证(13 SSoT 守卫 / 36 callers / 22 callers / 9 import)
 
-**决策记录:** 详见 `.planning/phases/02-代码规范化与流程清晰化/02-CONTEXT.md` §Implementation Decisions(12 项 D-01~D-23)
----
+## **决策记录:** 详见 `.planning/phases/02-代码规范化与流程清晰化/02-CONTEXT.md` §Implementation Decisions(12 项 D-01~D-23)
 
-## Phase 3: compileCommands 重构
+## Phase 3: compileCommands 重构 — **COMPLETE 2026-07-23**
 
-**Goal:** 把 1002 行 god 文件按职责拆 4 个子模块,公共 API 保持
+**Goal:** 将实测约 929 行的 `compileCommands.ts` 按职责拆为 4 个子模块，公共 API 保持。
 
 **Mode:** standard
 
 **Success Criteria:**
-1. `src/clangd/compileCommands/{task,cache,symlink,fingerprint}.ts` 4 个子模块就位,公共类型在 `src/clangd/compileCommands/index.ts` 重新导出
-2. `grep "import.*compileCommands" src/` 全部通过,无新 import 失败
-3. `npm run test:unit` 全绿,新增 `test/unit/clangd/compileCommands/{task,cache,symlink,fingerprint}.test.ts` ≥ 4 个测试文件,覆盖拆出来的子模块
+
+1. `src/clangd/compileCommands/{task,cache,symlink,fillMissing}.ts` 四个子模块就位；既有顶层 `src/clangd/fingerprint.ts` 继续负责 SHA256 cache key，避免命名冲突。✓
+2. 主入口 492 行（≤ 500），四子模块单向接线，无重复实现或反向 import。✓
+3. `@clangd/compileCommands` 六个公共符号保持；顶层 `@clangd` 重导出四函数与 `FillResult`，3 个直接 caller 全部解析。✓
+4. typecheck、lint、完整 unit suite（75 files / 856 tests）与 build 通过；本阶段文件 Prettier 通过。全仓 format:check 因 26 个未触及存量文件失败，已记录。✓（有存量债务）
+5. 真实 UE / Extension Host 命令 smoke 因本环境无 `.uproject` / UE / UBT 可用而未执行，未伪造；保留人工验证债务。
 
 **Requirements:** PERF-01
 
 **Plans:**
-- Plan 3.1: 拆分 UBT -ProjectFiles task 执行(150 行)
-- Plan 3.2: 拆缓存层(200 行)
-- Plan 3.3: 拆 symlink workspace 根(150 行)
-- Plan 3.4: 拆 fingerprint/缓存键逻辑(200 行)
-- Plan 3.5: 重写 index.ts 重新导出,验证集成测试
 
-**Risks:** 拆分破坏公共 API 兼容性 → Plan 3.5 验证 step 必须 0 警告 0 错误 + 全测
+- [x] Plan 3.1: task 基线与主入口接线 — `ae784b0`
+- [x] Plan 3.2: 提取 cache 编排 — `2a78b9a`
+- [x] Plan 3.3: 提取 symlink — `9953001`
+- [x] Plan 3.4: 提取 fillMissing（避开既有 fingerprint 命名）— `e501754`
+- [x] Plan 3.5: 顶层 index 重导出与集成验证 — `bd36b79`，见 `03-05-SUMMARY.md`
+
+**Verification:** 自动化目标通过；真实 UE / Extension Host smoke 标记为环境阻塞的人工 verification debt，详见 `03-VERIFICATION.md`。
+
+**Risks:** 公共 API、caller、perf 事件链、循环依赖均已验证；剩余风险仅为未在真实 UE 环境执行命令路径。
 
 ---
 
@@ -107,6 +116,7 @@
 **Mode:** standard
 
 **Success Criteria:**
+
 1. `src/core/workspace/{...}.ts` 拆 workspace.ts 307 行
 2. `src/core/config/{...}.ts` 拆 config.ts 317 行
 3. `src/ui/controlPanel/{...}.html.ts` 拆 controlPanel.html.ts 615 行
@@ -117,13 +127,15 @@
 **Requirements:** PERF-02
 
 **Plans:**
+
 - Plan 4.1: workspace.ts 拆分(2h)
 - Plan 4.2: config.ts 拆分(2h)
 - Plan 4.3: controlPanel.html.ts 拆分(3h,最大)
 - Plan 4.4: proxy/bridge.ts 拆分(3h)
 - Plan 4.5: 集成回归(1h)
 
-**Risks:** 
+**Risks:**
+
 - 拆分时跨文件引用混乱 → 每个 plan 末尾必须 0 typecheck 错误
 - bridge.ts 涉及 LSP 协议处理,拆分后响应顺序错乱 → Plan 4.4 必须保留请求/响应相关性测试
 
@@ -136,6 +148,7 @@
 **Mode:** standard
 
 **Success Criteria:**
+
 1. MCP 新增 `ue_suggest_fix` 工具,接收 P0 错误 + 上下文,返回 AI 修复建议
 2. 用户在 Problems Panel 看到 P0 错误时,QuickFix 菜单出现"AI 建议修复"选项
 3. 端到端 demo:故意写错代码 → Live Coding → 命中 P0 → QuickFix → AI 建议 → 用户确认 → 应用 patch
@@ -143,12 +156,14 @@
 **Requirements:** LIVE-01
 
 **Plans:**
+
 - Plan 5.1: 调研 MCP 工具扩展点 + UE AI agent 行为(2h)
 - Plan 5.2: `ue_suggest_fix` MCP 工具实现(3h)
 - Plan 5.3: Problems Panel QuickFix 集成(3h)
 - Plan 5.4: 端到端 demo + 文档(2h)
 
-**Risks:** 
+**Risks:**
+
 - 性能:AI 建议生成 > 3s 会破坏 Live Coding 节奏 → 节流同 LIVE
 - 用户接受度:AI 建议错误率 → 默认"建议"非"自动应用"
 
@@ -161,12 +176,14 @@
 **Mode:** standard
 
 **Success Criteria (选项 A — 推荐,2h):**
+
 1. 删 controlPanel UI 汉化 toggle(用户不会主动开启)
 2. AGENTS.md 改"目前仅 hover 词典生效"
 3. 6 个 TODO 函数体保留返回原值(不删函数,保留扩展点)
 4. `grep "汉化" src/` 无 stale 引用
 
 **Success Criteria (选项 B — 2-3d):**
+
 1. 6 个 TODO 函数体填充实际汉化逻辑(Completion/SignatureHelp/InlayHint)
 2. 翻译源:`src/clangd/proxy/localization.json` 扩展键
 3. 新增测试覆盖 6 个扩展点
@@ -175,11 +192,13 @@
 **Requirements:** LIVE-02
 
 **Plans (选项 A):**
+
 - Plan 6.1: 删 controlPanel 汉化 toggle UI(30min)
 - Plan 6.2: AGENTS.md 措辞更新(30min)
 - Plan 6.3: 验证 6 个 TODO 函数仍可扩展(1h)
 
 **Plans (选项 B):**
+
 - Plan 6.1-6.6: 6 个 TODO 各 1 plan,每天 1-2 个
 
 **Decision gate:** Phase 6 启动前 user 选 A 或 B(默认 A,推荐)
@@ -196,14 +215,14 @@
 
 ## Risk Register
 
-| Risk | Phase | Mitigation |
-|------|-------|------------|
-| AGENTS.md 修订引入新错误 | 1 | grep 每个被改数字,验证与实测一致 |
-| 升级 `no-explicit-any` 触发 ≥ 5 处新错误 | 2 | Plan 2.1 Step 1.2 显式回退 warn + 延后到独立 phase |
-| compileCommands 拆分破坏公共 API | 3 | Plan 3.5 验证 step 必须 0 警告 0 错误 |
-| bridge.ts 拆分破坏 LSP 顺序 | 4 | 保留请求/响应相关性测试 |
-| AI 建议生成 > 3s 破坏 Live Coding 节奏 | 5 | 同 LIVE 节流策略 |
-| 汉化扩展范围膨胀 | 6 | 默认选项 A,选项 B 需 user 明确选 |
+| Risk                                     | Phase | Mitigation                                         |
+| ---------------------------------------- | ----- | -------------------------------------------------- |
+| AGENTS.md 修订引入新错误                 | 1     | grep 每个被改数字,验证与实测一致                   |
+| 升级 `no-explicit-any` 触发 ≥ 5 处新错误 | 2     | Plan 2.1 Step 1.2 显式回退 warn + 延后到独立 phase |
+| compileCommands 拆分破坏公共 API         | 3     | Plan 3.5 验证 step 必须 0 警告 0 错误              |
+| bridge.ts 拆分破坏 LSP 顺序              | 4     | 保留请求/响应相关性测试                            |
+| AI 建议生成 > 3s 破坏 Live Coding 节奏   | 5     | 同 LIVE 节流策略                                   |
+| 汉化扩展范围膨胀                         | 6     | 默认选项 A,选项 B 需 user 明确选                   |
 
 ## Phase Dependencies
 
@@ -222,13 +241,13 @@ Phase 6 (i18n) → 最后,独立
 
 原 Phase 1.2 / 1.3 / 2 范围(per 2026-07-23 D-01 重定义),显式延后:
 
-| ID | Item | 原 Phase | 状态 | 备注 |
-|----|------|----------|------|------|
-| **DEBT-01** | `Config.completionMode` 死分支 API 收口(2 caller 改读 `COMPLETION_MODE` 静态常量 + 1 mock 调整) | Phase 2(原) | **TODO** | DEBT-02/03 已 DONE;此为收口残余 |
-| **DEBT-02** ✅ | 卸 3 个零引用 runtime 依赖 — `execa` / `neverthrow` / `xstate` | Phase 2(原) | **DONE** | `package.json#dependencies` 已无;`grep "from ['\"](execa\|neverthrow\|xstate)"` 0 匹配 |
-| **DEBT-03** ✅ | 替换 `resources/icon.png` 占位为合规 128×128 PNG | Phase 2(原) | **DONE** | commit `deb7ac7 chore(assets): 替换占位 icon.png ...`(2026-07-23) |
-| **DOC-01** | `resources/README.md` 重写(删 `ue5-fast.json` / `banner.png` 描述 + icon TODO 行) | Phase 1.2(原) | **TODO** | 资源描述同步,等 Phase 2 流程清晰化顺手做 |
-| **DOC-03** | 8 模块 AGENTS.md 数字校正(38 callers / 9 import / 72 测试 / 16.3k 行 / 9 别名 / 22 命令) | Phase 1.3(原) | **TODO** | 与 Phase 2 流程清晰化同主题延后 |
+| ID             | Item                                                                                            | 原 Phase      | 状态     | 备注                                                                                   |
+| -------------- | ----------------------------------------------------------------------------------------------- | ------------- | -------- | -------------------------------------------------------------------------------------- |
+| **DEBT-01**    | `Config.completionMode` 死分支 API 收口(2 caller 改读 `COMPLETION_MODE` 静态常量 + 1 mock 调整) | Phase 2(原)   | **TODO** | DEBT-02/03 已 DONE;此为收口残余                                                        |
+| **DEBT-02** ✅ | 卸 3 个零引用 runtime 依赖 — `execa` / `neverthrow` / `xstate`                                  | Phase 2(原)   | **DONE** | `package.json#dependencies` 已无;`grep "from ['\"](execa\|neverthrow\|xstate)"` 0 匹配 |
+| **DEBT-03** ✅ | 替换 `resources/icon.png` 占位为合规 128×128 PNG                                                | Phase 2(原)   | **DONE** | commit `deb7ac7 chore(assets): 替换占位 icon.png ...`(2026-07-23)                      |
+| **DOC-01**     | `resources/README.md` 重写(删 `ue5-fast.json` / `banner.png` 描述 + icon TODO 行)               | Phase 1.2(原) | **TODO** | 资源描述同步,等 Phase 2 流程清晰化顺手做                                               |
+| **DOC-03**     | 8 模块 AGENTS.md 数字校正(38 callers / 9 import / 72 测试 / 16.3k 行 / 9 别名 / 22 命令)        | Phase 1.3(原) | **TODO** | 与 Phase 2 流程清晰化同主题延后                                                        |
 
 **后续 phase 可承接**(从 Phase 2 决策抽出):
 
@@ -239,5 +258,5 @@ Phase 6 (i18n) → 最后,独立
 
 ---
 
-*Roadmap defined: 2026-07-23*
-*Last updated: 2026-07-23 after Phase 2 complete (4 plans done: 00 + 2.1 + 2.2 + 2.3; 19 项子交付物全部落地)*
+_Roadmap defined: 2026-07-23_
+_Last updated: 2026-07-23 after Phase 3 complete (5 plans done; PERF-01 automated acceptance passed; real UE smoke remains environment-blocked verification debt)_

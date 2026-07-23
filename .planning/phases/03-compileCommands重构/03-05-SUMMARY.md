@@ -13,26 +13,26 @@
 
 ## 结构与 caller 证据
 
-| 检查 | 结果 |
-|---|---|
-| 主入口行数 | `src/clangd/compileCommands.ts` = **492**（≤ 500） |
-| 四子模块 | `task.ts` 299、`cache.ts` 114、`symlink.ts` 156、`fillMissing.ts` 299；全部存在 |
-| 命名冲突 | 不存在 `src/clangd/compileCommands/fingerprint.ts`；既有 `src/clangd/fingerprint.ts` 保持 SHA256 职责 |
-| 依赖方向 | 主入口单向导入四子模块；子模块未反向导入主入口 |
-| 重复实现 | `linkToWorkspaceRoot` 仅在 `symlink.ts`；`fillMissingCompileCommands` 仅在 `fillMissing.ts` |
+| 检查        | 结果                                                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 主入口行数  | `src/clangd/compileCommands.ts` = **492**（≤ 500）                                                                                |
+| 四子模块    | `task.ts` 299、`cache.ts` 114、`symlink.ts` 156、`fillMissing.ts` 299；全部存在                                                   |
+| 命名冲突    | 不存在 `src/clangd/compileCommands/fingerprint.ts`；既有 `src/clangd/fingerprint.ts` 保持 SHA256 职责                             |
+| 依赖方向    | 主入口单向导入四子模块；子模块未反向导入主入口                                                                                    |
+| 重复实现    | `linkToWorkspaceRoot` 仅在 `symlink.ts`；`fillMissingCompileCommands` 仅在 `fillMissing.ts`                                       |
 | 直接 caller | 3 个：`src/commands/createProject.ts`、`test/unit/clangd/compileCommandsPerf.test.ts`、`test/unit/commands/createProject.test.ts` |
-| 顶层 caller | `src/commands/generateCompileCommands.ts` 继续通过 `@clangd` 导入生成、链接、fillMissing 与三个既有 helper |
+| 顶层 caller | `src/commands/generateCompileCommands.ts` 继续通过 `@clangd` 导入生成、链接、fillMissing 与三个既有 helper                        |
 
 ## 验证证据
 
-| Gate | 结果 |
-|---|---|
-| `npm run typecheck` | **PASS**, exit 0 |
-| `npm run lint` | **PASS**, exit 0；0 errors / 125 个存量 `consistent-type-imports` warnings |
-| `npm run test:unit` | **PASS**, 75 files / 856 tests；一次并行门禁遇到 `proxyLogTailer` 计时抖动，单测重跑 9/9、完整 suite 重跑 856/856 通过 |
-| `npm run build` | **PASS**, exit 0；生成 `out/extension.js`、`out/clangdProxy.js`、`out/launcher/proxy-launcher.bat` |
-| touched-file Prettier | **PASS**：`npx prettier --check src/clangd/index.ts test/unit/clangd/index.test.ts` |
-| `npm run format:check` | **FAIL（存量）**：exit 1；本计划文件不在失败清单，未扩大范围格式化 |
+| Gate                   | 结果                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`    | **PASS**, exit 0                                                                                                       |
+| `npm run lint`         | **PASS**, exit 0；0 errors / 125 个存量 `consistent-type-imports` warnings                                             |
+| `npm run test:unit`    | **PASS**, 75 files / 856 tests；一次并行门禁遇到 `proxyLogTailer` 计时抖动，单测重跑 9/9、完整 suite 重跑 856/856 通过 |
+| `npm run build`        | **PASS**, exit 0；生成 `out/extension.js`、`out/clangdProxy.js`、`out/launcher/proxy-launcher.bat`                     |
+| touched-file Prettier  | **PASS**：`npx prettier --check src/clangd/index.ts test/unit/clangd/index.test.ts`                                    |
+| `npm run format:check` | **FAIL（存量）**：exit 1；本计划文件不在失败清单，未扩大范围格式化                                                     |
 
 ### format:check 精确失败清单（26）
 

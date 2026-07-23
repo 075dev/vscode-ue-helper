@@ -2,19 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 02
-current_phase_name: 代码规范化与流程清晰化
-status: phase-2-complete
-stopped_at: Phase 2 complete (4 plans done: 00 + 2.1 + 2.2 + 2.3); Phase 3 ready
-last_updated: "2026-07-23T21:55:00.000Z"
+current_phase: 04
+current_phase_name: 4 个中型 god 文件拆分
+status: phase-3-complete
+stopped_at: Phase 3 complete (5 plans done); Phase 4 ready; real UE Extension Host smoke remains verification debt
+last_updated: "2026-07-23T23:32:00.000Z"
 last_activity: 2026-07-23
-last_activity_desc: Phase 2 complete: ueLinkManager 收尾 + ESLint 规则 + AGENTS 同步 + Result/errors + CONTRIBUTING/DEBUG/RELEASE + 3 ADR + 4 design doc
+last_activity_desc: Phase 3 complete: compileCommands main reduced to 492 lines, four submodules extracted, public barrels/callers verified, 856 unit tests and build passed
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 17
-  completed_plans: 4
+  completed_phases: 2
+  total_plans: 22
+  completed_plans: 9
 ---
+
 # State: VSCodeUEHelper
 
 **Initialized:** 2026-07-23
@@ -26,14 +27,14 @@ progress:
 
 See: `.planning/PROJECT.md` (updated 2026-07-23)
 
-**Current focus:** Phase 02 — 代码规范化与流程清晰化 **(DONE 2026-07-23)**
+**Current focus:** Phase 04 — 4 个中型 god 文件拆分（ready）
 
 ## Current Position
 
-**Phase:** 02 (代码规范化与流程清晰化) — **COMPLETE**
-**Plans:** 4 of 4 done (00 pre-plan + 2.1 + 2.2 + 2.3)
-**Status:** Phase 2 complete with 19 项子交付物全部落地;Phase 3 (compileCommands 重构) ready
-**Last activity:** 2026-07-23 — Phase 2 全 4 plans 完成: ueLinkManager 收尾 + ESLint `no-explicit-any: error` + 5 模块 AGENTS.md 同步 13 个条目 + `Result<T,E>` + 错误码体系 + `Result/errors` 测试 + CONTRIBUTING/DEBUG/RELEASE + PR 模板 + 3 份 ADR + 4 份 design doc + .vscodeignore 补 .github/.cursor
+**Phase:** 03 (compileCommands 重构) — **COMPLETE**
+**Plans:** 5 of 5 done
+**Status:** PERF-01 自动化验收完成；Phase 4 ready；真实 UE / Extension Host Generate Compile Commands smoke 因环境不可用保留为 verification debt
+**Last activity:** 2026-07-23 — `compileCommands.ts` 约 929 → 492 行；提取 task/cache/symlink/fillMissing；顶层 `@clangd` 补 `FillResult`；typecheck/lint/856 unit/build 通过；全仓 format:check 的 26 个存量漂移精确记录
 
 ## Codebase state (2026-07-23, after Phase 2)
 

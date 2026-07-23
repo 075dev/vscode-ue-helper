@@ -62,9 +62,13 @@ VSCodeUEHelper 是一款 **Windows-only 的 VS Code 扩展**,为 Unreal Engine 5
 #### 架构稳定性
 
 - ✓ **ARCH-01**: `WorkspaceState` 单一真相源(13 import / 36 callers)— `src/core/workspaceState.ts`
-- ✓ **ARCH-02**: 激活顺序硬约束 `extension.ts` (initI18n → Logger+Config → Detection → WorkspaceState → ClangdOps → activate*)
+- ✓ **ARCH-02**: 激活顺序硬约束 `extension.ts` (initI18n → Logger+Config → Detection → WorkspaceState → ClangdOps → activate\*)
 - ✓ **ARCH-03**: 双 esbuild bundle (`out/extension.js` + `out/clangdProxy.js`) — `esbuild.config.mjs`
 - ✓ **ARCH-04**: 13 个 SSoT 回归守卫 + 12 个 WorkspaceState 行为测试 — `test/unit/core/ssot.test.ts` + `test/unit/core/workspace.test.ts`
+
+#### Phase 3 / 可维护性
+
+- ✓ **REQ-PERF-01**: `compileCommands.ts` 从实测约 929 行降至 492 行，提取 `task/cache/symlink/fillMissing` 四子模块并保持公共 API — Phase 3（真实 UE command smoke 因环境不可用保留 verification debt）
 
 ### Active
 
@@ -72,7 +76,6 @@ VSCodeUEHelper 是一款 **Windows-only 的 VS Code 扩展**,为 Unreal Engine 5
 
 - [ ] **REQ-LIVE-01**: Live Coding 后命中 P0 错误时一键修复流程(AI 自动建议 + 用户确认,基于 MCP 工具链)
 - [ ] **REQ-LIVE-02**: 汉化功能在 Completion/SignatureHelp/InlayHint 上**修齐**(6 个僵尸 TODO 落地或下架)
-- [ ] **REQ-PERF-01**: 解决 `src/clangd/compileCommands.ts` 1002 行 god 文件可维护性问题(拆 4 个子模块)
 - [ ] **REQ-PERF-02**: 解决 `src/core/workspace.ts` 307 / `config.ts` 317 / `controlPanel.html.ts` 615 / `proxy/bridge.ts` 692 行 4 个 god 文件拆分
 - [ ] **REQ-DEBT-01**: `Config.completionMode` 死分支 API 收口(caller 改读静态常量,删 getter)
 - [ ] **REQ-DEBT-02**: 3 个零引用 runtime 依赖 `execa` / `neverthrow` / `xstate` 卸载
@@ -146,29 +149,30 @@ VSCodeUEHelper 是一款 **Windows-only 的 VS Code 扩展**,为 Unreal Engine 5
 
 <!-- 重大决策,影响未来工作 -->
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Windows-only (`package.json#platforms: ["win32"]`) | 跨平台代码是死代码,清理掉 | ✓ Good (N1/N2/N3 已清) |
-| 砍 `completionMode` fast/slow UI,合并 slow | 用户拒绝复杂开关,fast.json 删 | ✓ Good (Phase 8) |
-| `ClangdOps` 统一 `.clangd` 写入 | Phase 9 解决 SSoT 漂移 | ✓ Good (13 SSoT 守卫) |
-| `WorkspaceState` 单一真相源 | 多模块各自读 `.code-workspace` 容易竞态 | ✓ Good (Phase 8) |
-| 独立 LSP proxy 子进程 | 给 UE 特定行为留 hook(didClose 汉化、UeDiagnosticWatcher) | ✓ Good (Phase 8 收尾) |
-| Live Coding 5s 节流 | 用户对"完美单文件 UHT"和"5s 节流"二选一时选节流 | ✓ Good (性能优先) |
-| UBT 被动触发 via `UeDiagnosticWatcher` | 主动 watcher 扫描风暴,误触发 UBT 浪费 30s+ | ✓ Good (Phase 8) |
-| `populateAddCompletions` 删 | 撒谎型兼容层(stats 全 0)误导新代码 | ✓ Good (Phase 9) |
-| dual esbuild bundle | 给 LSP proxy 留独立 Node 进程,不依赖 vscode | ✓ Good (架构清晰) |
-| TS strict + 3 ESLint error 规则 | 防止 floating promise,no-floating-promises 是 UE 内存泄漏主要来源 | ✓ Good |
-| 13 个 SSoT 回归守卫 | 防止 Phase 9 决策被未来"重构"复活 | ✓ Good (`test/unit/core/ssot.test.ts`) |
+| Decision                                           | Rationale                                                         | Outcome                                |
+| -------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------- |
+| Windows-only (`package.json#platforms: ["win32"]`) | 跨平台代码是死代码,清理掉                                         | ✓ Good (N1/N2/N3 已清)                 |
+| 砍 `completionMode` fast/slow UI,合并 slow         | 用户拒绝复杂开关,fast.json 删                                     | ✓ Good (Phase 8)                       |
+| `ClangdOps` 统一 `.clangd` 写入                    | Phase 9 解决 SSoT 漂移                                            | ✓ Good (13 SSoT 守卫)                  |
+| `WorkspaceState` 单一真相源                        | 多模块各自读 `.code-workspace` 容易竞态                           | ✓ Good (Phase 8)                       |
+| 独立 LSP proxy 子进程                              | 给 UE 特定行为留 hook(didClose 汉化、UeDiagnosticWatcher)         | ✓ Good (Phase 8 收尾)                  |
+| Live Coding 5s 节流                                | 用户对"完美单文件 UHT"和"5s 节流"二选一时选节流                   | ✓ Good (性能优先)                      |
+| UBT 被动触发 via `UeDiagnosticWatcher`             | 主动 watcher 扫描风暴,误触发 UBT 浪费 30s+                        | ✓ Good (Phase 8)                       |
+| `populateAddCompletions` 删                        | 撒谎型兼容层(stats 全 0)误导新代码                                | ✓ Good (Phase 9)                       |
+| dual esbuild bundle                                | 给 LSP proxy 留独立 Node 进程,不依赖 vscode                       | ✓ Good (架构清晰)                      |
+| TS strict + 3 ESLint error 规则                    | 防止 floating promise,no-floating-promises 是 UE 内存泄漏主要来源 | ✓ Good                                 |
+| 13 个 SSoT 回归守卫                                | 防止 Phase 9 决策被未来"重构"复活                                 | ✓ Good (`test/unit/core/ssot.test.ts`) |
 
 ---
 
-*Last updated: 2026-07-23 after Phase 2 complete (4 plans: 00 pre-plan + 2.1 + 2.2 + 2.3; 19 项子交付物落地, 0 新 REQ 验证)*
+_Last updated: 2026-07-23 after Phase 3 complete (5 plans; PERF-01 automated acceptance passed; real UE smoke environment-blocked)_
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd-transition`):
+
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
@@ -176,6 +180,7 @@ This document evolves at phase transitions and milestone boundaries.
 5. "What This Is" still accurate? → Update if drifted
 
 **After each milestone** (via `/gsd-complete-milestone`):
+
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
@@ -205,3 +210,11 @@ This document evolves at phase transitions and milestone boundaries.
    - Phase 5 Live Coding + AI 集成 (规则引擎, 零 LLM 依赖)
    - Phase 6 汉化 TODO 决断 (设计 doc 推荐选项 A 下架, 4-6h,优于选项 B 填充 8-12h)
 
+### Phase 3 evolution (2026-07-23)
+
+**Status:** Phase 3 落地（03-01 至 03-05 全 5 plans 完成）。
+
+1. **新验证的 REQ:** REQ-PERF-01 — 主入口 492 行，四子模块和公共 API/callers 自动化验证通过。
+2. **设计校正:** 原规划的第四模块 `fingerprint` 与既有 SHA256 `src/clangd/fingerprint.ts` 冲突，按研究结果改为 `fillMissing.ts`。
+3. **验证债务:** 真实 UE / Extension Host `Generate Compile Commands` smoke 因本环境无可运行 `.uproject` / UE / UBT 未执行；未伪造通过。
+4. **下一焦点:** Phase 4 — 4 个中型 god 文件拆分（REQ-PERF-02）。
