@@ -205,17 +205,3 @@ This document evolves at phase transitions and milestone boundaries.
    - Phase 5 Live Coding + AI 集成 (规则引擎, 零 LLM 依赖)
    - Phase 6 汉化 TODO 决断 (设计 doc 推荐选项 A 下架, 4-6h,优于选项 B 填充 8-12h)
 
-This document evolves at phase transitions and milestone boundaries.
-
-**After each phase transition** (via `/gsd-transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd-complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
