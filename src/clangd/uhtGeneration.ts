@@ -217,24 +217,20 @@ export async function runUhtCodegen(opts: RunUhtCodegenOptions): Promise<UhtResu
   //   内部 Split 空格 → Name / Platform / Config / `-Project=...`。
   // - `-Project=` 必须在 `-Target=` 值里，否则 ProjectFile=null → 找不到 target rules。
   //
-  // H1-P0: InputCache 让 UHT 第二次跑时只 parse 变更的 .h（其他走缓存读）。
-  //   验证：UE 5.8 `Engine/Source/Programs/UnrealBuildTool/Modes/UnrealHeaderToolMode.cs:593-600`
-  //   的 [CommandLine] attribute + `UhtSession.cs:2141-2178` 的 StepParseHeaders
-  //   `headerFile.ReadFromCache() if (!headerFile.WasCached) ... Parse()` 流程。
-  //   日志会区分 `Source Files Read (disk/cache): N/M` 与 `Cache Skipped (fnf/version/...)`。
-  // -EnableInputCacheRead  读已缓存（cache hit 跳解析，节省大头）
-  // -EnableInputCacheWrite 写新缓存（持续累积，未来更快）
-  // -NoGoWide               关闭并发 parse/codegen——开发期 1 次只改 1 个 .h，
-  //                         并发反而拖慢（小任务调度开销大于收益）。引擎头通常
-  //                         全部 cache hit，无需并发；并发对全 cache miss 才有意义。
+  // H1-P0 REVERTED：之前尝试加 -EnableInputCacheRead/Write + -NoGoWide 加速 UHT，
+  //   真实 XianDreamwalking 项目（10206 源文件）实测发现 InputCache 反而**慢 3-7 倍**：
+  //     A 基线（无 cache） warm=3.94s（UHT 检测 manifest 未变 → 直接跳 codegen）
+  //     B H1-P0  cold=19.6s（10206 文件全 parse + 写 652 cache entry）
+  //         B warm=11.1s（10206 文件 cache hit + 652 cache 读，仍要 11s 启动 + 校验）
+  //   UHT 启动本身（dotnet + UnrealBuildTool.dll 加载 + 10206 文件 hash 校验）就是大头，
+  //   启用 cache 让 UHT 做更多工作。Rider 体感"无延迟"来自 IPC 复用 UE Editor 进程
+  //   内嵌 UHT，我们 fork 新 dotnet 进程是物理限制，无法走 IPC 路径。
+  //   结论：保留 UHT 子进程调用，但只跑必要工作（manifest hash 检测）—— 3-4s 已是最优。
   const args: string[] = [
     ubtDll,
     '-Mode=UnrealHeaderTool',
     `-Target=${buildTargetName} ${platform} ${buildType} -Project=${project}`,
     '-waitmutex',
-    '-EnableInputCacheRead',
-    '-EnableInputCacheWrite',
-    '-NoGoWide',
   ];
 
   // bundled dotnet 需要的环境变量（per GetDotnetPath.bat）
