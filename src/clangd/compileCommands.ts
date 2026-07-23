@@ -23,13 +23,16 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Logger, sharedLogger } from '@core/logger';
+import { sharedLogger } from '@core/logger';
+import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
-import { computeFingerprint } from './fingerprint';
-import { CompileCommandsCache } from './compileCommandsCache';
 import { generateFallbackCompileCommands } from './compileCommandsFallback';
 import { perfLog } from './perfLog';
-import type { CachedCompileCommands } from './types';
+import {
+  tryCompileCommandsFastPath,
+  writeCompileCommandsCache,
+  type FastPathResult,
+} from '@clangd/compileCommands/cache';
 import {
   buildNativeArgs,
   buildNonNativeArgs,
@@ -140,63 +143,49 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   );
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
+  // [Phase 3.2] cache 编排抽到 @clangd/compileCommands/cache,主文件保留 perf 埋点
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
   // [P2-4] 阶段反馈：计算指纹
   opts.progress?.report({ message: 'Computing fingerprint...' });
-  const cache = new CompileCommandsCache({ logger: log });
-  let cachedEntry: CachedCompileCommands | undefined;
-  try {
-    const fpStart = performance.now();
-    const fp = await computeFingerprint(projectDir);
-    cachedEntry = await cache.tryRead(projectDir);
-    const fpMs = performance.now() - fpStart;
-
-    // 命中条件：cache 存在 + fingerprint 完全一致 + ccPath 仍存在
-    // P1-3: fallback 条目不走快路径（下次仍重试 UBT，避免永久降级）
-    if (cachedEntry && cachedEntry.fingerprint === fp.fingerprint && !cachedEntry.fallback) {
-      const ccExists = await fs
-        .access(cachedEntry.ccPath)
-        .then(() => true)
-        .catch(() => false);
-      if (ccExists) {
-        perfLog.record({
-          event: 'compileCommands.cacheHit',
-          elapsedMs: fpMs,
-          meta: { fingerprint: fp.fingerprint, ccPath: cachedEntry.ccPath },
-        });
-        log.info(
-          `[perf] compileCommands cache HIT (fp ${fpMs.toFixed(1)}ms), skip UBT → ${cachedEntry.ccPath}`,
-        );
-        // [Phase 7 PLAN B / per D-03] 阶段 5：fast-path 命中 — totalElapsed 收尾
-        try {
-          perfLog.record({
-            event: 'compileCommands.totalElapsed',
-            elapsedMs: performance.now() - entryStart,
-            meta: { hit: true, outcome: 'cacheFastPath' },
-          });
-        } catch (err) {
-          log.warn(
-            `[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-        return cachedEntry.ccPath;
-      }
-    }
+  const fastPath: FastPathResult = await tryCompileCommandsFastPath(projectDir, log);
+  if (fastPath.hit) {
     perfLog.record({
-      event: 'compileCommands.cacheMiss',
-      elapsedMs: fpMs,
-      meta: { fingerprint: fp.fingerprint, hadCache: !!cachedEntry },
+      event: 'compileCommands.cacheHit',
+      elapsedMs: fastPath.elapsedMs,
+      meta: { fingerprint: fastPath.fingerprint, ccPath: fastPath.ccPath },
     });
-    log.info(`[perf] compileCommands cache MISS (fp ${fpMs.toFixed(1)}ms), running UBT`);
-  } catch (err) {
+    log.info(
+      `[perf] compileCommands cache HIT (fp ${fastPath.elapsedMs.toFixed(1)}ms), skip UBT → ${fastPath.ccPath}`,
+    );
+    // [Phase 7 PLAN B / per D-03] 阶段 5：fast-path 命中 — totalElapsed 收尾
+    try {
+      perfLog.record({
+        event: 'compileCommands.totalElapsed',
+        elapsedMs: performance.now() - entryStart,
+        meta: { hit: true, outcome: 'cacheFastPath' },
+      });
+    } catch (err) {
+      log.warn(
+        `[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return fastPath.ccPath;
+  }
+  if ('error' in fastPath) {
     // 指纹或缓存 IO 异常：降级到原有 UBT 路径（per T-7-04 防御原则）
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn(`[perf] fingerprint/cache fast-path failed, fallback to UBT: ${msg}`);
+    log.warn(`[perf] fingerprint/cache fast-path failed, fallback to UBT: ${fastPath.error}`);
     perfLog.record({
       event: 'compileCommands.fastPathError',
       elapsedMs: 0,
-      meta: { error: msg },
+      meta: { error: fastPath.error },
     });
+  } else {
+    perfLog.record({
+      event: 'compileCommands.cacheMiss',
+      elapsedMs: fastPath.elapsedMs,
+      meta: { fingerprint: fastPath.fingerprint, hadCache: fastPath.hadCache },
+    });
+    log.info(`[perf] compileCommands cache MISS (fp ${fastPath.elapsedMs.toFixed(1)}ms), running UBT`);
   }
 
   // 1. 查找 UBT 路径（RunUBT.bat/sh 优先）
@@ -330,20 +319,14 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
         );
 
         // [Phase 7 D-08] 写入缓存，供下次快速命中
-        if (cachedEntry?.ccPath !== p) {
+        // [Phase 3.2] cache 编排抽到 @clangd/compileCommands/cache,主文件只保留 dedup 守卫 + 日志
+        const cachedCcPath = 'cachedCcPath' in fastPath ? fastPath.cachedCcPath : undefined;
+        if (cachedCcPath !== p) {
           try {
-            // 重新计算一次以获取稳定 fingerprint（含 computedMs 用于诊断）
-            const fp = await computeFingerprint(path.dirname(opts.project));
-            await cache.write(path.dirname(opts.project), {
-              fingerprint: fp.fingerprint,
-              ccPath: p,
-              linkTarget: p,
-              savedAt: new Date().toISOString(),
-              fileCount: 0,
+            await writeCompileCommandsCache(path.dirname(opts.project), p, {
+              logger: log,
             });
-            log.info(
-              `[perf] compileCommands cache WRITTEN (fingerprint=${fp.fingerprint.slice(0, 12)}...)`,
-            );
+            log.info(`[perf] compileCommands cache WRITTEN (path changed: ${cachedCcPath ?? '(none)'} → ${p})`);
           } catch (cacheErr) {
             // 写缓存失败：不阻塞主流程（per T-7-04 防御原则）
             const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
@@ -412,17 +395,14 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     });
     if (fbResult) {
       // 写缓存（标记 fallback：命中时不走快路径，下次仍重试 UBT）
+      // [Phase 3.2] cache 编排抽到 @clangd/compileCommands/cache
       try {
-        const fp = await computeFingerprint(projectDir);
-        await cache.write(projectDir, {
-          fingerprint: fp.fingerprint,
-          ccPath: fbResult.ccPath,
-          linkTarget: fbResult.ccPath,
-          savedAt: new Date().toISOString(),
-          fileCount: fbResult.entryCount,
+        await writeCompileCommandsCache(projectDir, fbResult.ccPath, {
           fallback: true,
+          fileCount: fbResult.entryCount,
+          logger: log,
         });
-        log.info(`[perf] fallback cache WRITTEN (fingerprint=${fp.fingerprint.slice(0, 12)}...)`);
+        log.info(`[perf] fallback cache WRITTEN (path=${fbResult.ccPath})`);
       } catch (cacheErr) {
         const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
         log.warn(`[perf] failed to write fallback cache: ${msg}`);

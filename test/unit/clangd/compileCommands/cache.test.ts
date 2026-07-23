@@ -7,6 +7,7 @@
  *   - 5MB 大小限制
  *   - temp + rename 原子写入（不留 .tmp）
  *   - invalidate 后 read miss
+ *   - [Phase 3.2] cache 编排子模块:tryCompileCommandsFastPath / writeCompileCommandsCache
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -14,6 +15,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import { CompileCommandsCache } from '@clangd/compileCommandsCache';
+import {
+  tryCompileCommandsFastPath,
+  writeCompileCommandsCache,
+} from '@clangd/compileCommands/cache';
+import { computeFingerprint } from '@clangd/fingerprint';
 import type { CachedCompileCommands } from '@clangd/types';
 
 function createCachePath(projectDir: string): string {
@@ -174,5 +180,166 @@ describe('CompileCommandsCache.cachePath (静态方法)', () => {
     expect(result).toContain('.vscode');
     expect(result).toContain('clangd-perf-cache');
     expect(result).toContain('compile-commands-cache.json');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  [Phase 3.2] cache 编排子模块测试(包裹 fingerprint + ccPath 访问性) */
+/* ------------------------------------------------------------------ */
+
+describe('tryCompileCommandsFastPath', () => {
+  let projectDir: string;
+
+  beforeEach(async () => {
+    projectDir = await fs.mkdtemp(path.join(tmpdir(), 'cc-fastpath-orch-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  });
+
+  it('fingerprint 一致 + 非 fallback + ccPath 存在 → hit', async () => {
+    const ccPath = path.join(projectDir, 'compile_commands.json');
+    await fs.writeFile(ccPath, '[]', 'utf-8');
+
+    const fp = await computeFingerprint(projectDir);
+    const cache = new CompileCommandsCache();
+    await cache.write(projectDir, {
+      fingerprint: fp.fingerprint,
+      ccPath,
+      linkTarget: ccPath,
+      savedAt: new Date().toISOString(),
+      fileCount: 0,
+    });
+
+    const result = await tryCompileCommandsFastPath(projectDir);
+    expect(result.hit).toBe(true);
+    if (result.hit) {
+      expect(result.ccPath).toBe(ccPath);
+      expect(result.fingerprint).toBe(fp.fingerprint);
+      expect(result.elapsedMs).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('fingerprint 不一致 → miss 且 hadCache=true', async () => {
+    const ccPath = path.join(projectDir, 'compile_commands.json');
+    await fs.writeFile(ccPath, '[]', 'utf-8');
+
+    const cache = new CompileCommandsCache();
+    await cache.write(projectDir, {
+      fingerprint: 'STALE_FINGERPRINT',
+      ccPath,
+      linkTarget: ccPath,
+      savedAt: new Date().toISOString(),
+      fileCount: 0,
+    });
+
+    const result = await tryCompileCommandsFastPath(projectDir);
+    expect(result.hit).toBe(false);
+    if (!result.hit && !('error' in result)) {
+      expect(result.hadCache).toBe(true);
+      expect(result.cachedCcPath).toBe(ccPath);
+      expect(result.fingerprint).not.toBe('STALE_FINGERPRINT');
+    }
+  });
+
+  it('fallback entry → miss(per P1-3 防永久降级)', async () => {
+    const ccPath = path.join(projectDir, 'compile_commands.json');
+    await fs.writeFile(ccPath, '[]', 'utf-8');
+
+    const fp = await computeFingerprint(projectDir);
+    const cache = new CompileCommandsCache();
+    await cache.write(projectDir, {
+      fingerprint: fp.fingerprint,
+      ccPath,
+      linkTarget: ccPath,
+      savedAt: new Date().toISOString(),
+      fileCount: 5,
+      fallback: true,
+    });
+
+    const result = await tryCompileCommandsFastPath(projectDir);
+    expect(result.hit).toBe(false);
+    if (!result.hit && !('error' in result)) {
+      expect(result.hadCache).toBe(true);
+    }
+  });
+
+  it('ccPath 缺失 → miss 且 hadCache=false（cache.tryRead 内部已过滤）', async () => {
+    // 写 cache 条目指向一个不存在的 ccPath
+    const fp = await computeFingerprint(projectDir);
+    const cache = new CompileCommandsCache();
+    const ccPath = path.join(projectDir, 'non-existent.json');
+    await cache.write(projectDir, {
+      fingerprint: fp.fingerprint,
+      ccPath,
+      linkTarget: ccPath,
+      savedAt: new Date().toISOString(),
+      fileCount: 0,
+    });
+
+    const result = await tryCompileCommandsFastPath(projectDir);
+    expect(result.hit).toBe(false);
+    // CompileCommandsCache.tryRead 内部已过滤 ccPath 缺失（per D-08），
+    // 所以 fastPath 看到 hadCache=false，但 fingerprint 已算
+    if (!result.hit && !('error' in result)) {
+      expect(result.hadCache).toBe(false);
+      expect(result.fingerprint).toBe(fp.fingerprint);
+    }
+  });
+
+  it('cache 文件不存在 → miss 且 hadCache=false', async () => {
+    const result = await tryCompileCommandsFastPath(projectDir);
+    expect(result.hit).toBe(false);
+    if (!result.hit && !('error' in result)) {
+      expect(result.hadCache).toBe(false);
+      expect(result.cachedCcPath).toBeUndefined();
+    }
+  });
+});
+
+describe('writeCompileCommandsCache', () => {
+  let projectDir: string;
+
+  beforeEach(async () => {
+    projectDir = await fs.mkdtemp(path.join(tmpdir(), 'cc-write-orch-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  });
+
+  it('正常路径写入保留 ccPath / linkTarget / fingerprint / fileCount=0', async () => {
+    const ccPath = path.join(projectDir, 'compile_commands.json');
+    await fs.writeFile(ccPath, '[]', 'utf-8');
+
+    await writeCompileCommandsCache(projectDir, ccPath, { logger: undefined });
+
+    const cache = new CompileCommandsCache();
+    const entry = await cache.tryRead(projectDir);
+    expect(entry).toBeDefined();
+    expect(entry?.ccPath).toBe(ccPath);
+    expect(entry?.linkTarget).toBe(ccPath);
+    expect(entry?.fileCount).toBe(0);
+    expect(entry?.fallback).toBe(false);
+    expect(entry?.fingerprint).toBeTruthy();
+  });
+
+  it('fallback 写入保留 fallback=true + 自定义 fileCount', async () => {
+    const ccPath = path.join(projectDir, 'compile_commands.json');
+    await fs.writeFile(ccPath, '[]', 'utf-8');
+
+    await writeCompileCommandsCache(projectDir, ccPath, {
+      fallback: true,
+      fileCount: 42,
+      logger: undefined,
+    });
+
+    const cache = new CompileCommandsCache();
+    const entry = await cache.tryRead(projectDir);
+    expect(entry).toBeDefined();
+    expect(entry?.ccPath).toBe(ccPath);
+    expect(entry?.fallback).toBe(true);
+    expect(entry?.fileCount).toBe(42);
   });
 });
