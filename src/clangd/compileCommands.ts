@@ -25,7 +25,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger, sharedLogger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
-import { getUbtPath } from './ueHelpers';
 import { computeFingerprint } from './fingerprint';
 import { CompileCommandsCache } from './compileCommandsCache';
 import { generateFallbackCompileCommands } from './compileCommandsFallback';
@@ -37,8 +36,8 @@ import {
   executeShellTask,
   findClangToolchain,
   isClangdAvailable,
-  getUbtPath as _getUbtPathReexportSentinel,
-} from './compileCommands/task';
+  getUbtPath,
+} from '@clangd/compileCommands/task';
 
 // re-export 公共 API 让外部 @clangd/compileCommands 用户零感知拆分（per T4.5 拆分策略）
 export { isClangdAvailable };
@@ -50,8 +49,6 @@ export { isClangdAvailable };
 /** compile_commands.json 文件名（主文件定位 candidates 用） */
 const FILE_NAME_COMPILE_COMMANDS = 'compile_commands.json';
 
-// 抑制 lint: getUbtPath 在新 task.ts 已经 re-export,主文件仍直接使用
-void _getUbtPathReexportSentinel;
 
 /* ------------------------------------------------------------------ */
 /*  类型定义                                                            */

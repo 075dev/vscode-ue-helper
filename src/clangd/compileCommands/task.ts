@@ -19,7 +19,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
-import { getUbtPath, getBuildTargetNames } from '../ueHelpers';
+import { getUbtPath, getBuildTargetNames } from '@clangd/ueHelpers';
 
 /** Windows-only：本插件唯一支持的 Unreal 平台。 */
 const WIN64_PLATFORM = 'Win64';
