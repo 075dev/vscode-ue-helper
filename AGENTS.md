@@ -2,6 +2,8 @@
 
 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding 热重载、clangd 智能提示、可选 MCP AI Agent 集成。所有代码注释强制中文。
 
+> **平台支持**：**仅 Windows**（`package.json#platforms: ["win32"]`，N1+N2+N3 死代码清理后强制）。Mac/Linux 不在支持范围。Engine 5.2+ / MSVC 工具链 / Windows SDK 是硬依赖。
+
 ## 状态速览
 
 - 0.1.0 已发布；0.6.x 合并 fast/slow 为 slow；**Phase 8 + 9 架构**：`WorkspaceState`（13 import / 36 callers）+ `ClangdOps`（22 callers）单一真相源，`phase 9 SSoT 收尾`完成——
@@ -9,8 +11,8 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
   - 29 处 `detection.workspaceContext.getSelected*` 收敛到 `workspace.selectedProject` / `selectedEngine`，新增 `resolveSelectedProject/Engine()` 收口 10 个命令文件重复模式
   - 全局 `.eslintrc.json` 锁定 3 类 syntax bypass + 1 类 import bypass
   - 13 个 `test/unit/core/ssot.test.ts` 回归守卫 + 12 个 `test/unit/core/workspace.test.ts` 行为测试
-- **19 个命令**（`package.json#contributes.commands`），11 个状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
-- 单元测试 56 个文件 + 1 个 .bak 手备份（共约 10.4k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 80/80/75/80。
+- **21 个命令**（`package.json#contributes.commands`），11 个状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
+- 单元测试 71 个文件（共约 12k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 80/80/75/80。
 
 ## 模块文档
 

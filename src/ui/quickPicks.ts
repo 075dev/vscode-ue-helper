@@ -64,6 +64,8 @@ export async function pickTarget(): Promise<string | undefined> {
 }
 
 export async function pickPlatform(): Promise<string | undefined> {
+  // Windows-only：本插件仅服务 Win64，其他平台保留 QuickPick 选项仅为未来
+  // 兼容（BuildPlatform type 仍包含 'Mac' | 'Linux'，便于后续扩展）。
   const items: vscode.QuickPickItem[] = [
     { label: 'Win64', description: 'Windows 64-bit' },
     { label: 'Mac', description: 'macOS' },

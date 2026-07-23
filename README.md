@@ -9,12 +9,12 @@
 | Phase | Status | Feature                                                                                             |
 | ----- | ------ | --------------------------------------------------------------------------------------------------- |
 | 0     | ✅     | Project skeleton, command palette, configuration schema                                             |
-| 1     | ✅     | `.uproject` scanning, cross-platform engine discovery (Win/Mac/Linux), VS Build Tools detection     |
+| 1     | ✅     | `.uproject` scanning, engine discovery (Windows-only), VS Build Tools detection                |
 | 2     | ✅     | UBT Build/Rebuild/Clean, Live Coding, MSVC parsing, Problems panel, Task provider                   |
 | 3     | ✅     | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes, workspace backup |
-| 4     | ✅     | Status bar, QuickPick pickers, **19 commands**                                                      |
+| 4     | ✅     | Status bar, QuickPick pickers, **21 commands**                                                      |
 | 5     | ✅     | MCP server (auto-enabled in Cursor / Claude Code), AI agent rules                                   |
-| 6     | ✅     | Unit tests (Vitest, 675 tests / 57 files), CI-ready scripts                                         |
+| 6     | ✅     | Unit tests (Vitest, 812 tests / 71 files), CI-ready scripts                                         |
 | 7     | ✅     | clangd LSP proxy + control panel webview + preparse cache, perf instrumentation                     |
 | 8     | ✅     | `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构、Phase 7/8/9 SSoT 收束            |
 
@@ -32,10 +32,10 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 ### Build Integration
 
 - Build / Rebuild / Clean via UnrealBuildTool (`Ctrl+Shift+B` via TaskProvider)
-- Live Coding hot-reload (Windows only — `Ctrl+Alt+F11`)
+- Live Coding hot-reload (`Ctrl+Alt+F11`)
 - MSVC error parsing → Problems panel with file:line:col click-through
 - Build progress in status bar notification
-- Cross-platform editor launch (Windows / Mac / Linux)
+- Cross-platform editor launch (Windows / Mac / Linux) — **本插件仅支持 Windows**
 
 ### Engine & Project Detection
 
@@ -123,15 +123,15 @@ Settings live under the `vscodeUEHelper.*` namespace.
 
 ## Commands
 
-19 commands total. All bound to `vscodeUEHelper.*` namespace.
+21 commands total. All bound to `vscodeUEHelper.*` namespace.
 
 | Command                                  | Title                             | Notes                                     |
 | ---------------------------------------- | --------------------------------- | ----------------------------------------- |
 | `vscodeUEHelper.build`                   | Build                             | UBT build of selected target/config       |
 | `vscodeUEHelper.rebuild`                 | Rebuild                           | Clean + Build                             |
 | `vscodeUEHelper.clean`                   | Clean                             | Remove intermediates                      |
-| `vscodeUEHelper.launchEditor`            | Launch Unreal Editor              | Cross-platform spawn                      |
-| `vscodeUEHelper.liveCoding`              | Live Coding (Hot Reload)          | Windows only                              |
+| `vscodeUEHelper.launchEditor`            | Launch Unreal Editor              | Windows spawn (`cmd /c start`)           |
+| `vscodeUEHelper.liveCoding`              | Live Coding (Hot Reload)          | Triggers UE Live Coding                  |
 | `vscodeUEHelper.generateCompileCommands` | Generate compile_commands.json    | For clangd                                |
 | `vscodeUEHelper.diagnoseProject`         | Diagnose Clangd Project           | First stop when clangd indexing is broken |
 | `vscodeUEHelper.createProject`           | Create Unreal Clangd Project      | Scaffold `.clangd` + customization        |
@@ -154,7 +154,7 @@ npm run build              # esbuild → out/extension.js (~826kb) + out/clangdP
 npm run typecheck          # tsc --noEmit
 npm run lint               # ESLint src test
 npm run format:check       # Prettier
-npm run test:unit          # Vitest (675 tests / 57 files, coverage ≥ 80/80/75/80)
+npm run test:unit          # Vitest (812 tests / 71 files, coverage ≥ 80/80/75/80)
 npm run package            # vsce package → .vsix
 npm run perf:baseline      # LSP proxy overhead sample → .vscode/clangd-perf-cache/proxy-baseline.json
 npm run perf:after         # Same as above → proxy-after.json
@@ -177,10 +177,10 @@ src/
 ├── detection/                   # uproject scan, engine discovery, vswhere
 ├── build/                       # UBT CLI, runner, live coding, launch editor
 ├── clangd/                      # compile_commands, .clangd, ClangdOps, preparse, proxy/
-│   └── proxy/                   # Standalone LSP proxy CLI (17 files)
+│   └── proxy/                   # Standalone LSP proxy CLI
 ├── parsers/                     # MSVC, UBT, linker, uproject JSON
 ├── ui/                          # Status bar, QuickPick, control panel webview
-├── commands/                    # 19 command handlers
+├── commands/                    # 21 command handlers
 ├── mcp/                         # MCP server (auto-enabled in Cursor)
 ├── rules/                       # AI agent rule generators
 └── i18n/                        # en.json + zh.json

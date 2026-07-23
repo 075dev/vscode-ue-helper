@@ -87,7 +87,7 @@ export async function pickXxx(
 | `pickEngine()` | detection.engines | workspaceState |
 | `pickConfig()` | 固定枚举 (Debug/DebugGame/Dev/Shipping/Test) | vscode 配置 |
 | `pickTarget()` | 固定枚举 (Editor/Game/Server/Client) | vscode 配置 |
-| `pickPlatform()` | 固定枚举 (Win64/Mac/Linux) | vscode 配置 |
+| `pickPlatform()` | 固定枚举（Windows-only：本插件仅服务 Win64） | vscode 配置 |
 
 ## Notifications 封装
 

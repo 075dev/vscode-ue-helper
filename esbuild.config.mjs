@@ -8,7 +8,7 @@
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { writeFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWatch = process.argv.includes('--watch');
@@ -90,7 +90,8 @@ if (isWatch) {
   const launcherDir = resolve(__dirname, 'out/launcher');
   mkdirSync(launcherDir, { recursive: true });
 
-  // Windows .bat launcher
+  // Windows-only launcher（不再生成 Unix .sh）
+  // 理由：本插件仅支持 Windows 平台，N2 死代码清理后已无任何调用方
   const batContent = [
     '@echo off',
     'REM proxy-launcher.bat —— clangd LSP 代理启动器（Windows）',
@@ -102,23 +103,4 @@ if (isWatch) {
   ].join('\r\n');
   writeFileSync(resolve(launcherDir, 'proxy-launcher.bat'), batContent, 'utf-8');
   console.log('[esbuild] launcher generated → out/launcher/proxy-launcher.bat');
-
-  // Unix .sh launcher
-  const shContent = [
-    '#!/bin/sh',
-    '# proxy-launcher.sh —— clangd LSP 代理启动器（Unix）',
-    '# 由 esbuild 自动生成，配合 clangd.useScriptAsExecutable=true 使用。',
-    '',
-    'PROXY_DIR="$(cd "$(dirname "$0")/.." && pwd)"',
-    'exec node "$PROXY_DIR/clangdProxy.js" "$@"',
-    '',
-  ].join('\n');
-  writeFileSync(resolve(launcherDir, 'proxy-launcher.sh'), shContent, 'utf-8');
-  // Unix 可执行权限（Windows 上忽略失败）
-  try {
-    chmodSync(resolve(launcherDir, 'proxy-launcher.sh'), 0o755);
-  } catch {
-    /* ignore on Windows */
-  }
-  console.log('[esbuild] launcher generated → out/launcher/proxy-launcher.sh');
 }
