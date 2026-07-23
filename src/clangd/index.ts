@@ -54,6 +54,7 @@ export {
   linkToWorkspaceRoot,
   isClangdAvailable,
   fillMissingCompileCommands,
+  type FillResult,
 } from './compileCommands';
 export {
   generateFallbackCompileCommands,

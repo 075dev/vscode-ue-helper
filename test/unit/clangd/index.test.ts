@@ -28,6 +28,7 @@ import {
   linkToWorkspaceRoot,
   isClangdAvailable,
   fillMissingCompileCommands,
+  type FillResult,
   createCompletionFiles,
   addCompletionHelperToCompileCommands,
   defaultClangdConfig,
@@ -60,6 +61,17 @@ describe('@clangd barrel exports', () => {
 
     it('fillMissingCompileCommands 是函数', () => {
       expect(typeof fillMissingCompileCommands).toBe('function');
+    });
+
+    it('FillResult 类型在 barrel 中存在且字段匹配', () => {
+      const result: FillResult = {
+        roots: ['C:/proj/Source'],
+        scanned: 1,
+        missing: [],
+        added: [],
+      };
+      expect(result.roots).toEqual(['C:/proj/Source']);
+      expect(result.scanned).toBe(1);
     });
 
     it('createCompletionFiles 是函数', () => {
