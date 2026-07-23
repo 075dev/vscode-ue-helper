@@ -33,6 +33,7 @@ import {
   writeCompileCommandsCache,
   type FastPathResult,
 } from '@clangd/compileCommands/cache';
+import { linkToWorkspaceRoot } from '@clangd/compileCommands/symlink';
 import {
   buildNativeArgs,
   buildNonNativeArgs,
@@ -43,7 +44,7 @@ import {
 } from '@clangd/compileCommands/task';
 
 // re-export 公共 API 让外部 @clangd/compileCommands 用户零感知拆分（per T4.5 拆分策略）
-export { isClangdAvailable };
+export { isClangdAvailable, linkToWorkspaceRoot };
 
 /* ------------------------------------------------------------------ */
 /*  常量（仅保留主文件直接用得到的,其余已迁 task.ts）                     */
@@ -51,7 +52,6 @@ export { isClangdAvailable };
 
 /** compile_commands.json 文件名（主文件定位 candidates 用） */
 const FILE_NAME_COMPILE_COMMANDS = 'compile_commands.json';
-
 
 /* ------------------------------------------------------------------ */
 /*  类型定义                                                            */
@@ -185,7 +185,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       elapsedMs: fastPath.elapsedMs,
       meta: { fingerprint: fastPath.fingerprint, hadCache: fastPath.hadCache },
     });
-    log.info(`[perf] compileCommands cache MISS (fp ${fastPath.elapsedMs.toFixed(1)}ms), running UBT`);
+    log.info(
+      `[perf] compileCommands cache MISS (fp ${fastPath.elapsedMs.toFixed(1)}ms), running UBT`,
+    );
   }
 
   // 1. 查找 UBT 路径（RunUBT.bat/sh 优先）
@@ -326,7 +328,9 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
             await writeCompileCommandsCache(path.dirname(opts.project), p, {
               logger: log,
             });
-            log.info(`[perf] compileCommands cache WRITTEN (path changed: ${cachedCcPath ?? '(none)'} → ${p})`);
+            log.info(
+              `[perf] compileCommands cache WRITTEN (path changed: ${cachedCcPath ?? '(none)'} → ${p})`,
+            );
           } catch (cacheErr) {
             // 写缓存失败：不阻塞主流程（per T-7-04 防御原则）
             const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
@@ -484,147 +488,6 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
       `Check the VSCode UE Helper output channel for UBT logs.`,
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  linkToWorkspaceRoot                                                  */
-/* ------------------------------------------------------------------ */
-
-/**
- * 将 compile_commands.json 复制/链接到 CompilationDatabase 指向的目录。
- *
- * 对齐 .clangd 中的 CompilationDatabase: .vscode/vscodeuehelper 指令。
- * 优先 symlink，Windows 上 symlink 失败时回退为 copy。
- */
-export async function linkToWorkspaceRoot(
-  jsonPath: string,
-  projectPath: string,
-  logger?: Logger,
-  workspace?: WorkspaceState,
-): Promise<string> {
-  // [Phase 7 PLAN B / per D-03] 阶段 4：linkToWorkspaceRoot — 入口 timing 测量
-  const lwsStart = performance.now();
-  let lwsSucceeded = false;
-  const projectDir = workspace?.projectDir ?? path.dirname(projectPath);
-  const ccDir = workspace?.clangdHelperDir ?? path.join(projectDir, '.vscode', 'vscodeuehelper');
-  const target = path.join(ccDir, FILE_NAME_COMPILE_COMMANDS);
-  logger?.info(
-    `[linkToWorkspaceRoot] ENTRY jsonPath=${jsonPath}, projectPath=${projectPath}, ` +
-      `projectDir=${projectDir}, target=${target}`,
-  );
-
-  // 如果生成的已经在目标位置，无需操作
-  if (path.resolve(jsonPath) === path.resolve(target)) {
-    logger?.info(`[linkToWorkspaceRoot] already at target, skip`);
-    lwsSucceeded = true;
-    try {
-      perfLog.record({
-        event: 'compileCommands.linkToWorkspaceRoot',
-        elapsedMs: performance.now() - lwsStart,
-        meta: { skipped: true, target },
-      });
-    } catch (err) {
-      logger?.warn(
-        `[perf] instrumentation linkToWorkspaceRoot skipped failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    return target;
-  }
-
-  // 确保目标目录存在
-  await fs.mkdir(ccDir, { recursive: true });
-  logger?.info(`[linkToWorkspaceRoot] ensured ccDir exists: ${ccDir}`);
-
-  // 如果目标已存在，清理
-  try {
-    const stat = await fs.lstat(target);
-    logger?.info(
-      `[linkToWorkspaceRoot] existing target: isSymbolicLink=${stat.isSymbolicLink()}, ` +
-        `isFile=${stat.isFile()}, size=${stat.size}`,
-    );
-    if (stat.isSymbolicLink() || stat.isFile()) {
-      const existing = await fs.readlink(target).catch(() => null);
-      logger?.info(`[linkToWorkspaceRoot] existing readlink → ${existing ?? '(not a symlink)'}`);
-      if (existing === jsonPath) {
-        logger?.info(`[linkToWorkspaceRoot] symlink already correct, skip`);
-        return target;
-      }
-      await fs.unlink(target);
-      logger?.info(`[linkToWorkspaceRoot] removed existing target`);
-    }
-  } catch (err) {
-    // 不存在，继续
-    logger?.info(
-      `[linkToWorkspaceRoot] no existing target (lstat failed: ${err instanceof Error ? err.message : String(err)})`,
-    );
-  }
-
-  // 先尝试 symlink
-  try {
-    logger?.info(`[linkToWorkspaceRoot] trying fs.symlink(${jsonPath}, ${target}, 'file')`);
-    await fs.symlink(jsonPath, target, 'file');
-    logger?.info(`[linkToWorkspaceRoot] fs.symlink SUCCEEDED → ${target}`);
-    lwsSucceeded = true;
-  } catch (symlinkErr) {
-    const symlinkMsg = symlinkErr instanceof Error ? symlinkErr.message : String(symlinkErr);
-    const errno =
-      typeof (symlinkErr as NodeJS.ErrnoException)?.code === 'string'
-        ? (symlinkErr as NodeJS.ErrnoException).code
-        : 'UNKNOWN';
-    logger?.info(
-      `[linkToWorkspaceRoot] fs.symlink FAILED errno=${errno} msg=${symlinkMsg}; ` +
-        `falling back to fs.copyFile`,
-    );
-
-    // Symlink 在 Windows 非 Developer Mode 下可能失败，回退 copy。
-    // copyFile 必须独立 try-catch —— 如果它也失败（比如 jsonPath 不存在），整个
-    // linkToWorkspaceRoot 不应静默吞错：把错误信息打到日志并重新抛出，让上层
-    // createProject step 2 知道这是真的失败。
-    try {
-      logger?.info(`[linkToWorkspaceRoot] trying fs.copyFile(${jsonPath}, ${target})`);
-      await fs.copyFile(jsonPath, target);
-      logger?.info(`[linkToWorkspaceRoot] fs.copyFile SUCCEEDED → ${target}`);
-      lwsSucceeded = true;
-    } catch (copyErr) {
-      const copyMsg = copyErr instanceof Error ? copyErr.message : String(copyErr);
-      const copyErrno =
-        typeof (copyErr as NodeJS.ErrnoException)?.code === 'string'
-          ? (copyErr as NodeJS.ErrnoException).code
-          : 'UNKNOWN';
-      logger?.error(
-        `[linkToWorkspaceRoot] fs.copyFile FAILED errno=${copyErrno} msg=${copyMsg}; ` +
-          `giving up. source exists?=${await fs
-            .access(jsonPath)
-            .then(() => 'yes')
-            .catch(() => 'no')}`,
-      );
-      throw new Error(
-        `linkToWorkspaceRoot: both symlink and copy failed. ` +
-          `symlink errno=${errno} (${symlinkMsg}), copy errno=${copyErrno} (${copyMsg}). ` +
-          `source=${jsonPath}, target=${target}`,
-      );
-    }
-  }
-  logger?.info(`[linkToWorkspaceRoot] done: ${target}`);
-  // [Phase 7 PLAN B / per D-03] 阶段 4 收尾：linkToWorkspaceRoot — 末尾 timing 测量
-  try {
-    perfLog.record({
-      event: 'compileCommands.linkToWorkspaceRoot',
-      elapsedMs: performance.now() - lwsStart,
-      meta: { succeeded: lwsSucceeded, target },
-    });
-  } catch (err) {
-    logger?.warn(
-      `[perf] instrumentation linkToWorkspaceRoot done failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-  return target;
-}
-
-/* ------------------------------------------------------------------ */
-/*  isClangdAvailable                                                    */
-/* ------------------------------------------------------------------ */
-//
-// 已迁到 ./compileCommands/task.ts,主文件通过 import 自动 re-export。
 
 /* ------------------------------------------------------------------ */
 /*  补全缺失的 compile_commands.json 条目                                */

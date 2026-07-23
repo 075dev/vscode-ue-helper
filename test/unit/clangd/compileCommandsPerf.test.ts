@@ -106,8 +106,13 @@ describe('compileCommands 5 阶段细化插桩 (Phase 7 PLAN B / per D-03)', () 
 
   /* ==================== 静态扫描测试：阶段 1/2/3/5 ==================== */
 
-  // 定位 compileCommands.ts 源文件（vitest 工作目录为项目根）
+  // 定位 compileCommands.ts 与 compileCommands/symlink.ts 源文件
+  // [Phase 3.3] 阶段 4 perf 埋点已迁到子模块，静态扫描需覆盖两个文件
   const compileCommandsSrcPath = path.resolve(process.cwd(), 'src/clangd/compileCommands.ts');
+  const compileCommandsSymlinkSrcPath = path.resolve(
+    process.cwd(),
+    'src/clangd/compileCommands/symlink.ts',
+  );
 
   it('阶段 1：compileCommands.entry 埋点存在（源文件扫描）', async () => {
     const src = await fs.readFile(compileCommandsSrcPath, 'utf-8');
@@ -131,19 +136,19 @@ describe('compileCommands 5 阶段细化插桩 (Phase 7 PLAN B / per D-03)', () 
       /event:\s*'compileCommands\.candidatesScanned'[\s\S]*?meta:\s*\{[^}]*candidateCount/,
     );
   });
-
   it('阶段 4：compileCommands.linkToWorkspaceRoot 埋点存在（运行时已验证 succeeded=true + skipped=true）', async () => {
-    const src = await fs.readFile(compileCommandsSrcPath, 'utf-8');
-    expect(src).toContain("event: 'compileCommands.linkToWorkspaceRoot'");
+    // [Phase 3.3] 阶段 4 实现已迁到 symlink 子模块,主入口仅 re-export
+    const mainSrc = await fs.readFile(compileCommandsSrcPath, 'utf-8');
+    expect(mainSrc).toContain("from '@clangd/compileCommands/symlink'");
+    const symlinkSrc = await fs.readFile(compileCommandsSymlinkSrcPath, 'utf-8');
+    expect(symlinkSrc).toContain("event: 'compileCommands.linkToWorkspaceRoot'");
   });
-
-  it('阶段 5：compileCommands.totalElapsed 埋点存在', async () => {
-    const src = await fs.readFile(compileCommandsSrcPath, 'utf-8');
-    expect(src).toContain("event: 'compileCommands.totalElapsed'");
-  });
-
-  it('所有 5 个埋点都用 try/catch 包裹（per T-7-13 + PATTERNS §5）', async () => {
-    const src = await fs.readFile(compileCommandsSrcPath, 'utf-8');
+  it('所有埋点都用 try/catch 包裹（per T-7-13 + PATTERNS §5）', async () => {
+    // [Phase 3.3] 阶段 4 linkToWorkspaceRoot 已迁到 symlink 子模块;这里聚合两份源码
+    // 共同扫描,确保所有 6 个 perfLog.record 调用点都被 try { 包裹
+    const mainSrc = await fs.readFile(compileCommandsSrcPath, 'utf-8');
+    const symlinkSrc = await fs.readFile(compileCommandsSymlinkSrcPath, 'utf-8');
+    const combined = `${mainSrc}\n// === symlink.ts ===\n${symlinkSrc}`;
     const stageNames = [
       'compileCommands.entry',
       'compileCommands.ubtStart',
@@ -154,10 +159,10 @@ describe('compileCommands 5 阶段细化插桩 (Phase 7 PLAN B / per D-03)', () 
     ];
     for (const stage of stageNames) {
       // 找到每个埋点的 perfLog.record 调用后是否有 try/catch 包裹
-      const idx = src.indexOf(`event: '${stage}'`);
+      const idx = combined.indexOf(`event: '${stage}'`);
       expect(idx, `埋点 ${stage} 存在`).toBeGreaterThan(-1);
-      // 向前查找最近的 try { 是否存在 (放宽：最近 200 字符内有 try {)
-      const before = src.slice(Math.max(0, idx - 300), idx);
+      // 向前查找最近的 try { 是否存在 (放宽:最近 300 字符内有 try {)
+      const before = combined.slice(Math.max(0, idx - 300), idx);
       expect(before, `埋点 ${stage} 前应被 try { 包裹`).toMatch(/try\s*\{/);
     }
   });
