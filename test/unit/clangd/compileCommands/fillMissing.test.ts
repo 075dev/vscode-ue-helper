@@ -1,15 +1,17 @@
 /**
- * compileCommands.test.ts —— fillMissingCompileCommands 单元测试
+ * fillMissing.test.ts —— fillMissingCompileCommands 单元测试（per Phase 3.4 迁入镜像子目录）
  *
  * TDD: 红测阶段，先写断言再实现。
  * 覆盖插件源码补齐、Windows 大小写规范化、模板选择、结构化结果。
+ * 通过 git mv 从 test/unit/clangd/compileCommands.test.ts 迁入；唯一变化是
+ * 被测符号 import 改为直达 `@clangd/compileCommands/fillMissing`（其它行为不变）。
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
-import { fillMissingCompileCommands } from '@clangd/compileCommands';
+import { fillMissingCompileCommands } from '@clangd/compileCommands/fillMissing';
 
 /**
  * 创建临时 UE 项目夹具：
