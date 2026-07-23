@@ -162,9 +162,48 @@ VSCodeUEHelper 是一款 **Windows-only 的 VS Code 扩展**,为 Unreal Engine 5
 
 ---
 
-*Last updated: 2026-07-23 after brownfield codebase mapping (`.planning/codebase/`, 7 docs, 2088 lines)*
+*Last updated: 2026-07-23 after Phase 2 complete (4 plans: 00 pre-plan + 2.1 + 2.2 + 2.3; 19 项子交付物落地, 0 新 REQ 验证)*
 
 ## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
+### Phase 2 evolution (2026-07-23)
+
+**Status:** Phase 2 落地 (00 + 2.1 + 2.2 + 2.3 全 4 plans 完成)
+
+1. **新验证的 REQ**: 无 — Phase 2 是规范/流程工作,无新 feature 交付 (per ROADMAP §Phase 2)
+2. **新 Active REQ**: 无 (与 1 同)
+3. **新 Key Decisions** (3 项,已写 ADR):
+   - **Phase 8 SSoT** — `WorkspaceState` 单一真相源 (ADR 0001, 2026-07-23 追溯)
+   - **Phase 9 ClangdOps** — `.clangd` 唯一写入 API (ADR 0002, 2026-07-23 追溯)
+   - **Live Coding 5s 节流** — 放弃完美单文件 UHT (ADR 0003, 2026-07-23 追溯)
+4. **Out of Scope 维持**: 跨平台 / 远程构建 / Blueprint 等
+5. **Codebase state 更新**:
+   - ESLint `no-explicit-any` 升 `error`; `consistent-type-imports` 降 `warn` (126 警告存量, 92 个可自动修复)
+   - `src/core/result.ts` + `src/core/errors.ts` 新基础设施 (Result<T, E> + 错误码体系)
+   - 12 个流程文档 (CONTRIBUTING / DEBUG / RELEASE / 3 ADR / 4 design doc / PR 模板)
+   - `src/` 137 → 145 TS 文件; `test/unit/` 72 → 74 文件
+6. **DEBT-02/03 状态**: 已在 Phase 2 重定义前完成 (per ROADMAP §Backlog)
+7. **DOC-01/03 状态**: 延后到 backlog (per ROADMAP §Backlog) — 不在 Phase 2 范围 (per CONTEXT §Deferred Ideas)
+8. **未来 Phase 3-6 决策建议** (from `docs/design/phase{3,4,5,6}-*.md`):
+   - Phase 3 拆 1002 行 `compileCommands.ts` 为 5 文件
+   - Phase 4 拆 4 个中型 god 文件 (workspace / config / controlPanel / bridge) 为 12 文件
+   - Phase 5 Live Coding + AI 集成 (规则引擎, 零 LLM 依赖)
+   - Phase 6 汉化 TODO 决断 (设计 doc 推荐选项 A 下架, 4-6h,优于选项 B 填充 8-12h)
 
 This document evolves at phase transitions and milestone boundaries.
 
