@@ -211,14 +211,8 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         ),
       },
       discovery: {
-        discover: vi.fn(() =>
-          Promise.resolve([
-            {
-              path: 'C:\\UE_5.4',
-              version: '5.4.0',
-            },
-          ]),
-        ),
+        // [Phase 11 SSoT] engines SSoT 已收敛到 detection.ready，discovery 仅作占位
+        discover: vi.fn(() => Promise.resolve([])),
       },
       vsBuildTools: {} as never,
       workspaceContext: {
@@ -238,7 +232,7 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
             engineVersion: '5.4.0',
           },
         ],
-        engines: [],
+        engines: [{ path: 'C:\\UE_5.4', version: '5.4.0', isLauncherInstall: false }],
         workspaceFile: null,
         workspaceRoot: projectDir,
         workspaceFolders: [],
@@ -313,14 +307,8 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         ),
       },
       discovery: {
-        discover: vi.fn(() =>
-          Promise.resolve([
-            {
-              path: 'C:\\UE_5.4',
-              version: '5.4.0',
-            },
-          ]),
-        ),
+        // [Phase 11 SSoT] engines SSoT 已收敛到 detection.ready，discovery 仅作占位
+        discover: vi.fn(() => Promise.resolve([])),
       },
       vsBuildTools: {} as never,
       workspaceContext: {
@@ -340,7 +328,7 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
             engineVersion: '5.4.0',
           },
         ],
-        engines: [],
+        engines: [{ path: 'C:\\UE_5.4', version: '5.4.0', isLauncherInstall: false }],
         workspaceFile: null,
         workspaceRoot: projectDir,
         workspaceFolders: [],

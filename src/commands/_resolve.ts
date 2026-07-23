@@ -71,7 +71,9 @@ export async function resolveProjectOrPick(opts: ResolveOpts): Promise<ProjectIn
 /** 同 resolveProjectOrPick 引擎版 */
 export async function resolveEngineOrPick(opts: ResolveOpts): Promise<EngineInstall | undefined> {
   const silent = opts.silent ?? false;
-  const engines = await opts.detection.discovery.discover();
+  // [Phase 11 SSoT 修复] engines 从 detection.ready 取 SSoT —— detection.discovery 是验证器，
+  // 构造时 candidates 为空，在 detection.ready resolve 前调用会拿到空数组触发假"未检测到引擎"提示。
+  const { engines } = await opts.detection.ready;
   let engine =
     opts.workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine(opts.detection, engines);
   if (!engine && engines.length === 1 && !silent) {

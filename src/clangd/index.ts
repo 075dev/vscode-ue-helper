@@ -27,6 +27,8 @@ import type { DetectionHandles } from '@detection';
 import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
 import { ClangdProxyManager } from './proxyManager';
+// [H1] 保存 .h 后自动触发 UHT codegen
+import { UeLinkManager } from './ueLinkManager';
 import { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 import { registerUeReflectionLinter } from './ueReflectionLinter';
 import { perfLog } from './perfLog';
@@ -120,11 +122,20 @@ export { startModifyResponseFiles } from './modifyRspFiles';
 export { startCreateRspMatchers, type RspMatcher } from './createRspMatchers';
 export { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 export { registerUeReflectionLinter } from './ueReflectionLinter';
+// [H1] 保存 .h 后自动触发 UHT codegen：mtime 跳过 + 5s 节流 + 状态栏反馈
+export {
+  UeLinkManager,
+  type UeLinkManagerOptions,
+  type UeLinkSnapshot,
+  type UeLinkState,
+} from './ueLinkManager';
 
 export interface ClangdHandles {
   completionMode: CompletionModeController;
   backup: WorkspaceBackup;
   proxyManager: ClangdProxyManager;
+  /** [H1] 保存 .h 后自动 UHT codegen 入口。undefined 表示未激活。 */
+  ueLink?: UeLinkManager;
 }
 
 export function activateClangd(
@@ -149,6 +160,26 @@ export function activateClangd(
   const proxyManager = new ClangdProxyManager(context, config, logger, {
     workspace,
   });
+
+  // [H1] 保存 .h 后自动触发 UHT codegen：mtime 跳过 + 5s 节流 + 状态栏反馈
+  // 实测：在 XianDreamwalking（10206 文件）下，UHT 子进程本身要 3-4s，
+  // 大头是 dotnet + UnrealBuildTool.dll 启动 + 10206 文件 hash 校验。
+  // Rider 通过 IPC 复用 UE Editor 进程内嵌 UHT 跳过这个开销——我们做不到。
+  // 本文实现的加速全部来自"避免不必要地跑 UHT"：
+  //   - mtime 跳过：保存但内容/时间未变 → 0ms
+  //   - 内容预过滤：.h 不含反射宏 → 0ms
+  //   - 5s 节流：连续保存合并成 1 次
+  //   - 状态栏 `$(sync~spin) UE Sync` 让用户知道在等而不是卡住
+  if (workspace) {
+    const ueLink = new UeLinkManager({ config, logger, workspace });
+    context.subscriptions.push(ueLink);
+    // 跟随 detection.ready 状态：project/engine 准备好后才接受保存事件
+    void detection.ready.then(() => {
+      logger.info('[H1] ueLinkManager armed, listening for onDidSaveTextDocument');
+    });
+    return { completionMode, backup, proxyManager, ueLink };
+  }
+  return { completionMode, backup, proxyManager };
 
   // [状态自愈] reload 后可能出现 isActive(clangd.path=launcher)但 enabled=false 的不一致状态
   // （历史 enable 因 clangd.restart 失败被误 rollback 留下）。clangd.path 已指向 launcher，

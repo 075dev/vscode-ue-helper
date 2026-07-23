@@ -48,7 +48,9 @@ export async function executeGenerateCompileCommands(
   // [Phase 11 SSoT] generateCompileCommands 是「显式重生成」语义，picker 优先于 selection，
   // 与其他命令 selection-first 不同——保留原 picker ?? selection ?? legacy 顺序。
   // silent = true 时跳过 picker，仅读 workspace selection（与 MCP tools 集成）。
-  const { projects } = await detection.ready;
+  // [Phase 11 SSoT 修复] engines 也从 detection.ready 取 SSoT —— detection.discovery 是验证器，
+  // 构造时 candidates 为空，在 detection.ready resolve 前调用会拿到空数组触发假"未检测到引擎"提示。
+  const { projects, engines } = await detection.ready;
   let project;
   if (!silent) {
     project = (await pickProject(projects)) ?? projects[0];
@@ -65,7 +67,6 @@ export async function executeGenerateCompileCommands(
     return;
   }
 
-  const engines = await detection.discovery.discover();
   const se = detection.workspaceContext.getSelectedEngine();
   let engine;
   if (!silent) {
