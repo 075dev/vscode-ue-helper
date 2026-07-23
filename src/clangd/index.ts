@@ -170,16 +170,17 @@ export function activateClangd(
   //   - 内容预过滤：.h 不含反射宏 → 0ms
   //   - 5s 节流：连续保存合并成 1 次
   //   - 状态栏 `$(sync~spin) UE Sync` 让用户知道在等而不是卡住
+  // [H1] ueLink 仅在 workspace 注入时启用 —— 无 workspace 是单元测试场景,
+  // 不应依赖 detection.ready 状态。生产路径（src/extension.ts）必传 workspace。
+  let ueLink: UeLinkManager | undefined;
   if (workspace) {
-    const ueLink = new UeLinkManager({ config, logger, workspace });
+    ueLink = new UeLinkManager({ config, logger, workspace });
     context.subscriptions.push(ueLink);
-    // 跟随 detection.ready 状态：project/engine 准备好后才接受保存事件
+    // 跟随 detection.ready 状态:project/engine 准备好后才接受保存事件
     void detection.ready.then(() => {
       logger.info('[H1] ueLinkManager armed, listening for onDidSaveTextDocument');
     });
-    return { completionMode, backup, proxyManager, ueLink };
   }
-  return { completionMode, backup, proxyManager };
 
   // [状态自愈] reload 后可能出现 isActive(clangd.path=launcher)但 enabled=false 的不一致状态
   // （历史 enable 因 clangd.restart 失败被误 rollback 留下）。clangd.path 已指向 launcher，
@@ -299,7 +300,6 @@ export function activateClangd(
   // TODO Phase 4: replace the WorkspaceBackup constructor argument with a real
   // projectPath sourced from the detection layer (after the user picks one).
   // For Phase 3 we just register the contract.
-
   logger.info('[clangd] activated (status bar + perf ready)');
-  return { completionMode, backup, proxyManager };
+  return { completionMode, backup, proxyManager, ...(ueLink ? { ueLink } : {}) };
 }
