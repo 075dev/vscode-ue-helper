@@ -34,9 +34,9 @@
 **Requirements:** DOC-01, DOC-02, DOC-03
 
 **Plans:**
-- Plan 1.1: 读 7 份 codebase 文档,生成 AGENTS.md 修订 diff(纯文档,1h)
-- Plan 1.2: 重写 `resources/README.md`(纯文档,30min)
-- Plan 1.3: 8 个模块 AGENTS.md 数字校正批处理(30min)
+- [x] Plan 1.1: ~~读 7 份 codebase 文档,生成 AGENTS.md 修订 diff(纯文档,1h)~~ **DONE** (4 处仓库陷阱 #1/#2/#7/#10 末尾追加斜体注释,2026-07-23) — see `01-01-SUMMARY.md`
+- [ ] Plan 1.2: ~~重写 `resources/README.md`(纯文档,30min)~~ **DEFERRED → Phase 2**(per CONTEXT.md §Deferred Ideas,DOC-01 续做)
+- [ ] Plan 1.3: ~~8 个模块 AGENTS.md 数字校正批处理(30min)~~ **DEFERRED → Phase 2**(per CONTEXT.md §Deferred Ideas,DOC-03 续做)
 
 **Risks:** AGENTS.md 修订引入新错误 → 验证方式:grep 每个被改数字,确认与实测一致
 
@@ -209,6 +209,5 @@ Phase 6 (i18n) → 最后,独立
 ```
 
 ---
-
 *Roadmap defined: 2026-07-23*
-*Last updated: 2026-07-23 after brownfield onboard (REQUIREMENTS.md)*
+*Last updated: 2026-07-23 after Phase 1.1 completion (Plan 1.2 / 1.3 deferred to Phase 2)*

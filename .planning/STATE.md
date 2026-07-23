@@ -2,20 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 1
+current_phase: 01
 current_phase_name: 文档质量校正
-status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-07-23T11:48:09.124Z"
+status: phase-1-partial
+stopped_at: Phase 1.1 complete; Plans 1.2/1.3 deferred to Phase 2
+last_updated: "2026-07-23T12:02:00.000Z"
 last_activity: 2026-07-23
-last_activity_desc: brownfield onboard 完成,7 份 codebase 文档 + PROJECT + REQUIREMENTS + ROADMAP 落地
+last_activity_desc: Phase 01 plan 01-01 executed; 4 AGENTS.md trap entries calibrated
 progress:
-  total_phases: 1
+  total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 16
+  completed_plans: 1
 ---
-
 # State: VSCodeUEHelper
 
 **Initialized:** 2026-07-23
@@ -28,14 +27,14 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-07-23)
 
 **Core value:** 在 Windows + VS Code 上提供与 Rider 等价的 UE5 C++ 开发体验,且冷启动与内存开销显著优于 Rider
-**Current focus:** Phase 1 — 文档质量校正 (DOC-01/02/03)
+**Current focus:** Phase 01 — 文档质量校正
 
 ## Current Position
 
-**Phase:** 1 of 6 (文档质量校正)
-**Plan:** 1.1 of 3 (AGENTS.md 修订 diff 生成)
-**Status:** Ready to execute
-**Last activity:** 2026-07-23 — brownfield onboard 完成,7 份 codebase 文档 + PROJECT + REQUIREMENTS + ROADMAP 落地
+**Phase:** 01 (文档质量校正) — Plan 01-01 COMPLETE
+**Plan:** 1 of 3 (1 done, 2 deferred to Phase 2)
+**Status:** Plan 01-01 done; Plans 01-02 (resources/README.md) + 01-03 (8 模块 AGENTS.md 数字) deferred to Phase 2 per CONTEXT.md §Deferred Ideas
+**Last activity:** 2026-07-23 — Phase 01 plan 01-01 executed (4 AGENTS.md trap entries calibrated)
 
 ## Performance Metrics
 
@@ -44,15 +43,15 @@ See: `.planning/PROJECT.md` (updated 2026-07-23)
 - Total plans: ~16 (Phase 1: 3, Phase 2: 3, Phase 3: 5, Phase 4: 5, Phase 5: 4, Phase 6: 1-6)
 - Total estimated hours: 30-40h (选项 A) / 50-60h (选项 B)
 - Phases completed: 0/6
-- Plans completed: 0/16
 
-**Codebase state (2026-07-23):**
+**Codebase state (2026-07-23, after Phase 1.1):**
 
 - src/ 137 TS files
 - test/unit/ 72 files, ~16.3k lines
 - vitest v8 coverage 80/80/75/80 (lines/branches/funcs/statements)
 - 21 commands + 11 status bar buttons
-- 9 SSoT 回归守卫 + 12 WorkspaceState 行为测试
+- 13 SSoT 回归守卫 + 12 WorkspaceState 行为测试
+- **AGENTS.md 仓库陷阱 #1/#2/#7/#10 已与 2026-07-23 实测对齐**(2026-07-23 反漂移)
 
 ## Decisions Log
 
@@ -74,17 +73,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-23)
 - **AGENTS.md 是仓库知识库**: 13 项仓库陷阱每条都是历史真实事故,改代码前先读
 - **13 个 SSoT 回归守卫**: 防止 Phase 9 决策被未来"重构"复活,新代码不要"复活" `populateAddCompletions`
 - **6 个汉化 TODO 僵尸**: `localization.ts:79/91/103` + `bridge.ts:676/685/694`,Phase 6 决断
-- **3 个未执行 P0/P1 项**: `execa/neverthrow/xstate` 卸载、icon 替换、AGENTS.md 措辞校正
+- **3 个未执行 P0/P1 项**: `execa/neverthrow/xstate` 卸载、icon 替换、AGENTS.md 措辞校正 → **AGENTS.md 措辞校正 = 1.1 DONE**(剩 2 项继续在 Phase 2)
 
-## Session Continuity
+**Stopped at:** Phase 1.1 complete; Plans 1.2/1.3 deferred to Phase 2
+Resume file: .planning/phases/01-文档质量校正/01-01-SUMMARY.md
 
-**Stopped at:** Phase 1 context gathered
-**Resume file:** .planning/phases/01-文档质量校正/01-CONTEXT.md
-
-Last session: 2026-07-23T11:36:18.958Z
-Next session hint: Phase 1.1 — 读 7 份 codebase 文档,生成 AGENTS.md 修订 diff
+Last session: 2026-07-23T12:02:00.000Z
+Next session hint: Phase 2 — 文档主题续做(resources/README.md 重写 + 8 模块 AGENTS.md 数字校正),或转向 Phase 2 技术债清理
 Resume command: `/gsd-resume`
-
----
 
 *State initialized: 2026-07-23 after /gsd-new-project brownfield onboard*
