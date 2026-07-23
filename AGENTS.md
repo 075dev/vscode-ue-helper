@@ -99,16 +99,16 @@ import { Logger } from '../../core/logger'; // ❌ 违反风格
 
 ## 仓库陷阱（容易误导的点）
 
-1. **`npm run test:integration` 已坏**——脚本指向 `test/integration/runTests.js`，该目录不存在。`npm test` 跑 unit + integration，integration 步会失败。**只跑 unit**：`npm run test:unit`。
-2. **`completionMode` 设置已废弃**——`package.json` 里 `deprecationMessage` 标明，值 `'fast'` 在 `Config.completionMode` getter 归一化为 `'slow'`。`resources/preparse-includes/ue5-fast.json` 已被删除，只剩 `ue5-slow.json`。**不要新增 fast/slow 分支代码**。
+1. **`npm run test:integration` 已坏**——脚本指向 `test/integration/runTests.js`，该目录不存在。`npm test` 跑 unit + integration，integration 步会失败。**只跑 unit**：`npm run test:unit`。*(T1.1 闭环 2026-07-23:`package.json#470` `test` script alias 到 `test:unit`,原 `npm run test:integration` 已删除)*
+2. **`completionMode` 设置已废弃**——`package.json` 里 `deprecationMessage` 标明，值 `'fast'` 在 `Config.completionMode` getter 归一化为 `'slow'`。`resources/preparse-includes/ue5-fast.json` 已被删除，只剩 `ue5-slow.json`。**不要新增 fast/slow 分支代码**。*(T2.1 闭环 2026-07-23: 新代码读静态常量 `COMPLETION_MODE = 'slow'`,不再读 `config.completionMode`;`src/core/config.ts:137-139` getter 保留仅作废弃 API 兼容)*
 3. **`resources/README.md` 描述过时**——还提到 `ue5-fast.json` 和缺失的 `banner.png`，与现状不符。
 4. **`.bak` 测试文件未忽略**——`test/unit/commands/clangdProxyCommands.test.ts.bak` 是手备份，`.gitignore` 没排除；提交前别把它带上。
 5. **MCP 只在 Cursor / Claude Code 启动**——检测 `CURSOR_TRACE_ID` / `CURSOR_USER_DATA_DIR` / `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_SSE_PORT` 环境变量，普通 VS Code 里 MCP 是 no-op。改 MCP 时不要假设 always-on。
 6. **chokidar 必须在 vitest mock**——`test/unit/setup.ts` 已 mock，否则 `fileWatcher` 测试会启动真实 fs watcher 卡住进程。
-7. **MSVC 错误正则**：`^(.*)\((\d+)(?:,(\d+))?\):\s+(error|warning|note|fatal error)\s+([A-Z]+\d+):\s+(.*)$`，定义在 `package.json#contributes.problemMatchers`，`src/parsers/msvcParser.ts` 用同一正则。改一处要同步另一处。
+7. **MSVC 错误正则**：`^(.*)\((\d+)(?:,(\d+))?\):\s+(error|warning|note|fatal error)\s+([A-Z]+\d+):\s+(.*)$`，定义在 `package.json#contributes.problemMatchers`，`src/parsers/msvcParser.ts` 用同一正则。改一处要同步另一处。*(T4.7 闭环 2026-07-23: 正则已统一;**实际生效的是 `src/parsers/msvcParser.ts`, `package.json#problemMatchers` 仅作 Task 用户手工配置参考**(本插件不自动 task 消费 UBT 输出))*
 8. **`headerWatcher` 已删**——Phase 8 改为 proxy 端 `UeDiagnosticWatcher` 被动触发 UBT 重生成，不要重新加回主动 watcher。
 9. **`out/` 必须清理**——`npm run clean` 只删 `out/src/` 和 `out/test/`（防打包残留），不会删 `out/extension.js`。`npm run build` 内部会先 clean 再 bundle。
-10. **`Config.update` 写完必须 refresh**——`src/core/config.ts` 内部已处理，但调用方常见误用：`await config.update(); 立刻读 config.xxx` 会拿到旧值（VS Code 同进程内不主动通知 WorkspaceConfiguration 失效）。改动该类代码要测试写入后读回。
+10. **`Config.update` 写完必须 refresh**——`src/core/config.ts` 内部已处理，但调用方常见误用：`await config.update(); 立刻读 config.xxx` 会拿到旧值（VS Code 同进程内不主动通知 WorkspaceConfiguration 失效）。改动该类代码要测试写入后读回。*(T1.x 部分闭环 2026-07-23: `Config.update` 内部已调 `refreshRoot()` 立即刷新;**但**跨实例/跨闭包缓存 `config` 引用仍会读到旧值)*
 11. **`completionMode` 设置已死但 API 还在**——`Config.completionMode` getter 强制归一化为 `'slow'`，`package.json` 标 `deprecationMessage`，但旧代码路径仍存在。新代码不要再读 `config.completionMode` 判断分支（详情见 `src/core/AGENTS.md`）。
 12. ~~**`populateAddCompletions` 是撒谎型兼容层**~~ —— ✅ **已解决（Phase 9）**：grep `src/` 全仓库零匹配，函数不存在。AGENTS.md 此条目仅作历史档案保留，未来读者不要"复活"该函数。新代码直接调 `createCompletionFiles()`（仍是单一写入点）。
 13. **6 个汉化 TODO 是僵尸承诺**——`src/clangd/proxy/localization.ts:79/91/103` + `src/clangd/proxy/bridge.ts:676/685/694` 都写 "后续实现"，未排进任何 phase。规划时不要假设汉化已上线。
