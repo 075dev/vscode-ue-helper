@@ -22,6 +22,8 @@ CLAUDE.md
 .claude/**
 .planning/**
 .codegraph/**
+.cursor/         # Phase 2 Plan 02-03 D-21: AI 规则目录(后续 .cursor/rules/*.mdc 不应进 .vsix)
+.github/**       # Phase 2 Plan 02-03 D-21: PR 模板等开发协作文件不应进 .vsix
 AGENTS.md
 .gsd-id
 

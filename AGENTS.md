@@ -123,6 +123,21 @@ import { Logger } from '../../core/logger'; // ❌ 违反风格
 - **新增命令 4 步**：① `package.json#contributes.commands` 加定义；② `src/commands/xxx.ts` 写 `executeXxx`；③ `src/commands/index.ts` `registerCommand`；④ i18n 双语 key。
 - **绝对路径用于诊断**——Problems 面板需要绝对路径；MSVC 输出 1-based，VS Code 0-based，解析时要减 1。
 
+## Commit message 规范
+
+仓库采用 Conventional Commits, 格式: `<type>(<scope>): <中文 summary>`
+
+Type: `feat` / `fix` / `chore` / `docs` / `refactor` / `test` / `perf`
+Scope(可选): `build` / `clangd` / `commands` / `core` / `detection` / `mcp` / `ui` / `i18n` 等
+中文 summary 优先(与"代码注释强制中文"对齐)
+
+例:
+- `feat(clangd): 新增 .clangd 备份恢复命令`
+- `fix(build): UBT 启动时 project path 含空格 crash`
+- `chore(assets): 替换占位 icon.png 为合规 128×128`
+- `docs(agents): 校准仓库陷阱 #1/#2/#7/#10 与 2026-07-23 实测`
+
+详见 `CONTRIBUTING.md` §5.
 ## 打包 / 发布注意
 
 - `package.json` 的 `repository.url` 还是 `YOUR_USERNAME/vscode-ue-helper` 占位符，发布前要改。
