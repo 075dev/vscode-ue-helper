@@ -59,30 +59,8 @@ describe('getShellQuoting (Shell quoting 规则)', () => {
     }
   });
 
-  it('Unix (Linux): command 用 Weak 引用，args 原样返回字符串数组', () => {
-    const originalPlatform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-
-    try {
-      const result = getShellQuoting('/bin/sh', ['-c', 'echo hi']);
-      expect(result.command).toEqual({ value: '/bin/sh', quoting: 'weak' });
-      expect(result.args).toEqual(['-c', 'echo hi']);
-    } finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
-    }
-  });
-
-  it('Unix (Mac): 与 Linux 行为一致', () => {
-    const originalPlatform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
-
-    try {
-      const result = getShellQuoting('/bin/sh', ['x']);
-      expect(result.command).toEqual({ value: '/bin/sh', quoting: 'weak' });
-    } finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
-    }
-  });
+  // 注：原"Unix (Linux/Mac) Weak 引用"两条 case 已删除——本插件仅支持 Windows，
+  //      getShellQuoting 永远走 Strong 引用路径。N2 死代码清理后失去意义。
 });
 
 describe('buildNativeArgs (Native -projectfiles 路径)', () => {

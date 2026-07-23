@@ -1,12 +1,10 @@
 /**
- * liveCoding —— 触发 UE Live Coding 热重载
+ * liveCoding —— 触发 UE Live Coding 热重载（Windows-only）
  *
  * 两种方式:
  *   1. 命令行: UnrealEditor-Cmd.exe -ExecCmds="LiveCoding.Compile"
  *      要求 Editor 已在跑
  *   2. UBT 方式: 用 -LiveCoding 标记重跑 UBT(UE 5.x)
- *
- * 仅 Windows + MSVC 支持。其他平台命令为 no-op + warn。
  */
 
 import { spawn } from 'node:child_process';
@@ -20,12 +18,6 @@ export interface LiveCodingOptions {
 }
 
 export async function triggerLiveCoding(opts: LiveCodingOptions): Promise<void> {
-  if (process.platform !== 'win32') {
-    throw new Error(
-      'Live Coding is currently Windows-only. ' + 'On Mac/Linux, use Build → Rebuild instead.',
-    );
-  }
-
   const cmd = resolveLiveCodingCmd(opts.engineRoot, opts.platform);
   const child = spawn(cmd.file, cmd.args, {
     detached: true,
@@ -39,9 +31,9 @@ export async function triggerLiveCoding(opts: LiveCodingOptions): Promise<void> 
 }
 
 /**
- * Check whether Live Coding is available for the given platform.
- * Pure function — used by command registration (`when: isWindows`) and UI.
+ * Live Coding 始终可用（Windows-only 插件，UE 5.2+ MSVC 全版本支持）。
+ * 保留函数供外部条件渲染（when clause）使用。
  */
-export function isLiveCodingSupported(platform: BuildPlatform): boolean {
-  return process.platform === 'win32' && platform === 'Win64';
+export function isLiveCodingSupported(_platform: BuildPlatform): boolean {
+  return true;
 }

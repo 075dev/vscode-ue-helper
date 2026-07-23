@@ -80,7 +80,7 @@ export interface BuildArgsOptions {
 /* ------------------------------------------------------------------ */
 
 /**
- * 对齐原版 getShellQuoting — Windows 用 Strong 引用包裹 args。
+ * 对齐原版 getShellQuoting（Windows-only）—— Windows 用 Strong 引用包裹 args。
  */
 export function getShellQuoting(
   command: string,
@@ -89,20 +89,13 @@ export function getShellQuoting(
   command: vscode.ShellQuotedString | string;
   args: (vscode.ShellQuotedString | string)[];
 } {
-  if (process.platform === 'win32') {
-    const modArgs: vscode.ShellQuotedString[] = [];
-    for (const arg of args) {
-      modArgs.push({ value: arg, quoting: vscode.ShellQuoting.Strong });
-    }
-    return {
-      command: { value: command, quoting: vscode.ShellQuoting.Strong },
-      args: modArgs,
-    };
-  }
-
+  const modArgs: vscode.ShellQuotedString[] = args.map((arg) => ({
+    value: arg,
+    quoting: vscode.ShellQuoting.Strong,
+  }));
   return {
-    command: { value: command, quoting: vscode.ShellQuoting.Weak },
-    args,
+    command: { value: command, quoting: vscode.ShellQuoting.Strong },
+    args: modArgs,
   };
 }
 
@@ -153,9 +146,8 @@ export function executeShellTask(
     // Shell quoting
     const quoted = getShellQuoting(cmd, [...args]);
 
-    // Windows 的 shell executable
-    const shellExec: string | undefined =
-      process.platform === 'win32' ? POWERSHELL_FILE_NAME : undefined;
+    // Windows-only：使用 PowerShell 作为 shell executable
+    const shellExec = POWERSHELL_FILE_NAME;
 
     (task as { execution: vscode.ShellExecution }).execution = new vscode.ShellExecution(
       quoted.command,
@@ -278,9 +270,8 @@ export function buildNativeArgs(opts: Pick<BuildArgsOptions, 'project'>): string
  * 返回 undefined 表示未找到——调用方应降级处理。
  */
 export async function findClangToolchain(): Promise<string | undefined> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which';
   try {
-    const { stdout } = await execFileAsync(cmd, ['clang']);
+    const { stdout } = await execFileAsync('where', ['clang']);
     const clangPath = stdout.trim().split('\n')[0]?.trim();
     if (!clangPath) {
       return undefined;
@@ -296,9 +287,8 @@ export async function findClangToolchain(): Promise<string | undefined> {
  * 检查 clangd 是否在 PATH 中可执行。
  */
 export async function isClangdAvailable(): Promise<boolean> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which';
   try {
-    const { stdout } = await execFileAsync(cmd, ['clangd']);
+    const { stdout } = await execFileAsync('where', ['clangd']);
     return stdout.trim().length > 0;
   } catch {
     return false;

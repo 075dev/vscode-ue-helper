@@ -86,15 +86,10 @@ export class UBTTaskProvider implements vscode.TaskProvider {
    * to run when the user invokes the task.
    */
   private placeholderCommand(): { file: string; args: string[]; cwd?: string } {
-    if (process.platform === 'win32') {
-      return {
-        file: 'cmd.exe',
-        args: ['/c', 'echo', `UE Helper ${this.config.configuration} task — wired in Phase 4`],
-      };
-    }
+    // Windows-only：本插件不支持 POSIX
     return {
-      file: 'echo',
-      args: [`UE Helper ${this.config.configuration} task — wired in Phase 4`],
+      file: 'cmd.exe',
+      args: ['/c', 'echo', `UE Helper ${this.config.configuration} task — wired in Phase 4`],
     };
   }
 }

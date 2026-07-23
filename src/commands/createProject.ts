@@ -415,10 +415,7 @@ export async function executeCreateProject(
       results.push({
         step: 'Complete',
         ok: true,
-        detail:
-          process.platform === 'win32'
-            ? 'Use "Set System Includes" to add MSVC/SDK paths. Otherwise ready.'
-            : 'Project ready to use',
+        detail: 'Use "Set System Includes" to add MSVC/SDK paths. Otherwise ready.',
       });
       progress.report({ increment: 20 });
     },

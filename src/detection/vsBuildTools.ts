@@ -79,10 +79,7 @@ export class VsBuildTools {
   }
 
   async findAll(): Promise<VSInstallation[]> {
-    if (process.platform !== 'win32') {
-      return [];
-    }
-
+    // Windows-only：本插件仅支持 Windows，MSVC 工具链只在 Windows 上
     const vswhere = await this.locateVswhere();
     if (!vswhere) {
       return [];

@@ -63,17 +63,10 @@ export function buildUBTCommand(args: UBTArgs): UBTCommand {
 /**
  * Resolve the UBT script path for the current platform.
  *
- *   Windows: <EngineRoot>/Engine/Build/BatchFiles/Build.bat
- *   Mac/Linux: <EngineRoot>/Engine/Build/BatchFiles/RunUBT.sh  (also has Build.sh)
- *
- * We pick the canonical "Build" entry point — RunUAT.sh is for editor automation,
- * not for in-IDE compiles.
+ * Windows: <EngineRoot>/Engine/Build/BatchFiles/Build.bat
  */
 export function resolveUBTPath(engineRoot: string): string {
-  if (process.platform === 'win32') {
-    return path.join(engineRoot, 'Engine', 'Build', 'BatchFiles', 'Build.bat');
-  }
-  return path.join(engineRoot, 'Engine', 'Build', 'BatchFiles', 'RunUBT.sh');
+  return path.join(engineRoot, 'Engine', 'Build', 'BatchFiles', 'Build.bat');
 }
 
 /**

@@ -57,10 +57,6 @@ export async function discoverSystemIncludes(
   clangdPath?: string,
   logger?: Logger,
 ): Promise<SystemIncludeInfo | null> {
-  if (process.platform !== 'win32') {
-    return null;
-  }
-
   const clangExe = await resolveClangExecutable(clangdPath, logger);
   if (!clangExe) {
     logger?.warn('[windowsSdk] no clangd.exe found anywhere (config / PATH / default LLVM paths)');
@@ -215,10 +211,6 @@ export async function detectSystemIncludesWithEngineRecommendation(
   clangdPath: string | undefined,
   logger?: Logger,
 ): Promise<string[] | null> {
-  if (process.platform !== 'win32') {
-    return null;
-  }
-
   // Step 1: 自动检测当前的 SDK + MSVC
   const detected = await discoverSystemIncludes(clangdPath, logger);
   if (!detected) {
@@ -279,10 +271,6 @@ async function resolveClangExecutable(
   clangdPath?: string,
   logger?: Logger,
 ): Promise<string | null> {
-  if (process.platform !== 'win32') {
-    return null;
-  }
-
   // Step 1 — find any clangd.exe.
   const clangdExe = await findClangdExecutable(clangdPath, logger);
   if (!clangdExe) {

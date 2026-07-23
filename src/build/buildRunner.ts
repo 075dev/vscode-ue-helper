@@ -22,32 +22,17 @@ import type { ParsedDiagnostic } from '@core/types/diagnostic';
 const execFileAsync = promisify(execFile);
 
 /**
- * Kill a child process AND all of its descendants.
+ * Kill a child process AND all of its descendants（Windows-only）。
  *
- * - Windows: `taskkill /T /F /PID <pid>` walks the parent→child chain and
- *   force-terminates each. Plain `child.kill()` only kills cmd.exe here,
- *   leaving Build.bat / dotnet / UBT running.
- * - POSIX: SIGTERM to the process group. The child is spawned with
- *   `detached: true` so it leads its own group; we kill the whole group.
+ * Windows: `taskkill /T /F /PID <pid>` walks the parent→child chain and
+ * force-terminates each. Plain `child.kill()` only kills cmd.exe here,
+ * leaving Build.bat / dotnet / UBT running.
  */
 async function killTree(child: ChildProcessWithoutNullStreams): Promise<void> {
   const pid = child.pid;
   if (!pid) {return;}
   try {
-    if (process.platform === 'win32') {
-      await execFileAsync('taskkill', ['/F', '/T', '/PID', String(pid)]);
-    } else {
-      try {
-        process.kill(-pid, 'SIGTERM');
-      } catch {
-        // Process group may not exist if the child already exited.
-        try {
-          child.kill('SIGTERM');
-        } catch {
-          /* already dead */
-        }
-      }
-    }
+    await execFileAsync('taskkill', ['/F', '/T', '/PID', String(pid)]);
   } catch {
     /* best-effort */
   }
@@ -68,21 +53,15 @@ export async function runBuild(
   return new Promise<BuildResult_>((resolve) => {
     let child: ChildProcessWithoutNullStreams;
     try {
-      // On Windows, .bat / .cmd files cannot be spawned directly — Node returns
-      // EINVAL. Wrap with cmd.exe /c so the shell resolves the script. We also
-      // do this for shell scripts on POSIX for consistency (RunUBT.sh).
-      const isWin = process.platform === 'win32';
+      // Windows: .bat / .cmd files cannot be spawned directly — Node returns
+      // EINVAL. Wrap with cmd.exe /c so the shell resolves the script.
       const isShellScript = cmd.file.endsWith('.bat') || cmd.file.endsWith('.cmd');
-      const file = isWin && isShellScript ? 'cmd.exe' : cmd.file;
-      const args = isWin && isShellScript ? ['/c', cmd.file, ...cmd.args] : cmd.args;
+      const file = isShellScript ? 'cmd.exe' : cmd.file;
+      const args = isShellScript ? ['/c', cmd.file, ...cmd.args] : cmd.args;
       child = spawn(file, args, {
         cwd: cmd.cwd,
         env: { ...process.env, ...(options.signal ? {} : {}) },
         windowsHide: true,
-        // detached:true makes the child a process-group leader on POSIX so
-        // process.kill(-pid) terminates the whole tree. On Windows it's a
-        // no-op for kill but doesn't hurt.
-        detached: process.platform !== 'win32',
       });
     } catch (err) {
       resolve({ ok: false, error: err as Error });
