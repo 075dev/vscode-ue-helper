@@ -95,3 +95,44 @@ registerCommand(context, 'vscodeUEHelper.myCmd', () => executeMy(...));
 **禁止**：
 - 直接 `vscode.commands.registerCommand` 后忘记 push 到 subscriptions（切工作区会泄漏）。
 - 重复注册同一 command ID（VS Code 会警告并覆盖）。
+
+## Result<T, E> 使用约定
+
+新代码遇到"业务预期失败"(配置无效 / detection 未就绪 / 进程崩溃),优先用 `Result<T, E>`
+(`@core/result`)而非 `throw`。调用方通过 `isOk` / `isErr` 类型守卫分支,无需 try/catch。
+
+不替换现有 `throw` 路径 —— 仅供新增/重构代码使用。错误码关联 `@core/errors` 的 `E_*` 常量。
+
+```typescript
+import { Ok, Err, isOk } from '@core/result';
+import { E_CONFIG_INVALID, VSCodeUEHelperError } from '@core/errors';
+
+function readConfig(): Result<Config> {
+  if (!existsSync(path)) return Err(E_CONFIG_INVALID, 'config file missing');
+  return Ok(JSON.parse(readFileSync(path, 'utf-8')));
+}
+```
+
+## 错误码体系
+
+项目级错误用 `VSCodeUEHelperError` 类 + `E_*` 常量(均来自 `@core/errors`):
+
+- `E_CONFIG_INVALID`: 配置无效(JSON parse 失败 / 字段缺失)
+- `E_DETECTION_NOT_READY`: detection.ready Promise 未 resolve(检查是否在 workspace 中打开 .code-workspace)
+- `E_BUILD_FAILED`: UBT / Live Coding 进程失败
+- `E_PROXY_CRASHED`: clangd proxy 子进程异常退出(查 `~/.vscode/extensions/.../logs/` 里的 proxy 日志)
+
+catch 块用 `isVSCodeUEHelperError(e)` 类型守卫路由:
+
+```typescript
+import { isVSCodeUEHelperError, E_DETECTION_NOT_READY } from '@core/errors';
+
+try { ... }
+catch (e) {
+  if (isVSCodeUEHelperError(e) && e.code === E_DETECTION_NOT_READY) {
+    vscode.window.showWarningMessage(t('detection.notReady'));
+  } else { throw e; }
+}
+```
+
+新错误码添加:在 `src/core/errors.ts` 加 `E_*` 常量 + 扩展 `ErrorCode` union type。

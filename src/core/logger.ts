@@ -35,7 +35,22 @@
  * ## 为什么不用第三方日志库？
  *
  * 简单场景下原生 console + OutputChannel 已经够用，省去依赖。
- */
+ *
+ * ## 日志前缀约定
+ *
+ * 所有模块的 `logger.info/warn/error/debug` 调用,首参数必须以 `[<moduleName>]` 开头,
+ * 例 `logger.info('[build] task provider registered')`。
+ *
+ * - 模块名:从文件所在 `src/<module>/` 推断;子目录用 `[module/sub]`
+ * - 仓库已通过 ESLint `no-restricted-syntax` 锁住 `new Logger()` 在 extension.ts:30 之外禁止
+ *   (必须用 `sharedLogger` 或参数注入的 `logger` 对象)
+ * - 仓库约定:前缀与"日志信息"之间用空格分隔,不要冒号
+ *
+ * 反例(将被 code review 退回):
+ *   - `logger.info('task provider registered')` — 无前缀
+ *   - `logger.info('[build]: task provider registered')` — 冒号分隔(约定)
+ *   - `new Logger('build')` — 模块内部禁止(ESLint 报错)
+  */
 
 import * as vscode from 'vscode';
 
