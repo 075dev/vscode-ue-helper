@@ -24,17 +24,17 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
 
 进入具体模块前先读对应的 AGENTS.md：
 
-| 模块                   | 路径                         | 内容                                                                            |
-| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
-| build                  | `src/build/AGENTS.md`        | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、`domain/` DDD 参考目录 |
-| clangd                 | `src/clangd/AGENTS.md`       | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引        |
-| clangd/proxy           | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO                                   |
-| commands               | `src/commands/AGENTS.md`     | 21 个命令注册表、新增命令 4 步流程                                              |
-| detection              | `src/detection/AGENTS.md`    | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强                 |
-| ui                     | `src/ui/AGENTS.md`           | 8 个主状态栏按钮布局、QuickPick 模式、ControlPanel Webview                      |
+| 模块                   | 路径                         | 内容                                                                                         |
+| ---------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| build                  | `src/build/AGENTS.md`        | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、`domain/` DDD 参考目录              |
+| clangd                 | `src/clangd/AGENTS.md`       | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引                     |
+| clangd/proxy           | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO                                                |
+| commands               | `src/commands/AGENTS.md`     | 21 个命令注册表、新增命令 4 步流程                                                           |
+| detection              | `src/detection/AGENTS.md`    | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强                              |
+| ui                     | `src/ui/AGENTS.md`           | 8 个主状态栏按钮布局、QuickPick 模式、ControlPanel Webview                                   |
 | core                   | `src/core/AGENTS.md`         | Logger/Config/WorkspaceState 横切基础设施、Config.update 陷阱、SubprocessRegistry 子进程清理 |
-| mcp                    | `src/mcp/AGENTS.md`          | MCP 服务器（仅 Cursor/Claude Code 环境激活）、6 个工具                          |
-| i18n / parsers / rules | （合并到根）                 | i18n 见下方"风格与约定"、parsers 是纯函数、rules 是 AI 规则生成器               |
+| mcp                    | `src/mcp/AGENTS.md`          | MCP 服务器（仅 Cursor/Claude Code 环境激活）、6 个工具                                       |
+| i18n / parsers / rules | （合并到根）                 | i18n 见下方"风格与约定"、parsers 是纯函数、rules 是 AI 规则生成器                            |
 
 ## 常用命令
 
@@ -124,6 +124,13 @@ import { Logger } from '../../core/logger'; // ❌ 违反风格
 12. ~~**`populateAddCompletions` 是撒谎型兼容层**~~ —— ✅ **已解决（Phase 9）**：grep `src/` 全仓库零匹配，函数不存在。AGENTS.md 此条目仅作历史档案保留，未来读者不要"复活"该函数。新代码直接调 `createCompletionFiles()`（仍是单一写入点）。
 13. **6 个汉化 TODO 是僵尸承诺**——`src/clangd/proxy/localization.ts:79/91/103` + `src/clangd/proxy/bridge.ts:676/685/694` 都写 "后续实现"，未排进任何 phase。规划时不要假设汉化已上线。
 14. **deactivate 时杀子进程是 P0**——插件关闭时必须杀掉本插件启动的所有子进程,否则 UBT 编译、UHT codegen 等会变孤儿拖死 VS Code。`SubprocessRegistry` (`src/core/subprocessRegistry.ts`) 是统一入口,所有 `child_process.spawn` 调用必须 `sharedSubprocessRegistry.register(child, label)`。`dispose()` 走 `taskkill /F /T /PID` 优雅杀进程树,3s 升级强杀。`proxy` 子进程 (`src/clangd/proxy/`) 不归本插件管(proxy 由 clangd 扩展 spawn),但 `proxyManager` 实现了 `vscode.Disposable`,deactivate 时恢复 `clangd.path` 备份,触发 clangd 扩展自己结束 proxy。`ueDiagnosticWatcher` 内部跟踪 `currentUbtChild`,dispose 时调本地 `killUbtTree()` 杀 UBT 子进程(proxy 子进程是 vscode-free,不能 import registry)。新写任何 `spawn` 调用前,先想清楚谁负责清理。
+    **不接入 registry 的合法场景(决策记录 2026-07-31)**:短探测类 `await spawn + close → resolve` 同步模式(ms 级单次探测,如 `where clang` / `cl.exe banner` / `clangd --version`)生命周期被 Promise 框定,不会 leak 到函数返回之外;`vscode.tasks.executeTask` 委托给 VS Code Task system,扩展不持有 child 句柄(只拿 `TaskExecution`),Task system 自带 lifecycle 清理。具体豁免清单:
+    - `src/clangd/compileCommands/task.ts:161` `vscode.tasks.executeTask` (UBT 任务) — Task system 托管
+    - `src/clangd/compileCommands/task.ts:274/291` `execFileAsync('where', ...)` (clang/clangd 路径探测) — ms 级 await
+    - `src/clangd/windowsSdk.ts:34` `runWithEofStdin` (clang/clang++ `-v -E` 探测 SDK) — Promise 框定
+    - `src/clangd/windowsSdk.ts:339/390/492` `execFileAsync`/`spawn` (clangd 探测 + cl.exe banner) — ms 级 await
+    - `src/detection/vsBuildTools.ts` `vswhere.exe` 探测 — ms 级 await
+      任何**新增** spawn/execFile 调用前,先判断是否符合"短探测 + Promise 框定"或"Task system 托管"两条豁免;否则必须接入 SubprocessRegistry。
 
 ## 风格与约定
 

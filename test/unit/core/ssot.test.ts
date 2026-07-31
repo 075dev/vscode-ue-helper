@@ -139,4 +139,38 @@ describe('SSoT surface regression', () => {
       expect(coreAgents).toMatch(/SSoT 规则|SSoT 收敛/);
     });
   });
+
+  /**
+   * SubprocessRegistry 豁免清单守卫 (2026-07-31,见 AGENTS.md 仓库陷阱 #14)。
+   *
+   * 这些文件含短探测类 spawn (ms 级 await + Promise 框定) 或 VS Code Task system
+   * 托管的进程,生命周期不跨函数,**故意不接入** SubprocessRegistry。
+   * 一旦这些文件开始 import `sharedSubprocessRegistry`,说明有人把短探测改成了
+   * fire-and-forget / detached 模式,需要重新评估豁免资格 —— 此测试会失败提醒。
+   */
+  describe('SubprocessRegistry 豁免清单 (仓库陷阱 #14)', () => {
+    const EXEMPT_FILES = [
+      'clangd/compileCommands/task.ts', // vscode.tasks.executeTask + ms 级 where 探测
+      'clangd/windowsSdk.ts', // clang/clang++ -v -E + cl.exe banner 探测
+      'detection/vsBuildTools.ts', // vswhere.exe 探测
+    ];
+
+    it.each(EXEMPT_FILES)(
+      '豁免文件 %s 不能 import sharedSubprocessRegistry (短探测不走 registry 路径)',
+      (rel) => {
+        const src = readFileSync(path.join(SRC_ROOT, rel), 'utf-8');
+        // 文件里可以"提到" SubprocessRegistry (注释里解释豁免理由),
+        // 但不能真的 import 它 —— 那等于改变了设计意图。
+        expect(src).not.toMatch(/from\s+['"]@core\/subprocessRegistry['"]/);
+        expect(src).not.toMatch(/require\(['"]@core\/subprocessRegistry['"]\)/);
+      },
+    );
+
+    it('根 AGENTS.md 仓库陷阱 #14 必须列出豁免清单', () => {
+      const agents = readFileSync(path.resolve(__dirname, '../../..', 'AGENTS.md'), 'utf-8');
+      // 必须有 SubprocessRegistry 豁免清单 (windowsSdk.ts / task.ts / vsBuildTools.ts)
+      expect(agents).toMatch(/compileCommands\/task\.ts.*豁免|豁免.*compileCommands\/task\.ts/s);
+      expect(agents).toMatch(/windowsSdk\.ts.*豁免|豁免.*windowsSdk\.ts/s);
+    });
+  });
 });

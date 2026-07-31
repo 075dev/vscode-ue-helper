@@ -13,6 +13,21 @@
  * 参考 unreal-clangd 的 src/modules/setCustomSysInc.ts,它用同样的技巧(只是用 clang++.exe)。
  *
  * 详见 doc/05-code-reference.md 第 2 节。
+ *
+ * [deactivate 子进程清理 — 决策记录 2026-07-31,见 AGENTS.md 仓库陷阱 #14]
+ *
+ * 本文件 4 处 `child_process` 调用全部**短探测**,**不接入 SubprocessRegistry**:
+ *   - L34 `runWithEofStdin` 内部 `spawn(file, args)`:clang/clang++ `-v -E -xc++ -` 探测。
+ *     **同步 await** 走 Promise,函数返回时 child 已 close,**不会 leak**。
+ *   - L339 `execFileAsync('where', ['clangd'])`:探测 clangd 是否在 PATH,**ms 级短任务**。
+ *   - L390 `execFileAsync(clangdExe, ['--version'])`:读 clangd banner,**ms 级短任务**。
+ *   - L492 `spawn(cl, [])`:cl.exe banner 探测 MSVC 版本,await close 后函数返回。
+ *
+ * 设计权衡:`SubprocessRegistry` 只跟踪**长时间运行 / 异步 / 跨函数生命周期**的子进程
+ * (UBT 编译、UHT codegen、UE Editor、Live Coding 等)。本文件所有 spawn 都是
+ * `await spawn + child.close → resolve` 的同步模式,生命周期被 Promise 严格框定,
+ * 接入 registry 反而增加无谓复杂度(register 后立即 unregister,无 deactivate 窗口)。
+ * 若未来某个 spawn 改为 fire-and-forget / detached / 后台持续轮询,**必须**接入 registry。
  */
 
 import { execFile, spawn } from 'node:child_process';

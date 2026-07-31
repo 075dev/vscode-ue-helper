@@ -11,6 +11,24 @@
  * 模块级 `optsSignal` 全局变量被去除（per 拆分清理），改为函数参数显式传递。
  * 该变量是 module-private，原行为由调用顺序：generateCompileCommands → executeShellTask
  * 同一 Promise tick 内完成，全局变量副作用可忽略，参数化更干净。
+ *
+ * [deactivate 子进程清理 — 决策记录 2026-07-31,见 AGENTS.md 仓库陷阱 #14]
+ *
+ * 本文件 4 处 `child_process` / `vscode.tasks` 调用,**全部不接入 SubprocessRegistry**:
+ *   - L161 `vscode.tasks.executeTask(task)`:UBT 生成 compile_commands.json。
+ *     委托给 VS Code Task system,扩展不持有 child 句柄(只能拿 `vscode.TaskExecution`),
+ *     Task system 自带 lifecycle(用户 cancel task / 关窗 / reload 都会自动杀进程)。
+ *     **无法注册到 SubprocessRegistry**:`executeTask` 不返回 ChildProcess,无法 `kill('SIGTERM')`。
+ *   - L274 `execFileAsync('where', ['clang'])`:探测 clang 路径,**短探测** (ms 级),
+ *     `await` 内完成,**不会 leak** 到函数返回之外。
+ *   - L291 `execFileAsync('where', ['clangd'])`:同上,探测 clangd 路径。
+ *   - L161 UBT 任务:同上,通过 Task system 托管,见上。
+ *
+ * 设计权衡:`SubprocessRegistry` 只跟踪**长时间运行 / 异步 / 跨函数生命周期**的子进程
+ * (UBT 编译、UHT codegen、UE Editor 启动、Live Coding 热重载等)。
+ * 单次 ms 级同步探测、Task system 托管的进程,不归 registry 管 ——
+ * 强行注册反而增加复杂度(需要在每个 await execFileAsync 前后 insert/remove,
+ * 但 await 期间 deactivate 来了也跑不到 dispose 路径)。
  */
 
 import { execFile } from 'node:child_process';
