@@ -5,11 +5,15 @@
  *   1. 命令行: UnrealEditor-Cmd.exe -ExecCmds="LiveCoding.Compile"
  *      要求 Editor 已在跑
  *   2. UBT 方式: 用 -LiveCoding 标记重跑 UBT(UE 5.x)
+ *
+ * [deactivate 子进程清理] detached + unref 的子进程仍注册到 SubprocessRegistry,
+ * best-effort 不保证一定能杀(detached 进程组可能已独立)。
  */
 
 import { spawn } from 'node:child_process';
 import { resolveLiveCodingCmd } from './ubt';
 import { BuildPlatform } from '@core/config';
+import { sharedSubprocessRegistry } from '@core/subprocessRegistry';
 
 export interface LiveCodingOptions {
   engineRoot: string;
@@ -25,6 +29,8 @@ export async function triggerLiveCoding(opts: LiveCodingOptions): Promise<void> 
     windowsHide: true,
   });
   child.unref();
+  // [deactivate 子进程清理] 注册到 registry,best-effort
+  sharedSubprocessRegistry.register(child, 'Live Coding');
 
   // Best-effort — Live Coding has no "completion" event we can await.
   await new Promise((resolve) => setTimeout(resolve, 300));

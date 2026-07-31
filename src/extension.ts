@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { Logger, sharedLogger } from '@core/logger';
 import { Config } from '@core/config';
 import { WorkspaceState } from '@core/workspace';
+import { sharedSubprocessRegistry } from '@core/subprocessRegistry';
 import { ClangdOps } from '@clangd/clangdOps';
 import { activateDetection } from '@detection';
 import { activateBuild } from '@build';
@@ -79,6 +80,10 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     // 接入 context.subscriptions 让 deactivate 时随 extension 一起释放
     context.subscriptions.push(workspace);
     context.subscriptions.push(clangdOps);
+    // [deactivate 子进程清理] sharedSubprocessRegistry 第一个 push —— 顺序倒序
+    // dispose 时最先被调,杀所有 spawn 子进程。Subsequent 资源(detached spawn
+    // 可能在 dispose 链尾部发生)能继续 register,但 killAll 已触发不会再杀。
+    context.subscriptions.push(sharedSubprocessRegistry);
 
     ControlPanelProvider.register({
       context,

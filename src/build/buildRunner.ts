@@ -10,12 +10,18 @@
  *   3. AbortSignal 支持取消按钮(由 withProgress 桥接 CancellationToken)
  *   4. 实时解析 stdout(MSVC + UBT progress)
  *   5. 推送 diagnostics 到 Problems 面板
+ *   6. [deactivate 清理] 子进程自动注册到 SubprocessRegistry,插件关闭时由
+ *      sharedSubprocessRegistry 统一杀进程树(兜底;AbortSignal 是主路径)
  */
 
 import { spawn, ChildProcessWithoutNullStreams, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { MsvcParser } from '@parsers/msvcParser';
 import { UbtParser } from '@parsers/ubtParser';
+import {
+  sharedSubprocessRegistry,
+  type SubprocessRegistry,
+} from '@core/subprocessRegistry';
 import { BuildOptions, BuildResult } from './types';
 import type { ParsedDiagnostic } from '@core/types/diagnostic';
 
@@ -43,6 +49,11 @@ export type BuildResult_ = { ok: true; value: BuildResult } | { ok: false; error
 export async function runBuild(
   cmd: { file: string; args: string[]; cwd?: string },
   options: BuildOptions = {},
+  /**
+   * 内部测试钩子:替换 SubprocessRegistry 注入,便于 fake child 单元测试。
+   * 生产代码不传 —— 默认用 `sharedSubprocessRegistry` 全局单例。
+   */
+  registry: SubprocessRegistry = sharedSubprocessRegistry,
 ): Promise<BuildResult_> {
   const start = Date.now();
   const allOutput: string[] = [];
@@ -63,6 +74,9 @@ export async function runBuild(
         env: { ...process.env, ...(options.signal ? {} : {}) },
         windowsHide: true,
       });
+      // [deactivate 子进程清理] 注册到 SubprocessRegistry,插件关闭时
+      // 由 sharedSubprocessRegistry 兜底杀进程(防止 AbortSignal 没传时漏杀)
+      registry.register(child, 'UBT build');
     } catch (err) {
       resolve({ ok: false, error: err as Error });
       return;

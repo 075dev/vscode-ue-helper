@@ -126,6 +126,12 @@ export class UeLinkManager implements vscode.Disposable {
   private readonly statusBarItem: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
   private disposed = false;
+  /**
+   * [deactivate 子进程清理] 控制 in-flight UHT codegen 取消。
+   * dispose() 调 abort() 让正在跑的 UHT 子进程被 uhtGeneration 内部
+   * SIGTERM→500ms→SIGKILL 升级逻辑杀掉。
+   */
+  private readonly abortController = new AbortController();
 
   constructor(opts: UeLinkManagerOptions) {
     this.config = opts.config;
@@ -139,8 +145,7 @@ export class UeLinkManager implements vscode.Disposable {
     );
     this.statusBarItem.name = 'UE Helper: Link Sync';
     this.statusBarItem.command = undefined; // 无命令，只显示状态；hover 看详情
-    this.statusBarItem.tooltip =
-      'UE Link: 保存 .h 后自动触发 UHT codegen（mtime 跳过 + 5s 节流）';
+    this.statusBarItem.tooltip = 'UE Link: 保存 .h 后自动触发 UHT codegen（mtime 跳过 + 5s 节流）';
     this.statusBarItem.text = '$(check)  UE✓';
     this.statusBarItem.show();
 
@@ -180,6 +185,9 @@ export class UeLinkManager implements vscode.Disposable {
     }
     this.disposed = true;
     this.clearTimers();
+    // [deactivate 子进程清理] 取消 in-flight UHT codegen 子进程
+    // uhtGeneration 内部监听 abort signal,触发 SIGTERM → 500ms → SIGKILL
+    this.abortController.abort('UeLinkManager disposed');
     for (const d of this.disposables) {
       try {
         d.dispose();
@@ -235,10 +243,10 @@ export class UeLinkManager implements vscode.Disposable {
       return;
     }
     // 1. 文件白名单：必须是 .h（contentType C++ header）
-    if (languageId !== "cpp" && languageId !== "c" && !uri.fsPath.endsWith(".h")) {
+    if (languageId !== 'cpp' && languageId !== 'c' && !uri.fsPath.endsWith('.h')) {
       return;
     }
-    if (!uri.fsPath.endsWith(".h")) {
+    if (!uri.fsPath.endsWith('.h')) {
       return;
     }
 
@@ -249,10 +257,10 @@ export class UeLinkManager implements vscode.Disposable {
       return;
     }
     const rel = path.relative(projectDir, uri.fsPath);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
       return;
     }
-    const relNorm = rel.split(path.sep).join("/");
+    const relNorm = rel.split(path.sep).join('/');
     const inSource = /^Source\//.test(relNorm);
     const inPluginSource = /^Plugins\/[^/]+\/Source\//.test(relNorm);
     if (!inSource && !inPluginSource) {
@@ -301,9 +309,7 @@ export class UeLinkManager implements vscode.Disposable {
       if (mtimeMs > 0) {
         this.lastHandledMtime.set(fsPath, mtimeMs);
       }
-      this.logger.info(
-        `[ueLink] no reflection macro, skip UHT: ${path.basename(fsPath)}`,
-      );
+      this.logger.info(`[ueLink] no reflection macro, skip UHT: ${path.basename(fsPath)}`);
       this.updateStatusBar();
       return;
     }
@@ -322,16 +328,17 @@ export class UeLinkManager implements vscode.Disposable {
     this.clearTimers();
 
     // 全局节流：如果距上次 UHT 启动 < 5s，等剩余时间
-    const sinceLastUht = this.lastUhtCompletedAt > 0
-      ? performance.now() - this.lastUhtCompletedAt
-      : Infinity;
+    const sinceLastUht =
+      this.lastUhtCompletedAt > 0 ? performance.now() - this.lastUhtCompletedAt : Infinity;
     if (sinceLastUht < GLOBAL_THROTTLE_MS) {
       const remaining = GLOBAL_THROTTLE_MS - sinceLastUht;
       this.throttledMergedCount++;
       this.state = {
         kind: 'throttled',
         fireAt: Date.now() + remaining,
-        timer: setTimeout(() => { void this.runUht(file); }, remaining),
+        timer: setTimeout(() => {
+          void this.runUht(file);
+        }, remaining),
       };
       this.logger.info(
         `[ueLink] throttled, will fire in ${remaining.toFixed(0)}ms (merged count=${this.throttledMergedCount})`,
@@ -344,7 +351,9 @@ export class UeLinkManager implements vscode.Disposable {
     this.state = {
       kind: 'debouncing',
       file,
-      timer: setTimeout(() => { void this.runUht(file); }, FILE_DEBOUNCE_MS),
+      timer: setTimeout(() => {
+        void this.runUht(file);
+      }, FILE_DEBOUNCE_MS),
     };
     this.updateStatusBar();
   }
@@ -377,14 +386,25 @@ export class UeLinkManager implements vscode.Disposable {
         buildTargetName,
         buildType: this.config.configuration,
         logger: this.logger,
+        // [deactivate 子进程清理] 传 abort signal,dispose 时取消 in-flight UHT
+        signal: this.abortController.signal,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`[ueLink] UHT spawn failed: ${msg}`);
+      // [deactivate 子进程清理] dispose 后的失败不更新 state (避免与 dispose 竞争)
+      if (this.disposed) {
+        return;
+      }
       this.state = { kind: 'error', message: msg };
       this.lastUhtCompletedAt = performance.now();
       this.lastUhtDurationMs = performance.now() - startMs;
       this.updateStatusBar();
+      return;
+    }
+
+    // [deactivate 子进程清理] abort 后 runUhtCodegen 返回(子进程已杀),不再更新 state
+    if (this.disposed) {
       return;
     }
 

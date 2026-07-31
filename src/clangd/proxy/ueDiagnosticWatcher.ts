@@ -32,7 +32,9 @@
  * 匹配逻辑：诊断 message 包含 UE 宏名 + 出现在 .h 文件中。
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import * as fs from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -40,6 +42,27 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import chokidar from 'chokidar';
 import type { LspBridge } from './bridge';
 import type { Logger } from '@core/logger';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * 杀 UBT 子进程 + 整棵进程树（Windows-only）。
+ *
+ * 与 `buildRunner.killTree` 等价但本地副本 —— proxy 子进程是 vscode-free,
+ * 不应 import build/ 模块（避免环依赖）。Plain `child.kill()` 只杀顶层
+ * cmd.exe/dotnet,UBT 编译进程仍在跑。
+ */
+async function killUbtTree(child: ChildProcessWithoutNullStreams): Promise<void> {
+  const pid = child.pid;
+  if (!pid) {
+    return;
+  }
+  try {
+    await execFileAsync('taskkill', ['/F', '/T', '/PID', String(pid)]);
+  } catch {
+    /* best-effort */
+  }
+}
 
 /** UE 宏报错正则 — clangd 对过期 generated.h 的典型错误消息 */
 const UE_MACRO_ERROR_PATTERNS: RegExp[] = [
@@ -173,6 +196,12 @@ export class UeDiagnosticWatcher {
   private forceReparseDone = false;
   /** chokidar watcher（监听 .generated.h 变化） */
   private fileWatcher: chokidar.FSWatcher | null = null;
+  /**
+   * 当前 UBT 子进程句柄（spawn 之后赋值,close/exit 后清空）。
+   * 用于 `dispose()` 时杀掉正在跑的 UBT —— 之前只 dispose chokidar watcher,
+   * UBT 进程漏到外部,变孤儿。
+   */
+  private currentUbtChild: ChildProcessWithoutNullStreams | null = null;
 
   private readonly minUbtIntervalMs: number;
   private readonly maxRetries: number;
@@ -396,6 +425,8 @@ export class UeDiagnosticWatcher {
         env,
         windowsHide: true,
       });
+      // [deactivate 子进程清理] 跟踪当前 UBT 子进程,dispose 时杀进程树
+      this.currentUbtChild = child;
 
       // UBT 的进度/错误信息大多走 stdout，stderr 常为空 —— 两路都捕获便于诊断
       let stdout = '';
@@ -408,10 +439,16 @@ export class UeDiagnosticWatcher {
       });
 
       child.on('error', (err) => {
+        if (this.currentUbtChild === child) {
+          this.currentUbtChild = null;
+        }
         reject(new Error(`UBT spawn failed: ${err.message}`));
       });
 
       child.on('close', (code) => {
+        if (this.currentUbtChild === child) {
+          this.currentUbtChild = null;
+        }
         if (code !== 0) {
           const combined = stdout + stderr;
           // 错误详情在输出开头(末尾是 usage/总结),打印开头 + 末尾便于诊断
@@ -605,8 +642,19 @@ export class UeDiagnosticWatcher {
 
   /**
    * 销毁监听器。
+   *
+   * 关键修复（之前 bug）：只 dispose chokidar watcher,UBT 子进程漏到外部变孤儿。
+   * 现在先杀 UBT 子进程 + 整棵进程树,再 dispose chokidar watcher。
    */
   dispose(): void {
+    if (this.currentUbtChild) {
+      const child = this.currentUbtChild;
+      this.currentUbtChild = null;
+      this.logger.info('[ueDiagnosticWatcher] dispose: killing in-flight UBT child');
+      void killUbtTree(child).catch(() => {
+        /* best-effort */
+      });
+    }
     this.disposeFileWatcher();
   }
 }

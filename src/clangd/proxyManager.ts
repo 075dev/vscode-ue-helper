@@ -13,6 +13,12 @@
  * - 不修改 clangd 设置，除非显式调用 enable()
  * - 所有写入操作委托给 ClangdSettingsManager
  * - 注册 disposable 用于清理
+ *
+ * [deactivate 清理] 实现 `vscode.Disposable`：
+ * dispose() 在 extension 卸载时由 context.subscriptions 触发，
+ * 若 proxy 当前处于激活状态（clangd.path 仍指向本扩展的 launcher），
+ * 自动调用 `disable()` 恢复原始 clangd 设置，避免扩展卸载后留下
+ * "clangd 仍指向我们的 launcher 但 launcher 已不存在"的死链。
  */
 
 import * as fs from 'node:fs';
@@ -45,7 +51,7 @@ export interface ClangdProxyManagerDependencies {
   readonly engineRoot?: string;
 }
 
-export class ClangdProxyManager {
+export class ClangdProxyManager implements vscode.Disposable {
   /** 设置管理器（备份/写入/恢复 clangd 设置） */
   public readonly settingsManager: ClangdSettingsManager;
 
@@ -316,6 +322,33 @@ export class ClangdProxyManager {
     }
     this.tailer.dispose();
     this.tailer = null;
+  }
+
+  /**
+   * [deactivate 清理] vscode.Disposable.dispose。
+   *
+   * 当 extension 被卸载/窗口 reload 时,VS Code 通过 context.subscriptions
+   * 同步调本方法。若 proxy 当前处于激活状态（clangd.path 仍指向我们的 launcher）,
+   * 调 `disable()` 恢复用户原始 clangd 设置 —— 避免卸载后留下"clangd 指向
+   * 一个已不存在的 launcher"的死链(下次用户打开工作区,IntelliSense 不可用)。
+   *
+   * 注意:
+   * - 这是 best-effort:disable() 失败也不抛错(用户可能已手动改过 clangd.path)
+   * - 不杀 proxy 子进程:本插件不直接 spawn proxy(proxy 由 clangd 扩展 spawn),
+   *   恢复 clangd.path 后 clangd 扩展会自行结束 proxy 子进程
+   * - 幂等:重复 dispose() 安全
+   */
+  dispose(): void {
+    if (!this.isActive) {
+      this.logger.info('[proxyManager] dispose: proxy not active, no settings to restore');
+      return;
+    }
+    this.logger.info('[proxyManager] dispose: proxy still active, restoring clangd settings');
+    // disable() 内部已 best-effort,这里不 await(deactivate 同步)
+    void this.disable().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`[proxyManager] dispose: disable failed: ${msg}`);
+    });
   }
 
   /**

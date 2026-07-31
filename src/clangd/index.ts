@@ -193,6 +193,11 @@ export function activateClangd(
     });
   }
 
+  // [deactivate 清理] ClangdProxyManager 实现 vscode.Disposable:
+  // extension 卸载时若 proxy 仍激活,自动恢复 clangd.path 备份。
+  // 必须 push 到 subscriptions,VS Code 才会调 dispose()。
+  context.subscriptions.push(proxyManager);
+
   const ueMacroCompletionProvider = registerUeMacroCompletionProvider();
   // P2-2: UE 反射诊断 linter（UCLASS 缺 GENERATED_BODY / 前缀违规 / UFUNCTION 多 RPC）
   const ueReflectionLinter = registerUeReflectionLinter();
