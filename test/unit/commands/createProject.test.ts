@@ -214,7 +214,6 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         // [Phase 11 SSoT] engines SSoT 已收敛到 detection.ready，discovery 仅作占位
         discover: vi.fn(() => Promise.resolve([])),
       },
-      vsBuildTools: {} as never,
       workspaceContext: {
         getSelectedProject: vi.fn(() => projectPath),
         getSelectedEngine: vi.fn(() => 'C:\\UE_5.4'),
@@ -310,7 +309,6 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
         // [Phase 11 SSoT] engines SSoT 已收敛到 detection.ready，discovery 仅作占位
         discover: vi.fn(() => Promise.resolve([])),
       },
-      vsBuildTools: {} as never,
       workspaceContext: {
         getSelectedProject: vi.fn(() => projectPath),
         getSelectedEngine: vi.fn(() => 'C:\\UE_5.4'),

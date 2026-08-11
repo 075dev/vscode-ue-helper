@@ -11,8 +11,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { ClangdHandles } from '@clangd';
 import type { DetectionHandles, ProjectInfo } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
@@ -27,6 +27,7 @@ import { executeEnableClangdProxy } from '@commands/enableClangdProxy';
 void executeCreateProject;
 void executeEnableClangdProxy;
 import { initI18n } from '@i18n';
+import json5 from 'json5';
 
 // .code-workspace JSON 形状的类型描述,用于解析写入内容时绕过 @typescript-eslint/no-unsafe-*
 type WorkspaceJson = {
@@ -126,7 +127,6 @@ function createConfigMock(): Config {
 function createClangdHandlesMock(): ClangdHandles {
   return {
     completionMode: {} as never,
-    backup: {} as never,
     proxyManager: {
       enabled: false,
       isActive: false,
@@ -161,7 +161,6 @@ function createDetectionHandlesMock(opts?: {
   return {
     scanner: { scan: vi.fn(() => Promise.resolve(projectInfo ? [projectInfo] : [])) } as never,
     discovery: {} as never,
-    vsBuildTools: {} as never,
     workspaceContext: {
       getSelectedProject: vi.fn(() => undefined),
       setProject: vi.fn(() => Promise.resolve()),
@@ -381,6 +380,76 @@ describe('markInitializedInWorkspace', () => {
       markInitializedInWorkspace('/fake/proj/LockedProject.code-workspace'),
     ).rejects.toThrow(/EACCES|permission/i);
   });
+
+  // [F2-20/§8.9] 定点修改保留 JSONC 注释/尾逗号,不再 JSON.stringify 整体重写(会毁注释)
+  it('保留 JSONC 注释与尾逗号(F2-20)', async () => {
+    const originalJson = [
+      '{',
+      '  // 项目根文件夹',
+      '  "folders": [',
+      '    { "path": "." },',
+      '  ],',
+      '  "settings": {',
+      '    "editor.fontSize": 14,',
+      '    "vscodeUEHelper": {',
+      '      // 用户注释要保留',
+      '      "someOtherKey": "keep-me",',
+      '    },',
+      '  },',
+      '}',
+    ].join('\n');
+    let writtenContent: string | undefined;
+    readFileMock.mockResolvedValue(originalJson);
+    writeFileMock.mockImplementation((_path: string, data: string | NodeJS.ArrayBufferView) => {
+      writtenContent = typeof data === 'string' ? data : String(data);
+      return Promise.resolve(undefined);
+    });
+    renameMock.mockResolvedValue(undefined);
+
+    await markInitializedInWorkspace('/fake/proj/MyProject.code-workspace');
+
+    expect(writtenContent).toBeDefined();
+    // 注释与尾逗号保留
+    expect(writtenContent).toContain('// 项目根文件夹');
+    expect(writtenContent).toContain('// 用户注释要保留');
+    // 其他键保留
+    expect(writtenContent).toContain('"someOtherKey": "keep-me"');
+    expect(writtenContent).toContain('"editor.fontSize": 14');
+    // 新标记写入且文档仍可解析(含注释/尾逗号,用 json5 解析)
+    const parsed: WorkspaceJson = json5.parse(writtenContent ?? '{}');
+    expect(parsed.settings?.vscodeUEHelper?.initialized).toBe(true);
+    expect(parsed.settings?.vscodeUEHelper?.someOtherKey).toBe('keep-me');
+    expect(parsed.folders).toEqual([{ path: '.' }]);
+  });
+
+  // [F2-20/§8.9] 已存在 initialized 键(如 false)时定点替换值,不重复插入键
+  it('已存在 initialized 键时替换值而非重复插入(F2-20)', async () => {
+    const originalJson = [
+      '{',
+      '  "settings": {',
+      '    "vscodeUEHelper": {',
+      '      "initialized": false,',
+      '    },',
+      '  },',
+      '}',
+    ].join('\n');
+    let writtenContent: string | undefined;
+    readFileMock.mockResolvedValue(originalJson);
+    writeFileMock.mockImplementation((_path: string, data: string | NodeJS.ArrayBufferView) => {
+      writtenContent = typeof data === 'string' ? data : String(data);
+      return Promise.resolve(undefined);
+    });
+    renameMock.mockResolvedValue(undefined);
+
+    await markInitializedInWorkspace('/fake/proj/MyProject.code-workspace');
+
+    expect(writtenContent).toBeDefined();
+    // 含尾逗号的 JSONC,用 json5 解析
+    const parsed: WorkspaceJson = json5.parse(writtenContent ?? '{}');
+    expect(parsed.settings?.vscodeUEHelper?.initialized).toBe(true);
+    // 只允许一个 initialized 键
+    expect((writtenContent ?? '').match(/"initialized"/g)).toHaveLength(1);
+  });
 });
 
 // 测试组 3：编排器短路（核心）
@@ -443,6 +512,29 @@ describe('runFirstTimeInit failure semantics', () => {
     );
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('mock proxy failure'),
+    );
+  });
+
+  // [F2-20] 标记写入失败时不 reload,返回 fail(与文件头设计原则 3 一致:
+  // 任一步骤失败 → 弹错误信息、不重启窗口,下次启动再次提示)
+  it('markInitializedInWorkspace 失败时不 reload,返回 fail', async () => {
+    executeCreateProjectMock.mockResolvedValue(undefined);
+    executeEnableClangdProxyMock.mockResolvedValue(undefined);
+    accessMock.mockResolvedValue(undefined);
+    readFileMock.mockResolvedValue(JSON.stringify({ folders: [] }));
+    writeFileMock.mockRejectedValue(new Error('EACCES: permission denied'));
+
+    const result = await runFirstTimeInit(
+      { context: createContextMock(), config, logger, detection, clangd, workspace },
+      createContextMock(),
+    );
+
+    expect(result).toBe('fail');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'workbench.action.reloadWindow',
+    );
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining('EACCES'),
     );
   });
 });

@@ -6,8 +6,8 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import { launchEditor as launch } from '@build';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';

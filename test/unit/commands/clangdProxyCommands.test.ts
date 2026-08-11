@@ -7,8 +7,9 @@ import * as vscode from 'vscode';
 import { executeEnableClangdProxy } from '@commands/enableClangdProxy';
 import { executeDisableClangdProxy } from '@commands/disableClangdProxy';
 import { executeShowClangdProxyStatus } from '@commands/showClangdProxyStatus';
-import { Config } from '@core/config';
-import { Logger } from '@core/logger';
+import { t } from '@i18n';
+import { type Config } from '@core/config';
+import { type Logger } from '@core/logger';
 
 function createLoggerMock(): Logger {
   const info = vi.fn();
@@ -68,7 +69,6 @@ function createClangdHandlesMock(overrides?: Record<string, unknown>) {
       : (o.enabled ?? false);
   return {
     completionMode: {} as never,
-    backup: {} as never,
     proxyManager: {
       get enabled() {
         return activeEnabled();
@@ -82,6 +82,7 @@ function createClangdHandlesMock(overrides?: Record<string, unknown>) {
       reapply: vi.fn<[], Promise<void>>(() => Promise.resolve()),
       getStatus: vi.fn(() => ({
         enabled: activeEnabled(),
+        active: o.isActive ?? false,
         launcherPath: o.launcherPath ?? '/fake/extension/out/launcher/proxy-launcher.bat',
         realClangdPath: o.realClangdPath ?? undefined,
         keepaliveMax: 20,
@@ -161,6 +162,7 @@ describe('executeDisableClangdProxy', () => {
   let config: Config;
   let logger: Logger;
   let infoMock: ReturnType<typeof vi.fn>;
+  let warnMock: ReturnType<typeof vi.fn>;
   let errorMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -168,6 +170,8 @@ describe('executeDisableClangdProxy', () => {
     logger = createLoggerMock();
     // eslint-disable-next-line @typescript-eslint/unbound-method
     infoMock = logger.info as unknown as ReturnType<typeof vi.fn>;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    warnMock = logger.warn as unknown as ReturnType<typeof vi.fn>;
     // eslint-disable-next-line @typescript-eslint/unbound-method
     errorMock = logger.error as unknown as ReturnType<typeof vi.fn>;
     vi.clearAllMocks();
@@ -195,6 +199,41 @@ describe('executeDisableClangdProxy', () => {
     expect(
       vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
     ).toHaveBeenCalled();
+  });
+
+  it('restart 失败但设置已恢复时，不弹"禁用失败"、弹成功提示', async () => {
+    // Given: clangd 扩展未激活 → clangd.restart 命令未注册，调用 reject；
+    // 但 proxyManager.disable + config.update 已成功完成（设置已恢复）。
+    const clangd = createClangdHandlesMock();
+    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      t('proxy.disable.restartClangd'),
+    );
+    (vscode.commands.executeCommand as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('command not found'),
+    );
+
+    // When
+    await executeDisableClangdProxy(config, logger, clangd as never);
+
+    // Then: 主流程按"设置恢复成功"收尾——弹成功提示，不弹失败
+    expect(clangd.proxyManager.disable).toHaveBeenCalledOnce();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(config.update as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+      'clangdProxy.enabled',
+      false,
+    );
+    expect(
+      vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalledWith(t('proxy.disable.success'), expect.any(String));
+    expect(
+      vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
+    ).not.toHaveBeenCalled();
+    // clangd.restart 失败仅 warn，且不记录为禁用失败
+    expect(warnMock).toHaveBeenCalledWith(
+      expect.stringContaining('clangd.restart'),
+      expect.any(Error),
+    );
+    expect(errorMock).not.toHaveBeenCalled();
   });
 });
 
@@ -257,6 +296,25 @@ describe('executeShowClangdProxyStatus', () => {
     executeShowClangdProxyStatus(configNoPath, logger, clangd as never);
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('auto-detect'));
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('not set'));
+  });
+
+  it('配置未启用但已激活时，enabled 与 active 两行文案各自正确', () => {
+    // F1-6：enableClangdProxy 命令故意不写 clangdProxy.enabled 配置，
+    // 但 clangd.path 已指向 launcher → 实际激活。enabled 行必须显示 No，
+    // active 行必须显示 Yes，不能再用 enabled 顶替 active。
+    const configDisabled = createConfigMock({ clangdProxyEnabled: false });
+    const clangd = createClangdHandlesMock({
+      enabled: false,
+      isActive: true,
+      hasBackup: true,
+    });
+    executeShowClangdProxyStatus(configDisabled, logger, clangd as never);
+    expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Config Enabled:  No'));
+    expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Currently Active: Yes'));
+    // 汇总弹窗同样区分 enabled 与 active
+    expect(
+      vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalledWith(expect.stringContaining('enabled=No, active=Yes'));
   });
 });
 

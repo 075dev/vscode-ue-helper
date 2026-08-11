@@ -214,10 +214,15 @@
   "openWorkspaceFile.noWorkspace": "未打开任何工作区。 / No workspace open.",
   "openWorkspaceFile.notFound": "在工作区根目录中未找到 .code-workspace 文件。 / No .code-workspace file found in workspace roots.",
 
+  "openTerminalInNewWindow.invalidPath": "无法打开终端:目标路径不是目录。 / Cannot open terminal: target path is not a directory.",
+  "openTerminalInNewWindow.moveFailed": "已在当前窗口打开终端,但移动到新窗口失败(旧版 VS Code 可能不支持)。 / Opened terminal in current window, but failed to move it to a new window.",
+
   "cmd.noEngineSelected": "未选择 Unreal Engine 安装。 / No Unreal Engine installation selected.",
   "cmd.noUprojectSelected": "未选择 .uproject 项目。 / No .uproject selected.",
   "cmd.noUnrealEngineSelected": "未选择 Unreal Engine 安装。 / No Unreal Engine installation selected.",
   "cmd.noWorkspaceRoot": "未找到工作区根目录。 / No workspace root found.",
+  "cmd.buildCancelled": "构建已取消。 / Build cancelled.",
+  "cmd.buildInFlight": "已有构建在运行,请等待完成。 / A build is already running. Wait for it to finish.",
 
   "projectExplorer.name": "项目目录 / Project Explorer",
   "projectExplorer.openFailed": "无法打开项目文件：{error} / Failed to open project file: {error}",

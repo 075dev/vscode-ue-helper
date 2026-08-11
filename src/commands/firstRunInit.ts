@@ -115,12 +115,259 @@ export async function isFirstRunVscodeWorkspace(workspaceFile: string): Promise<
   return initialized !== true;
 }
 
+/** [F2-20/§8.9] 无可保留内容时(文件缺失/损坏)整写的最小结构 */
+function defaultInitializedJson(): string {
+  return JSON.stringify({ settings: { vscodeUEHelper: { initialized: true } } }, null, 4) + '\n';
+}
+
+function isWs(ch: string | undefined): boolean {
+  return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
+}
+
+/** 返回字符串的结束引号下标(支持转义),找不到返回 -1 */
+function findStringEnd(text: string, start: number, quote: string): number {
+  let pos = start + 1;
+  while (pos < text.length) {
+    if (text[pos] === '\\') {
+      pos += 2;
+      continue;
+    }
+    if (text[pos] === quote) {
+      return pos;
+    }
+    pos++;
+  }
+  return -1;
+}
+
+/** 从 openIdx 起匹配括号(跳字符串),返回对应的闭括号下标;不匹配返回 -1 */
+function matchBrace(text: string, openIdx: number): number {
+  const open = text[openIdx];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let pos = openIdx;
+  let inString = false;
+  let strQuote = '';
+  while (pos < text.length) {
+    const ch = text[pos];
+    if (inString) {
+      if (ch === '\\') {
+        pos += 2;
+        continue;
+      }
+      if (ch === strQuote) {
+        inString = false;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inString = true;
+      strQuote = ch;
+    } else if (ch === open) {
+      depth++;
+    } else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        return pos;
+      }
+    }
+    pos++;
+  }
+  return -1;
+}
+
+/**
+ * 在 [from, to) 范围内找属性 key(形如 "key": 或 'key':,key 后允许空白再跟冒号),
+ * 返回属性 key 起始引号下标;找不到返回 -1。出现在 value 位置的同名字符串不会命中
+ * (因为要求 key 后跟 `:`)。
+ */
+function findKeyInRange(text: string, from: number, to: number, key: string): number {
+  let pos = from;
+  while (pos < to) {
+    const double = text.indexOf('"', pos);
+    const single = text.indexOf("'", pos);
+    let quote: number;
+    let q: string;
+    if (double === -1 && single === -1) {
+      break;
+    }
+    if (double === -1) {
+      quote = single;
+      q = "'";
+    } else if (single === -1) {
+      quote = double;
+      q = '"';
+    } else {
+      quote = Math.min(double, single);
+      q = text[quote] ?? '"';
+    }
+    if (quote >= to) {
+      break;
+    }
+    const end = findStringEnd(text, quote, q);
+    if (end === -1) {
+      break;
+    }
+    if (end < to && text.slice(quote + 1, end) === key) {
+      let k = end + 1;
+      while (k < to && isWs(text[k])) {
+        k++;
+      }
+      if (text[k] === ':') {
+        return quote;
+      }
+    }
+    pos = quote + 1;
+  }
+  return -1;
+}
+
+/** 返回属性 key(引号起始下标)之后的值起始下标;不是属性/找不到返回 -1 */
+function valueAfterKey(text: string, keyStart: number): number {
+  const q = text[keyStart];
+  if (q !== '"' && q !== "'") {
+    return -1;
+  }
+  const keyEnd = findStringEnd(text, keyStart, q);
+  if (keyEnd === -1) {
+    return -1;
+  }
+  let pos = keyEnd + 1;
+  while (pos < text.length && isWs(text[pos])) {
+    pos++;
+  }
+  if (text[pos] !== ':') {
+    return -1;
+  }
+  pos++;
+  while (pos < text.length && isWs(text[pos])) {
+    pos++;
+  }
+  return pos;
+}
+
+/** 返回值从 start 起到结束后的下标(支持对象/数组/字符串/字面量) */
+function valueEnd(text: string, start: number): number {
+  const c = text[start];
+  if (c === '{' || c === '[') {
+    const close = matchBrace(text, start);
+    return close === -1 ? -1 : close + 1;
+  }
+  if (c === '"' || c === "'") {
+    const end = findStringEnd(text, start, c);
+    return end === -1 ? -1 : end + 1;
+  }
+  let pos = start;
+  while (
+    pos < text.length &&
+    !isWs(text[pos]) &&
+    text[pos] !== ',' &&
+    text[pos] !== '}' &&
+    text[pos] !== ']'
+  ) {
+    pos++;
+  }
+  return pos;
+}
+
+/** 返回 openIdx 所在行的行首缩进(插入新行对齐用) */
+function indentOf(text: string, openIdx: number): string {
+  const lineStart = text.lastIndexOf('\n', openIdx - 1) + 1;
+  const line = text.slice(lineStart, openIdx);
+  return line.match(/^[ \t]*/)?.[0] ?? '';
+}
+
+/** 在文本中查找属性 key 的值为对象的属性,返回该对象 `{...}` 的开闭下标;找不到返回 null */
+function findKeyObject(text: string, key: string): { open: number; close: number } | null {
+  let searchFrom = 0;
+  for (;;) {
+    const idx = findKeyInRange(text, searchFrom, text.length, key);
+    if (idx === -1) {
+      return null;
+    }
+    const valueStart = valueAfterKey(text, idx);
+    if (valueStart !== -1 && text[valueStart] === '{') {
+      const close = matchBrace(text, valueStart);
+      if (close !== -1) {
+        return { open: valueStart, close };
+      }
+    }
+    searchFrom = idx + 1;
+  }
+}
+
+/** 在对象 [open, close] 内定点设置布尔属性:已存在 → 替换值为 true;不存在 → 在 `{` 后插入 */
+function setBooleanKeyInObject(
+  raw: string,
+  open: number,
+  close: number,
+  key: string,
+  indent: string,
+): string {
+  const keyIdx = findKeyInRange(raw, open + 1, close, key);
+  if (keyIdx !== -1) {
+    const valueStart = valueAfterKey(raw, keyIdx);
+    if (valueStart !== -1) {
+      const end = valueEnd(raw, valueStart);
+      if (end !== -1) {
+        return raw.slice(0, valueStart) + 'true' + raw.slice(end);
+      }
+    }
+  }
+  const suffix = `\n${indent}  "${key}": true,`;
+  return raw.slice(0, open + 1) + suffix + raw.slice(open + 1);
+}
+
+/**
+ * 在 JSONC 文本中定点设置 `settings.vscodeUEHelper.initialized = true`,保留注释。
+ *
+ * [F2-20/§8.9] 不做整体 JSON 重序列化(那会毁掉 .code-workspace 的注释/尾逗号),
+ * 而是字符串级定点手术:
+ *   1. 已有 vscodeUEHelper 对象 → 替换/插入 initialized 属性;
+ *   2. 只有 settings 对象 → 在 settings 内插入 vscodeUEHelper;
+ *   3. 都没有 → 文档末尾(最后一个 `}`)前插入 settings 块。
+ * 插入均为 JSONC 合法写法(允许尾逗号),调用方会再 json5 解析兜底,改坏则回退整写。
+ */
+function setInitializedInJsonc(raw: string): string {
+  // 情况 1:已有 vscodeUEHelper 对象
+  const vuh = findKeyObject(raw, 'vscodeUEHelper');
+  if (vuh) {
+    return setBooleanKeyInObject(raw, vuh.open, vuh.close, 'initialized', indentOf(raw, vuh.open));
+  }
+
+  // 情况 2:有 settings 对象但没有 vscodeUEHelper → 在 settings 内插入
+  const settings = findKeyObject(raw, 'settings');
+  if (settings) {
+    const childIndent = indentOf(raw, settings.open) + '  ';
+    const suffix = `\n${childIndent}"vscodeUEHelper": { "initialized": true },`;
+    return raw.slice(0, settings.open + 1) + suffix + raw.slice(settings.open + 1);
+  }
+
+  // 情况 3:都没有 → 文档末尾插入 settings 块(前面已含尾逗号则不再加逗号)
+  const lastBrace = raw.lastIndexOf('}');
+  if (lastBrace === -1) {
+    return defaultInitializedJson();
+  }
+  const head = raw.slice(0, lastBrace).trimEnd();
+  // 空对象 {} → 直接整写最小结构,避免产生 `{,` 非法片段
+  if (head === '{') {
+    return defaultInitializedJson();
+  }
+  const base = indentOf(raw, lastBrace);
+  const hasTrailingComma = head.endsWith(',');
+  const block =
+    `${hasTrailingComma ? '' : ','}\n` +
+    `${base}  "settings": {\n` +
+    `${base}    "vscodeUEHelper": { "initialized": true }\n` +
+    `${base}  }\n${base}`;
+  return raw.slice(0, lastBrace) + block + raw.slice(lastBrace);
+}
+
 /**
  * 原子写入：在 `.code-workspace` 的 `settings.vscodeUEHelper.initialized` 字段标记 `true`。
  *
  * 写入策略：
- *   - re-read 现有内容（保留用户其他设置）
- *   - 改写 `settings.vscodeUEHelper.initialized = true`（其他字段不动）
+ *   - re-read 现有内容（保留用户其他设置与 JSONC 注释）
+ *   - [F2-20/§8.9] 定点改写 `settings.vscodeUEHelper.initialized = true`（其他字段不动,
+ *     注释/尾逗号保留）;文件缺失/损坏时整写最小结构
  *   - 序列化 → 写临时文件 `.tmp` → rename（原子）
  *
  * 失败抛错，调用方决定是否继续 reload。
@@ -128,37 +375,26 @@ export async function isFirstRunVscodeWorkspace(workspaceFile: string): Promise<
  * @param workspaceFile .code-workspace 文件绝对路径
  */
 export async function markInitializedInWorkspace(workspaceFile: string): Promise<void> {
-  // 读取现有内容（容忍文件不存在 → 视为空对象）
-  let data: Record<string, unknown> = {};
+  // 读取现有内容（文件不存在 → 直接写全新文件）
+  let raw: string;
   try {
-    const raw = await fs.readFile(workspaceFile, 'utf-8');
-    const parsed: unknown = json5.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null) {
-      data = parsed as Record<string, unknown>;
-    }
+    raw = await fs.readFile(workspaceFile, 'utf-8');
   } catch {
-    // 文件不存在或解析失败 → 视为空对象继续写入
-    data = {};
+    raw = '';
   }
 
-  // 确保 data.settings 与 data.settings.vscodeUEHelper 存在
-  let settings = data['settings'] as Record<string, unknown> | undefined;
-  if (typeof settings !== 'object' || settings === null) {
-    settings = {};
-    data['settings'] = settings;
+  let serialized: string;
+  if (raw.trim() === '') {
+    serialized = defaultInitializedJson();
+  } else {
+    serialized = setInitializedInJsonc(raw);
+    // 兜底校验:定点手术改坏(扫描器边界)时回退为最小结构整写
+    try {
+      json5.parse(serialized);
+    } catch {
+      serialized = defaultInitializedJson();
+    }
   }
-
-  let vscodeUEHelper = settings['vscodeUEHelper'] as Record<string, unknown> | undefined;
-  if (typeof vscodeUEHelper !== 'object' || vscodeUEHelper === null) {
-    vscodeUEHelper = {};
-    settings['vscodeUEHelper'] = vscodeUEHelper;
-  }
-
-  // 覆盖写 initialized = true（保留 vscodeUEHelper 内其他字段）
-  vscodeUEHelper['initialized'] = true;
-
-  // 序列化（VS Code 工作区文件惯例：4 空格缩进 + 末尾换行）
-  const serialized = JSON.stringify(data, null, 4) + '\n';
 
   // 原子写入：先写临时文件，再 rename
   const tempFile = workspaceFile + '.tmp';
@@ -245,13 +481,15 @@ export async function runFirstTimeInit(
     return 'fail';
   }
 
-  // 写标记（仅 warn，不阻断 reload —— 用户已点确认，标记写入是 best-effort）
+  // 写标记。失败 → 弹错并返回 fail,不触发 reload(与文件头设计原则 3 一致:
+  // 任一步骤失败 → 弹错误信息、不重启窗口,下次启动再次提示)。
   try {
     await markInitializedInWorkspace(wsFile);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(`[firstRunInit] markInitializedInWorkspace failed: ${msg}`);
-    logger.warn(t('init.fail.markWorkspace', { '0': msg }));
+    logger.error(`[firstRunInit] markInitializedInWorkspace failed: ${msg}`);
+    void vscode.window.showErrorMessage(t('init.fail.markWorkspace', { '0': msg }));
+    return 'fail';
   }
 
   // 触发窗口 reload（AC-3）。失败仅 warn，不影响 init 返回值

@@ -17,8 +17,8 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import {
   generateCompileCommands,
   linkToWorkspaceRoot,
@@ -53,7 +53,16 @@ export async function executeGenerateCompileCommands(
   const { projects, engines } = await detection.ready;
   let project;
   if (!silent) {
-    project = (await pickProject(projects)) ?? projects[0];
+    // [F2-18/E5] QuickPick 取消(undefined)时静默返回,不再静默落到 projects[0] 继续执行。
+    // 仅当只有一个项目时才自动选中(用户没得选,自动继续合理);多项目取消 = 用户放弃本次操作。
+    const picked = await pickProject(projects);
+    if (picked) {
+      project = picked;
+    } else if (projects.length === 1) {
+      project = projects[0];
+    } else {
+      return;
+    }
   } else {
     project =
       workspace?.resolveSelectedProject(projects) ??

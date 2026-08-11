@@ -17,7 +17,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { type Logger } from '@core/logger';
 import type { ClangdHandles } from '@clangd';
 import { t } from '@i18n';
 
@@ -35,7 +35,7 @@ export function executeShowClangdProxyStatus(
     t('proxy.status.title'),
     '',
     t('proxy.status.enabled', { value: status.enabled ? t('common.yes') : t('common.no') }),
-    t('proxy.status.active', { value: status.enabled ? t('common.yes') : t('common.no') }),
+    t('proxy.status.active', { value: status.active ? t('common.yes') : t('common.no') }),
     t('proxy.status.launcherPath', { value: status.launcherPath }),
     t('proxy.status.realClangdPath', {
       value: status.realClangdPath ?? t('common.autoDetect'),
@@ -72,7 +72,7 @@ export function executeShowClangdProxyStatus(
   void vscode.window.showInformationMessage(
     t('proxy.status.summary', {
       enabled: status.enabled ? t('common.yes') : t('common.no'),
-      active: status.enabled ? t('common.yes') : t('common.no'),
+      active: status.active ? t('common.yes') : t('common.no'),
     }),
   );
 }

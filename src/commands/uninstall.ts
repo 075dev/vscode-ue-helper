@@ -17,13 +17,53 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { type Logger } from '@core/logger';
 import { t } from '@i18n';
 import type { WorkspaceState } from '@core/workspace';
 
 interface CleanupTarget {
   label: string;
   paths: string[];
+}
+
+/**
+ * 删除 .vscode/vscodeuehelper/ 下的托管文件,保留 addCompletions.h / addMacroCompletions.h。
+ *
+ * [F2-20/§8.8] 这两个文件声明保留用户编辑(见 src/clangd/completionFiles.ts:487-512):
+ *   - addCompletions.h 是纯用户文件,仅在不存在时创建模板,已存在绝不覆盖;
+ *   - addMacroCompletions.h 托管刷新,但 MANAGED/USER 分区里 USER 区归用户所有。
+ * 整目录递归删除会毁掉用户内容,因此改为逐文件删除,最后尝试移除空目录。
+ *
+ * @returns 是否删除了至少一个文件(用于结果汇总)
+ */
+async function cleanupHelperDir(dir: string): Promise<boolean> {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    // 目录不存在 → 无清理项
+    return false;
+  }
+  let removedAny = false;
+  for (const name of entries) {
+    // 保留用户可能编辑过的文件
+    if (name === 'addCompletions.h' || name === 'addMacroCompletions.h') {
+      continue;
+    }
+    try {
+      await fs.rm(path.join(dir, name), { recursive: true, force: true });
+      removedAny = true;
+    } catch {
+      // ignore — 文件可能不存在
+    }
+  }
+  // 目录清空后尝试移除空目录(失败无妨——残留空目录不构成"托管文件"残留)
+  try {
+    await fs.rmdir(dir);
+  } catch {
+    // ignore
+  }
+  return removedAny;
 }
 
 export async function executeUninstall(
@@ -43,7 +83,6 @@ export async function executeUninstall(
     // [Phase 9 SSoT] .clangd 路径用 WorkspaceState 派生，不走 path.join
     { label: '.clangd', paths: [clangdPath ?? path.join(root, '.clangd')] },
     { label: 'compile_commands.json', paths: [path.join(root, 'compile_commands.json')] },
-    { label: '.vscode/vscodeuehelper/', paths: [path.join(root, '.vscode', 'vscodeuehelper')] },
     {
       label: '.vscode/.code-workspace.backup',
       paths: [path.join(root, '.vscode', '.code-workspace.backup')],
@@ -68,6 +107,13 @@ export async function executeUninstall(
         // ignore — file may not exist
       }
     }
+  }
+
+  // [F2-20/§8.8] .vscode/vscodeuehelper/ 不能整目录递归删除 —— addCompletions.h 与
+  // addMacroCompletions.h 声明保留用户编辑。只删托管文件,保留这两个文件。
+  const helperDir = path.join(root, '.vscode', 'vscodeuehelper');
+  if (await cleanupHelperDir(helperDir)) {
+    removed.push('.vscode/vscodeuehelper/');
   }
 
   void vscode.window.showInformationMessage(

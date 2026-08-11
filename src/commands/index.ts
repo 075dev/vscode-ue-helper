@@ -2,9 +2,9 @@
  * commands —— 模块入口
  */
 
-import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import type * as vscode from 'vscode';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import { registerCommand } from '@core/command-registry';
 import type { WorkspaceState } from '@core/workspace';
 import type { DetectionHandles } from '@detection';
@@ -20,6 +20,7 @@ import { executeInstallRules } from './installRules';
 import { executeUninstall } from './uninstall';
 import { executeSetSystemIncludes } from './setSystemIncludes';
 import { executeOpenWorkspaceFile } from './openWorkspaceFile';
+import { executeOpenTerminalInNewWindow } from './openTerminalInNewWindow';
 import { executeSelectConfig } from './selectConfig';
 import { executeSelectTarget } from './selectTarget';
 import { executeEnableClangdProxy } from './enableClangdProxy';
@@ -42,10 +43,6 @@ export function activateCommands(
   clangdOps?: ClangdOps,
   projectExplorer?: ProjectExplorerProvider,
 ): void {
-  // [Plan D] 把 Config 注入 CompletionModeController，让 rewriteClangd 能读 userAddFlags
-  if (clangd?.completionMode && typeof clangd.completionMode.setConfig === 'function') {
-    clangd.completionMode.setConfig(config);
-  }
   // 用本地计数器替代硬编码 20,避免后续增删命令时日志与实际不一致
   let commandCount = 0;
   const track = (label: string, fn: (...args: unknown[]) => unknown): void => {
@@ -79,6 +76,9 @@ export function activateCommands(
     executeSetSystemIncludes(config, logger, detection, workspace, clangdOps),
   );
   track('vscodeUEHelper.openWorkspaceFile', () => executeOpenWorkspaceFile(workspace));
+  track('vscodeUEHelper.openTerminalInNewWindow', (uri) =>
+    executeOpenTerminalInNewWindow(uri as vscode.Uri | undefined, logger),
+  );
   track('vscodeUEHelper.selectConfig', () => executeSelectConfig(config, logger));
   track('vscodeUEHelper.selectTarget', () => executeSelectTarget(config, logger));
   track('vscodeUEHelper.enableClangdProxy', () => executeEnableClangdProxy(config, logger, clangd));

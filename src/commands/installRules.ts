@@ -3,40 +3,19 @@
  *
  * 把插件内置的 .cursorrules / rules 文件复制到项目,让 Cursor / Claude Code
  * 等 AI 工具能感知 UE 项目结构,给出更好的代码补全和建议。
+ *
+ * 内容单一真相源：`@rules`（src/rules/cursorRules.ts）。
+ *   - Cursor: `.cursor/rules/*.mdc` 用 `UE_HELPER_RULES_MDC`（含 frontmatter）
+ *   - Copilot: `.github/copilot-instructions.md` 用 `UE_HELPER_COPILOT_INSTRUCTIONS`（纯 markdown）
  */
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { type Logger } from '@core/logger';
 import { t } from '@i18n';
 import type { WorkspaceState } from '@core/workspace';
-
-const RULES_CONTENT = `# UE Helper — AI Agent Rules
-
-These rules help AI coding assistants (Cursor, Claude Code, GitHub Copilot)
-work effectively with Unreal Engine C++ projects opened in this workspace.
-
-## Build & Live Coding
-
-- Use UBT (UnrealBuildTool) for builds — never try to compile .cpp files directly.
-- Prefer Live Coding for fast iteration when only headers changed.
-- All paths to engine binaries go through \`vscodeUEHelper.*\` settings or the
-  detection layer; do not hardcode engine paths.
-
-## Conventions
-
-- Use UCLASS / UPROPERTY / UFUNCTION macros as documented in Unreal Engine docs.
-- Generated.h files are auto-generated — do not edit them.
-- Module dependencies are declared in \`<Module>.Build.cs\` not in code.
-- Prefer TObjectPtr<T> over raw T* for UPROPERTY pointers (UE 5.0+).
-
-## Workflow
-
-- After editing .cpp/.h, suggest a Live Coding reload if only a header changed.
-- After editing .Build.cs or adding a new module, suggest a full Rebuild.
-- Surface compile errors in the Problems panel — never paper over them silently.
-`;
+import { UE_HELPER_RULES_MDC, UE_HELPER_COPILOT_INSTRUCTIONS } from '@rules';
 
 export async function executeInstallRules(
   logger: Logger,
@@ -49,17 +28,17 @@ export async function executeInstallRules(
     return;
   }
 
-  // Cursor: .cursor/rules/*.mdc
+  // Cursor: .cursor/rules/*.mdc（含 frontmatter）
   const cursorDir = path.join(root, '.cursor', 'rules');
   await fs.mkdir(cursorDir, { recursive: true });
   const cursorFile = path.join(cursorDir, 'unreal-cpp.mdc');
-  await fs.writeFile(cursorFile, RULES_CONTENT, 'utf-8');
+  await fs.writeFile(cursorFile, UE_HELPER_RULES_MDC, 'utf-8');
 
-  // Copilot: .github/copilot-instructions.md
+  // Copilot: .github/copilot-instructions.md（纯 markdown，无 frontmatter）
   const ghDir = path.join(root, '.github');
   await fs.mkdir(ghDir, { recursive: true });
   const copilotFile = path.join(ghDir, 'copilot-instructions.md');
-  await fs.writeFile(copilotFile, RULES_CONTENT, 'utf-8');
+  await fs.writeFile(copilotFile, UE_HELPER_COPILOT_INSTRUCTIONS, 'utf-8');
 
   void vscode.window.showInformationMessage(
     t('installRules.installed', { 0: cursorFile, 1: copilotFile }),

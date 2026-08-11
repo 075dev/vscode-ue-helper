@@ -14,8 +14,8 @@
 
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
 import {

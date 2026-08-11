@@ -315,4 +315,40 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     expect(mockFillMissing).toHaveBeenCalled();
     expect(mockFillMissing.mock.calls[0]?.[0]).toBe(LINK_PATH);
   });
+
+  // [F2-18/E5] 多项目时取消 QuickPick → 直接返回,不再静默落到 projects[0] 执行
+  it('多项目时取消 QuickPick 直接返回,不执行任何后续流程(F2-18/E5)', async () => {
+    mockPickProject.mockResolvedValue(undefined as never);
+    detection = {
+      ...detection,
+      ready: Promise.resolve({
+        projects: [
+          { path: PROJECT_PATH, name: 'MyGame' },
+          { path: 'C:\\UEProjects\\Other\\Other.uproject', name: 'Other' },
+        ],
+        engines: [{ path: ENGINE_PATH, version: '5.4' }],
+        workspaceFile: 'C:\\UEProjects\\MyGame\\MyGame.code-workspace',
+        workspaceRoot: 'C:\\UEProjects\\MyGame',
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      }),
+    } as unknown as DetectionHandles;
+
+    await executeGenerateCompileCommands(config, logger, detection);
+
+    expect(mockGenerateCompileCommands).not.toHaveBeenCalled();
+    expect(mockLinkToWorkspaceRoot).not.toHaveBeenCalled();
+    expect(mockAddCompletionHelper).not.toHaveBeenCalled();
+  });
+
+  // [F2-18/E5] 单项目时取消 QuickPick 自动选中唯一项目继续执行
+  it('单项目时取消 QuickPick 自动选中唯一项目(F2-18/E5)', async () => {
+    mockPickProject.mockResolvedValue(undefined as never);
+    // 默认 beforeEach 的 detection.ready 只有 1 个项目
+    await executeGenerateCompileCommands(config, logger, detection);
+
+    expect(mockGenerateCompileCommands).toHaveBeenCalled();
+    expect(mockAddCompletionHelper).toHaveBeenCalled();
+  });
 });

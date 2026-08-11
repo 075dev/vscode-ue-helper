@@ -214,10 +214,15 @@
   "openWorkspaceFile.noWorkspace": "No workspace open.",
   "openWorkspaceFile.notFound": "No .code-workspace file found in workspace roots.",
 
+  "openTerminalInNewWindow.invalidPath": "Cannot open terminal: target path is not a directory.",
+  "openTerminalInNewWindow.moveFailed": "Opened terminal in current window, but failed to move it to a new window (older VS Code version may not support this).",
+
   "cmd.noEngineSelected": "No Unreal Engine installation selected.",
   "cmd.noUprojectSelected": "No .uproject selected.",
   "cmd.noUnrealEngineSelected": "No Unreal Engine installation selected.",
   "cmd.noWorkspaceRoot": "No workspace root found.",
+  "cmd.buildCancelled": "Build cancelled.",
+  "cmd.buildInFlight": "A build is already running. Wait for it to finish.",
 
   "projectExplorer.name": "Project Explorer",
   "projectExplorer.openFailed": "Failed to open project file: {error}",

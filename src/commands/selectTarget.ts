@@ -6,8 +6,8 @@
  */
 
 import * as vscode from 'vscode';
-import { Config } from '@core/config';
-import { Logger } from '@core/logger';
+import { type Config } from '@core/config';
+import { type Logger } from '@core/logger';
 import { pickTarget } from '@ui/quickPicks';
 import { t } from '@i18n';
 

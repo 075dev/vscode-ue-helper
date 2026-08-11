@@ -11,11 +11,13 @@
  * - 只写 workspace 级别设置
  * - 委托 proxyManager 处理设置恢复
  * - 无备份时不抛出异常，仅显示警告
+ * - clangd.restart 单独 try-catch（对照 enableClangdProxy）：clangd 扩展未激活时该命令
+ *   不存在会 reject，此时设置已成功恢复，restart 失败仅 warn，不影响"禁用成功"结果
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { ClangdHandles } from '@clangd';
 import { t } from '@i18n';
 
@@ -36,16 +38,24 @@ export async function executeDisableClangdProxy(
     await config.update('clangdProxy.enabled', false);
 
     logger.info('[disableClangdProxy] proxy disabled, settings restored');
-
-    const choice = await vscode.window.showInformationMessage(
-      t('proxy.disable.success'),
-      t('proxy.disable.restartClangd'),
-    );
-    if (choice === t('proxy.disable.restartClangd')) {
-      await vscode.commands.executeCommand('clangd.restart');
-    }
   } catch (err) {
+    // 仅"设置恢复"本身失败才弹失败提示
     logger.error('[disableClangdProxy] failed:', err);
     void vscode.window.showErrorMessage(t('proxy.disable.failed'));
+    return;
+  }
+
+  // clangd.restart 移出主 try 块：clangd 扩展未激活时该命令未注册会 reject，
+  // 此时设置已成功恢复，restart 失败仅 warn，不影响"禁用成功"收尾。
+  const choice = await vscode.window.showInformationMessage(
+    t('proxy.disable.success'),
+    t('proxy.disable.restartClangd'),
+  );
+  if (choice === t('proxy.disable.restartClangd')) {
+    try {
+      await vscode.commands.executeCommand('clangd.restart');
+    } catch (err) {
+      logger.warn('[disableClangdProxy] clangd.restart failed, please restart clangd manually:', err);
+    }
   }
 }

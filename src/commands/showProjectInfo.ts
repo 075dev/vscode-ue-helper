@@ -10,8 +10,8 @@
  */
 
 import * as vscode from 'vscode';
-import { Config } from '@core/config';
-import { Logger } from '@core/logger';
+import { type Config } from '@core/config';
+import { type Logger } from '@core/logger';
 import { detectHost } from '@core/runtime-detect';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
