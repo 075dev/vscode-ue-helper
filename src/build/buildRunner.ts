@@ -14,7 +14,7 @@
  *      sharedSubprocessRegistry 统一杀进程树(兜底;AbortSignal 是主路径)
  */
 
-import { spawn, ChildProcessWithoutNullStreams, execFile } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { MsvcParser } from '@parsers/msvcParser';
 import { UbtParser } from '@parsers/ubtParser';
@@ -22,7 +22,7 @@ import {
   sharedSubprocessRegistry,
   type SubprocessRegistry,
 } from '@core/subprocessRegistry';
-import { BuildOptions, BuildResult } from './types';
+import { type BuildOptions, type BuildResult } from './types';
 import type { ParsedDiagnostic } from '@core/types/diagnostic';
 
 const execFileAsync = promisify(execFile);
@@ -64,15 +64,24 @@ export async function runBuild(
   return new Promise<BuildResult_>((resolve) => {
     let child: ChildProcessWithoutNullStreams;
     try {
-      // Windows: .bat / .cmd files cannot be spawned directly — Node returns
-      // EINVAL. Wrap with cmd.exe /c so the shell resolves the script.
+      // Windows: .bat / .cmd 文件不能直接被 spawn(Node 会抛 EINVAL),
+      // 必须用 cmd.exe /c 包装,让 shell 解析脚本。
+      // F1-1:cmd.exe 的 /c 对超过 2 个引号的参数会剥离首尾引号,引擎路径与
+      // 项目路径同时含空格时构建必失败(报"不是内部或外部命令")。因此把整条
+      // 命令拼成单个引号包裹的字符串交给 /d /s /c,并开启
+      // windowsVerbatimArguments 禁止 Node 对参数二次加引号。
       const isShellScript = cmd.file.endsWith('.bat') || cmd.file.endsWith('.cmd');
       const file = isShellScript ? 'cmd.exe' : cmd.file;
-      const args = isShellScript ? ['/c', cmd.file, ...cmd.args] : cmd.args;
+      const args = isShellScript
+        ? ['/d', '/s', '/c', `"${[cmd.file, ...cmd.args].join(' ')}"`]
+        : cmd.args;
       child = spawn(file, args, {
         cwd: cmd.cwd,
-        env: { ...process.env, ...(options.signal ? {} : {}) },
+        // env 直接透传 process.env(FIX-PLAN §8.20:原展开式是死代码)
+        env: process.env,
         windowsHide: true,
+        // 仅 shell 脚本需要;非 shell 路径保持 Node 默认的加引号行为
+        ...(isShellScript ? { windowsVerbatimArguments: true } : {}),
       });
       // [deactivate 子进程清理] 注册到 SubprocessRegistry,插件关闭时
       // 由 sharedSubprocessRegistry 兜底杀进程(防止 AbortSignal 没传时漏杀)
@@ -85,10 +94,14 @@ export async function runBuild(
     // Abort signal handling — must kill the whole process tree, not just
     // the top-level cmd.exe wrapper. On Windows we use `taskkill /T /F`
     // which walks the parent→child chain.
+    //
+    // [F2-3 资源清理] onAbort 必须具名:进程正常结束(close)但 signal 未 abort 时,
+    // 若不移除监听器,signal 会一直持有该监听器引用直到被 GC。once:true 只覆盖
+    // "abort 已触发"这一条路径,close 路径必须显式 removeEventListener。
+    const onAbort = (): void => {
+      void killTree(child);
+    };
     if (options.signal) {
-      const onAbort = (): void => {
-        void killTree(child);
-      };
       if (options.signal.aborted) { void onAbort(); }
       else { options.signal.addEventListener('abort', onAbort, { once: true }); }
     }
@@ -130,6 +143,8 @@ export async function runBuild(
     });
 
     child.on('close', (code) => {
+      // [F2-3] close 后移除 abort 监听器,防止 signal 持有已结束进程的引用
+      options.signal?.removeEventListener('abort', onAbort);
       // Drain remaining buffers.
       if (stdoutBuf) {
         flushLines(stdoutBuf + '\n', false);
@@ -146,6 +161,9 @@ export async function runBuild(
           durationMs: Date.now() - start,
           output: allOutput,
           diagnostics,
+          // [F2-1] 用户取消(taskkill 杀树)后 close 到达时标记 cancelled,
+          // 让命令层区分"取消"与"真实失败",取消不弹失败警告
+          cancelled: options.signal?.aborted ?? false,
         },
       });
     });

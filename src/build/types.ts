@@ -35,6 +35,11 @@ export interface UBTCommand {
 export interface BuildResult {
   /** Exit code from the build process. 0 = success. */
   exitCode: number;
+  /**
+   * [F2-1] 用户取消时为 true(AbortSignal abort 后 close 到达)。
+   * 命令层据此区分"用户取消"与"真实构建失败",取消时只弹中性提示。
+   */
+  cancelled?: boolean;
   /** Total duration in milliseconds. */
   durationMs: number;
   /** All stdout/stderr lines captured during the build. */

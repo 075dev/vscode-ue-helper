@@ -13,15 +13,15 @@
  */
 
 import * as vscode from 'vscode';
-import { Config } from '@core/config';
-import { UprojectScanner, EngineDiscovery } from '@detection';
+import { type Config } from '@core/config';
+import { type UprojectScanner, type EngineDiscovery } from '@detection';
 import { buildUBTCommand, resolveUBTPath } from './ubt';
-import { BuildTarget, BuildPlatform, BuildConfiguration } from '@core/config';
+import { type BuildTarget, type BuildPlatform, type BuildConfiguration } from '@core/config';
 
 export class UBTTaskProvider implements vscode.TaskProvider {
   constructor(
     scanner: UprojectScanner,
-    discovery: EngineDiscovery,
+    discovery: EngineDiscovery | null,
     private readonly config: Config,
   ) {
     // Suppress unused-parameter warnings — these are stashed for Phase 4

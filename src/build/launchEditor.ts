@@ -5,16 +5,13 @@
  *
  * 进程 detached —— 我们不等 Editor 退出,用户看到 Editor 窗口弹出后继续在 VS Code 工作。
  *
- * [deactivate 子进程清理] 子进程仍注册到 SubprocessRegistry —— 决策是"全部都杀"。
- * 实际效果:detached + `start ""` 启动的进程组,Windows taskkill /F /T 能杀掉
- * cmd.exe 包装层,但 UnrealEditor.exe 可能已独立成新进程组(取决于 UBT 启动方式),
- * best-effort 不保证。
+ * [F2-12] Editor 由用户管理生命周期,不接入 SubprocessRegistry:插件 deactivate 不应杀掉
+ * 用户手动启动的编辑器。detached + stdio ignore + unref 让 Editor 完全独立于扩展进程存活。
  */
 
 import { spawn } from 'node:child_process';
 import { resolveEditorPath } from './ubt';
-import { BuildPlatform } from '@core/config';
-import { sharedSubprocessRegistry } from '@core/subprocessRegistry';
+import { type BuildPlatform } from '@core/config';
 
 export interface LaunchOptions {
   /** Absolute path to engine root. */
@@ -40,8 +37,9 @@ export async function launchEditor(opts: LaunchOptions): Promise<void> {
     stdio: 'ignore',
     windowsHide: false,
   });
-  // [deactivate 子进程清理] 注册到 registry,best-effort 杀进程树
-  sharedSubprocessRegistry.register(child, 'Unreal Editor launch');
+  // [F2-12] 不接入 SubprocessRegistry:Editor 生命周期归用户,deactivate 不应杀。
+  // unref() 让 Node 不因该子进程句柄而挂住事件循环,配合 detached 保持完全独立。
+  child.unref();
 
   // Give the OS a moment to spawn before resolving.
   await new Promise((resolve) => setTimeout(resolve, 500));

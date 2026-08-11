@@ -17,7 +17,7 @@
  */
 
 import * as path from 'node:path';
-import { UBTArgs, UBTCommand } from './types';
+import { type UBTArgs, type UBTCommand } from './types';
 
 /**
  * Map a `BuildTarget` type + .uproject path to UBT's concrete target name.

@@ -28,7 +28,13 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { runBuild } from '@build/buildRunner';
 import { SubprocessRegistry } from '@core/subprocessRegistry';
 
-const spawnCalls: Array<{ cmd: string; args: readonly string[] }> = [];
+const spawnCalls: Array<{
+  cmd: string;
+  args: readonly string[];
+  opts?: Record<string, unknown>;
+}> = [];
+// [F2-1/F2-3] 记录 mock spawn 返回的 child,便于测试手动 emit 'close' 模拟进程退出
+const spawnedChildren: ChildProcessWithoutNullStreams[] = [];
 const execFileCalls: Array<{ cmd: string; args: readonly string[] }> = [];
 
 vi.mock('node:child_process', async () => {
@@ -40,10 +46,11 @@ vi.mock('node:child_process', async () => {
     spawn: (
       cmd: string,
       args: readonly string[],
-      _opts?: unknown,
+      opts?: unknown,
     ): ChildProcessWithoutNullStreams => {
-      spawnCalls.push({ cmd, args });
+      spawnCalls.push({ cmd, args, opts: opts as Record<string, unknown> | undefined });
       const emitter = new EE() as unknown as ChildProcessWithoutNullStreams;
+      spawnedChildren.push(emitter);
       // 模拟 spawn 后立刻有 PID
       Object.defineProperty(emitter, 'pid', { value: 54321, configurable: true });
       Object.defineProperty(emitter, 'stdout', { value: emitter, configurable: true });
@@ -68,7 +75,8 @@ vi.mock('node:child_process', async () => {
       execFileCalls.push({ cmd, args });
       const cp = new EE() as unknown as import('node:child_process').ChildProcess;
       if (cb) {
-        Promise.resolve().then(() => cb(null));
+        // 用 microtask 异步触发 callback;void 标记有意忽略返回的 Promise
+        void Promise.resolve().then(() => cb(null));
       }
       return cp;
     },
@@ -80,6 +88,7 @@ describe('buildRunner SubprocessRegistry 兜底 (P1 集成)', () => {
 
   beforeEach(() => {
     spawnCalls.length = 0;
+    spawnedChildren.length = 0;
     execFileCalls.length = 0;
     // 用 fresh registry 避免与 subprocessRegistry.test.ts 共享单例状态
     registry = new SubprocessRegistry();
@@ -116,6 +125,40 @@ describe('buildRunner SubprocessRegistry 兜底 (P1 集成)', () => {
     expect(registry.size).toBe(1);
 
     // 不 await resultPromise —— fake child 永远不会 close,race 后让 test 继续
+    void Promise.race([
+      resultPromise,
+      new Promise((r) => setTimeout(r, 10)),
+    ]);
+  });
+
+  it('引擎与项目路径均含空格时,cmd /s /c 单引号包裹整条命令并开 windowsVerbatimArguments (F1-1)', async () => {
+    // 引擎路径与项目路径都含空格是 UE 最常见布局,F1-1 回归用例
+    const resultPromise = runBuild(
+      {
+        file: 'D:/Epic Games/UE_5.2/Engine/Build/BatchFiles/RunUBT.bat',
+        args: [
+          'Win64 Development',
+          '-Project="D:/My Game Project/MyGame.uproject"',
+        ],
+      },
+      {},
+      registry,
+    );
+
+    await new Promise((r) => setTimeout(r, 5));
+
+    // 断言 spawn 包装形态:cmd.exe + ['/d','/s','/c','"<完整命令>"']
+    expect(spawnCalls.length).toBe(1);
+    expect(spawnCalls[0]?.cmd).toBe('cmd.exe');
+    expect(spawnCalls[0]?.args).toEqual([
+      '/d',
+      '/s',
+      '/c',
+      '"D:/Epic Games/UE_5.2/Engine/Build/BatchFiles/RunUBT.bat Win64 Development -Project="D:/My Game Project/MyGame.uproject""',
+    ]);
+    // shell 脚本路径必须开 windowsVerbatimArguments,禁止 Node 二次加引号
+    expect(spawnCalls[0]?.opts?.windowsVerbatimArguments).toBe(true);
+
     void Promise.race([
       resultPromise,
       new Promise((r) => setTimeout(r, 10)),
@@ -185,6 +228,77 @@ describe('buildRunner SubprocessRegistry 兜底 (P1 集成)', () => {
     expect(taskkillCalls.length).toBeGreaterThanOrEqual(1);
 
     void resultPromise;
+  });
+
+  it('abort 后 close 结果标记 cancelled=true,不再被误报为构建失败 (F2-1)', async () => {
+    const ac = new AbortController();
+    const resultPromise = runBuild(
+      {
+        file: 'D:/fake/RunUBT.bat',
+        args: ['-Target=MyGame Win64 Development -Project=D:/fake/MyGame.uproject'],
+      },
+      { signal: ac.signal },
+      registry,
+    );
+
+    await new Promise((r) => setTimeout(r, 5));
+    expect(spawnCalls.length).toBe(1);
+
+    // 用户取消:onAbort → killTree (taskkill /F /T)
+    ac.abort();
+    await new Promise((r) => setTimeout(r, 10));
+
+    // taskkill 杀树后 child 退出,close 到达 (模拟非 0 exitCode)
+    const child = spawnedChildren[0];
+    if (!child) {
+      throw new Error('fake child not spawned');
+    }
+    child.emit('close', 1);
+
+    const result = await resultPromise;
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // [F2-1] 核心断言:取消路径必须带 cancelled=true
+      expect(result.value.cancelled).toBe(true);
+      expect(result.value.exitCode).toBe(1);
+    }
+  });
+
+  it('close 后 abort 监听器被移除,再 abort 不再触发 taskkill (F2-3 防泄漏)', async () => {
+    const ac = new AbortController();
+    const resultPromise = runBuild(
+      {
+        file: 'D:/fake/RunUBT.bat',
+        args: ['-Target=MyGame Win64 Development -Project=D:/fake/MyGame.uproject'],
+      },
+      { signal: ac.signal },
+      registry,
+    );
+
+    await new Promise((r) => setTimeout(r, 5));
+    expect(spawnCalls.length).toBe(1);
+
+    // 进程正常结束 (exitCode 0,未 abort)
+    const child = spawnedChildren[0];
+    if (!child) {
+      throw new Error('fake child not spawned');
+    }
+    child.emit('close', 0);
+
+    const result = await resultPromise;
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.cancelled).toBe(false);
+      expect(result.value.exitCode).toBe(0);
+    }
+
+    // [F2-3] close 后 abort 监听器已被 removeEventListener:
+    // 记录当前 taskkill 次数,再 abort,次数不应增加
+    const before = execFileCalls.filter((c) => c.cmd === 'taskkill').length;
+    ac.abort();
+    await new Promise((r) => setTimeout(r, 10));
+    const after = execFileCalls.filter((c) => c.cmd === 'taskkill').length;
+    expect(after).toBe(before);
   });
 
   it('重复 runBuild 调用各自注册到同一 registry (multi-build 场景)', async () => {

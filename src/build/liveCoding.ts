@@ -12,7 +12,7 @@
 
 import { spawn } from 'node:child_process';
 import { resolveLiveCodingCmd } from './ubt';
-import { BuildPlatform } from '@core/config';
+import { type BuildPlatform } from '@core/config';
 import { sharedSubprocessRegistry } from '@core/subprocessRegistry';
 
 export interface LiveCodingOptions {
