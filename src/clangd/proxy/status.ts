@@ -20,6 +20,8 @@
 export interface ClangdProxyStatus {
   /** 配置中是否启用了 proxy */
   enabled: boolean;
+  /** proxy 当前是否实际激活（clangd.path 指向本扩展 launcher） */
+  active: boolean;
   /** launcher 脚本的完整路径 */
   launcherPath: string;
   /** 真实 clangd 二进制路径（配置中指定，undefined = 自动检测） */
@@ -48,6 +50,8 @@ export interface ClangdProxyStatus {
 export interface StatusDependencies {
   /** 配置中是否启用了 proxy */
   enabled: boolean;
+  /** proxy 当前是否实际激活（clangd.path 指向本扩展 launcher） */
+  active: boolean;
   /** launcher 路径 */
   launcherPath: string;
   /** 真实 clangd 路径 */
@@ -84,6 +88,7 @@ export interface StatusDependencies {
 export function buildStatus(deps: StatusDependencies): ClangdProxyStatus {
   return {
     enabled: deps.enabled,
+    active: deps.active,
     launcherPath: deps.launcherPath,
     realClangdPath: deps.realClangdPath,
     keepaliveMax: deps.keepaliveMax,

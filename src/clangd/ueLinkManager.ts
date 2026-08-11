@@ -10,17 +10,19 @@
  * 见 src/clangd/uhtGeneration.ts 的 REVERTED 注释。
  *
  * 真实有效加速（本文档实现）：
- *   1. mtime 跳过：保存但 mtime 未变 → 0ms 跳过 UHT（用户保存的非反射 .h / Ctrl+S 无变化）
+ *   1. 内容预过滤：读文件检查 UE 反射宏，非反射 .h 保存直接跳过（0ms）
+ *      （mtime 跳过层已删除（S3）：VS Code 每次保存都重写文件，mtime 恒变，
+ *        原"Ctrl+S 无变化→0ms 跳过"承诺无法成立，反射宏预过滤覆盖大部分场景）
  *   2. 5s 全局节流：5s 内多次保存合并成 1 次 UHT（避免连续保存 fork 多个 dotnet）
  *   3. 状态栏反馈：UHT 跑时显 `$(sync~spin) UE Sync`，让用户知道在等而不是卡住
  *
  * ## Rider 对比
  * Rider 通过 IPC 让 UE Editor 进程内嵌 UHT 跑——无 fork 开销。
- * 我们 fork 新 dotnet 进程（3-4s 是物理下界），但靠"无变更跳过 + 5s 节流"
+ * 我们 fork 新 dotnet 进程（3-4s 是物理下界），但靠"非反射头跳过 + 5s 节流"
  * 把常见保存场景压缩到 ~0ms 体感。
  *
  * ## 状态机
- *   idle        → 收到 onDidSave（白名单 + mtime 检查）
+ *   idle        → 收到 onDidSave（白名单 + 反射宏预过滤）
  *   debouncing  → 同文件 200ms 内多次保存合并
  *   throttled   → 距上次 UHT 启动 < 5s，setTimeout(remaining)
  *   running-uht → runUhtCodegen 在跑
@@ -82,8 +84,6 @@ export interface UeLinkSnapshot {
   lastUhtDurationMs: number;
   /** 最近一次 UHT 生成的 .generated.h 数（-1 = 未跑过） */
   lastGeneratedCount: number;
-  /** mtime 跳过的次数（性能指标） */
-  mtimeSkippedCount: number;
   /** 5s 节流合并的次数 */
   throttledMergedCount: number;
 }
@@ -100,7 +100,7 @@ export interface UeLinkManagerOptions {
 /* ------------------------------------------------------------------ */
 
 /**
- * 事件入口 + 状态机 + 5s 节流 + mtime 跳过 + 状态栏反馈。
+ * 事件入口 + 状态机 + 5s 节流 + 反射宏预过滤 + 状态栏反馈。
  *
  * 生命周期：
  *   - constructor: 订阅 onDidSaveTextDocument + 创建 status bar
@@ -113,11 +113,13 @@ export class UeLinkManager implements vscode.Disposable {
   private lastUhtCompletedAt = 0;
   private lastUhtDurationMs = 0;
   private lastGeneratedCount = -1;
-  private mtimeSkippedCount = 0;
   private throttledMergedCount = 0;
 
-  /** .h 文件最近一次 UHT 处理时的 mtime（毫秒）。mtime 未变 → 跳过。 */
-  private readonly lastHandledMtime = new Map<string, number>();
+  /**
+   * [W18 running-uht 守卫] UHT 运行中收到的新保存请求（待当前 UHT 完成后补跑）。
+   * null = 无 pending。
+   */
+  private pendingRerunFile: string | null = null;
 
   /* ── 依赖 ── */
   private readonly config: Config;
@@ -145,7 +147,7 @@ export class UeLinkManager implements vscode.Disposable {
     );
     this.statusBarItem.name = 'UE Helper: Link Sync';
     this.statusBarItem.command = undefined; // 无命令，只显示状态；hover 看详情
-    this.statusBarItem.tooltip = 'UE Link: 保存 .h 后自动触发 UHT codegen（mtime 跳过 + 5s 节流）';
+    this.statusBarItem.tooltip = 'UE Link: 保存 .h 后自动触发 UHT codegen（反射宏预过滤 + 5s 节流）';
     this.statusBarItem.text = '$(check)  UE✓';
     this.statusBarItem.show();
 
@@ -166,16 +168,15 @@ export class UeLinkManager implements vscode.Disposable {
       lastUhtCompletedAt: this.lastUhtCompletedAt,
       lastUhtDurationMs: this.lastUhtDurationMs,
       lastGeneratedCount: this.lastGeneratedCount,
-      mtimeSkippedCount: this.mtimeSkippedCount,
       throttledMergedCount: this.throttledMergedCount,
     };
   }
 
-  /** 强制重置所有状态（包括 mtime 缓存 + 节流计时）。 */
+  /** 强制重置所有状态（pending 补跑标记 + 节流计时）。 */
   reset(): void {
     this.clearTimers();
+    this.pendingRerunFile = null;
     this.state = { kind: 'idle' };
-    this.lastHandledMtime.clear();
     this.updateStatusBar();
   }
 
@@ -268,34 +269,16 @@ export class UeLinkManager implements vscode.Disposable {
     }
 
     // 3. 内容预过滤：含 UE 反射宏才需要 UHT
-    // 这里不能直接读 fs（避免阻塞 onDidSave 同步路径），改用 mtime 命中跳过的策略：
-    // - 如果 mtime 未变 → 直接跳过（无需读内容，常见 case：Ctrl+S 触发但实际无变化）
-    // - 如果 mtime 变了 → 必须读内容判断是否含反射宏（用 fs.promises.stat + 异步读）
+    // 这里不能直接读 fs（避免阻塞 onDidSave 同步路径），统一在异步 handleSaveAsync
+    // 中读内容判断（mtime 层已删除（S3）：VS Code 每次保存都重写文件，mtime 恒变，
+    // 原"Ctrl+S 无变化→0ms 跳过"承诺无法成立，反射宏预过滤覆盖大部分场景）
     void this.handleSaveAsync(uri);
   }
 
   private async handleSaveAsync(uri: vscode.Uri): Promise<void> {
     const fsPath = uri.fsPath;
 
-    // 3a. mtime 快速路径：同文件 mtime 未变 → 跳过
-    let mtimeMs = 0;
-    try {
-      const stat = await vscode.workspace.fs.stat(uri);
-      mtimeMs = stat.mtime;
-    } catch {
-      // 文件可能在保存后立即被其他工具修改；保守起见继续走 UHT
-    }
-    const lastMtime = this.lastHandledMtime.get(fsPath);
-    if (lastMtime !== undefined && lastMtime === mtimeMs && mtimeMs > 0) {
-      this.mtimeSkippedCount++;
-      this.logger.info(
-        `[ueLink] mtime unchanged, skip UHT: ${path.basename(fsPath)} (skip count=${this.mtimeSkippedCount})`,
-      );
-      this.updateStatusBar();
-      return;
-    }
-
-    // 3b. 内容预过滤：读磁盘检查是否含 UE 反射宏
+    // 3. 内容预过滤：读磁盘检查是否含 UE 反射宏（不含 → 跳过 UHT）
     let content: string;
     try {
       const bytes = await vscode.workspace.fs.readFile(uri);
@@ -304,27 +287,32 @@ export class UeLinkManager implements vscode.Disposable {
       return;
     }
     if (!REFLECTION_MACRO_RE.test(content)) {
-      // 不是反射头，记录 mtime（下次 Ctrl+S 同文件 mtime 还会变，但内容不会改回反射宏）
-      // 仍记录 mtime 避免下次重复读 fs
-      if (mtimeMs > 0) {
-        this.lastHandledMtime.set(fsPath, mtimeMs);
-      }
+      // 非反射头：跳过 UHT（下次保存会重新读内容判断，无 mtime 缓存可跳过）
       this.logger.info(`[ueLink] no reflection macro, skip UHT: ${path.basename(fsPath)}`);
       this.updateStatusBar();
       return;
     }
 
-    // 4. 含反射宏：记录 mtime + 走节流状态机
-    if (mtimeMs > 0) {
-      this.lastHandledMtime.set(fsPath, mtimeMs);
-    }
+    // 4. 含反射宏：走节流状态机
     this.scheduleRun(fsPath);
   }
 
   /* ── 状态机 ── */
 
   private scheduleRun(file: string): void {
-    // 已经在 debouncing/throttled/running：清掉旧 timer，更新状态
+    // [W18 running-uht 守卫] UHT 运行中收到新保存 → 挂 pending 标记，
+    // 当前 UHT 完成后补跑一次。
+    // 背景：节流基准 lastUhtCompletedAt 是"完成时间"，UHT 运行期间它不会更新，
+    // 直接走下面的节流逻辑会算出 sinceLastUht=Infinity，200ms 后并发启动第二个 UHT。
+    if (this.state.kind === 'running-uht') {
+      this.pendingRerunFile = file;
+      this.logger.info(
+        `[ueLink] UHT running, queued re-run for: ${path.basename(file)}`,
+      );
+      return;
+    }
+
+    // 已经在 debouncing/throttled：清掉旧 timer，更新状态
     this.clearTimers();
 
     // 全局节流：如果距上次 UHT 启动 < 5s，等剩余时间
@@ -400,6 +388,8 @@ export class UeLinkManager implements vscode.Disposable {
       this.lastUhtCompletedAt = performance.now();
       this.lastUhtDurationMs = performance.now() - startMs;
       this.updateStatusBar();
+      // [W18] UHT 已结束：补跑运行期间挂起的保存请求（若有）
+      this.drainPendingRerun();
       return;
     }
 
@@ -416,6 +406,8 @@ export class UeLinkManager implements vscode.Disposable {
       this.logger.warn(`[ueLink] UHT did not run: ${result.errorMessage ?? 'unknown'}`);
       this.state = { kind: 'error', message: result.errorMessage ?? 'UHT did not run' };
       this.updateStatusBar();
+      // [W18] UHT 已结束：补跑运行期间挂起的保存请求（若有）
+      this.drainPendingRerun();
       return;
     }
 
@@ -438,8 +430,12 @@ export class UeLinkManager implements vscode.Disposable {
     this.logger.info(
       `[ueLink] UHT done in ${this.lastUhtDurationMs.toFixed(0)}ms, ` +
         `generated ${result.generatedHeaderCount} .generated.h, ` +
-        `triggered reparse (mtime skip=${this.mtimeSkippedCount}, throttled=${this.throttledMergedCount})`,
+        `triggered reparse (throttled=${this.throttledMergedCount})`,
     );
+    // [W18] UHT 已结束：补跑运行期间挂起的保存请求（若有）。
+    // 注意 drainPendingRerun 会走 scheduleRun 把 state 切到 throttled/debouncing，
+    // 下面 1s 的 notify→idle 回调检查 state.kind === 'notify'，不会误改新状态。
+    this.drainPendingRerun();
     // 1s 后回到 idle（让用户看到 "Synced" 状态一会儿）
     setTimeout(() => {
       if (this.state.kind === 'notify') {
@@ -449,6 +445,25 @@ export class UeLinkManager implements vscode.Disposable {
         }
       }
     }, 1000);
+  }
+
+  /**
+   * [W18 running-uht 守卫] UHT 运行结束后补跑挂起的保存请求。
+   * 只在 UHT 确实跑过一轮后调用（catch / !ran / notify 三处完成路径）。
+   */
+  private drainPendingRerun(): void {
+    if (this.disposed) {
+      return;
+    }
+    const pending = this.pendingRerunFile;
+    if (pending === null) {
+      return;
+    }
+    this.pendingRerunFile = null;
+    this.logger.info(
+      `[ueLink] UHT finished, re-running queued save: ${path.basename(pending)}`,
+    );
+    this.scheduleRun(pending);
   }
 
   private clearTimers(): void {
@@ -473,7 +488,7 @@ export class UeLinkManager implements vscode.Disposable {
         tooltip =
           `UE Link: idle. ` +
           `Last UHT: ${this.lastUhtDurationMs > 0 ? `${this.lastUhtDurationMs.toFixed(0)}ms ago, ${this.lastGeneratedCount} headers` : 'never'}. ` +
-          `Stats: mtime skip=${this.mtimeSkippedCount}, throttled merge=${this.throttledMergedCount}.`;
+          `Stats: throttled merge=${this.throttledMergedCount}.`;
         break;
       case 'debouncing':
         text = '$(edit)  UE…';

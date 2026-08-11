@@ -14,9 +14,11 @@
  *     实际值被忽略 —— T2.1 后 fast/slow 已合并，统一 slow。
  *
  * 兼容性策略：
- *   - `setClangdOps / setProjectContext / setProjectPath / refresh / dispose` 接口保留
+ *   - `setClangdOps / setProjectContext / setProjectPath` 接口保留
  *     以兼容现有调用点（`src/clangd/index.ts`、测试）。
- *   - `setConfig` 新增 —— 注入 Config 以读 userAddFlags（Phase 8 完整流程必须注入）。
+ *   - `config` 由 constructor 直接注入（Phase 8 完整流程必须注入）。
+ *   - `setConfig` 方法已删除（config 构造期注入，无后置注入路径）。
+ *   - `refresh / dispose` 空实现已删除（状态栏按钮已删，无调用方）。
  *   - `toggle()` 方法已删除。
  *   - `ToggleResult` 类型已删除。
  */
@@ -40,21 +42,14 @@ export interface CompletionModeProjectContext {
   engineRoot?: string;
 }
 
-export type RewriteWarning = 'missingProjectPath' | 'no-clangdOps' | 'no-config' | 'writeFailed';
+export type RewriteWarning = 'missingProjectPath' | 'no-clangdOps' | 'writeFailed';
 
 export class CompletionModeController {
   private projectContext: CompletionModeProjectContext | null = null;
   private clangdOps: ClangdOps | null = null;
-  /** [Plan D] 注入 Config（用于读 userAddFlags） */
-  private config: Config | null = null;
 
-  // 保留 constructor 兼容旧调用点
-  constructor(_config: Config) {}
-
-  /** [Plan D] 注入 Config。后续 rewriteClangd 通过它读 userAddFlags。 */
-  setConfig(config: Config): void {
-    this.config = config;
-  }
+  /** [Plan D] constructor 注入 Config（用于读 userAddFlags）。 */
+  constructor(private readonly config: Config) {}
 
   /** [Phase 8] 注入 ClangdOps（推荐路径）。 */
   setClangdOps(ops: ClangdOps): void {
@@ -77,15 +72,12 @@ export class CompletionModeController {
    * 签名仍接受一个可选 `mode` 参数仅为兼容旧调用点（test 中 `rewriteClangd('slow')`）；
    * 实际值被忽略 —— T2.1 后 fast/slow 已合并，统一 slow。
    *
-   * @returns RewriteResult: written=false 表示缺少项目路径/ClangdOps/Config 或写入失败
+   * @returns RewriteResult: written=false 表示缺少项目路径/ClangdOps 或写入失败
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async rewriteClangd(_mode?: unknown): Promise<RewriteResult> {
     if (!this.clangdOps) {
       return { written: false, warning: 'no-clangdOps' };
-    }
-    if (!this.config) {
-      return { written: false, warning: 'no-config' };
     }
 
     const projectPath = this.projectContext?.projectPath;
@@ -111,10 +103,4 @@ export class CompletionModeController {
     }
     return { written: false, warning: 'writeFailed' };
   }
-
-  /** @deprecated 状态栏按钮已删除；保留为空实现以兼容可能引用此方法的旧调用点。 */
-  refresh(): void {}
-
-  /** @deprecated 状态栏按钮已删除；保留为空实现以兼容可能引用此方法的旧调用点。 */
-  dispose(): void {}
 }

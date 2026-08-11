@@ -94,7 +94,15 @@ const UE_MACRO_ERROR_PATTERNS: RegExp[] = [
  * ueErrorFiles.has 失败，onDidSave 不触发 UBT。规范化统一两者。
  */
 function normalizeFileUri(uri: string): string {
-  return decodeURIComponent(uri).replace(
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(uri);
+  } catch {
+    // [F2-7] 畸形 URI(非法百分号编码如 %zz)会抛 URIError,直接把 proxy 进程打死。
+    // 兜底:解码失败按原值返回,后续用原值参与匹配(多数场景仍可工作)。
+    return uri;
+  }
+  return decoded.replace(
     /^file:\/\/\/([a-zA-Z]):/,
     (_m, drive: string) => `file:///${drive.toUpperCase()}:`,
   );
@@ -202,6 +210,16 @@ export class UeDiagnosticWatcher {
    * UBT 进程漏到外部,变孤儿。
    */
   private currentUbtChild: ChildProcessWithoutNullStreams | null = null;
+  /**
+   * 聚合通知定时器(notifyClangd,1s 防抖)。
+   * 之前是 waitForGeneratedHeaderChanges 的局部变量,dispose 后仍在跑,
+   * 导致进程最多延迟退出且回调向已关闭的 bridge 发消息。
+   */
+  private notifyTimer: NodeJS.Timeout | null = null;
+  /** 30 秒兜底超时定时器(waitForGeneratedHeaderChanges 内),dispose 时必须清掉。 */
+  private watchTimeout: NodeJS.Timeout | null = null;
+  /** 是否已 dispose:定时器回调先检查再触碰 bridge,防止向已关闭的 bridge 发消息。 */
+  private disposed = false;
 
   private readonly minUbtIntervalMs: number;
   private readonly maxRetries: number;
@@ -501,7 +519,6 @@ export class UeDiagnosticWatcher {
       )
       .replace(/\\/g, '/');
 
-    let timeout: NodeJS.Timeout | null = null;
     const changedFiles: string[] = [];
 
     this.fileWatcher = chokidar.watch(pattern, {
@@ -516,6 +533,10 @@ export class UeDiagnosticWatcher {
     });
 
     const notifyClangd = (): void => {
+      // [F2-8] dispose 后不再向(可能已关闭的)bridge 注入通知
+      if (this.disposed) {
+        return;
+      }
       if (changedFiles.length === 0) {
         return;
       }
@@ -552,12 +573,16 @@ export class UeDiagnosticWatcher {
     // clangd 需重新解析。之前用 mtime 过滤，但 UBT 增量可能不改动文件（mtime 不变），
     // 导致不 inject、clangd 不 re-parse。去掉 mtime 过滤，inject 所有项目 .generated.h。
     const handleFile = (filePath: string): void => {
+      // [F2-8] dispose 后 chokidar 可能仍有残留事件,直接忽略
+      if (this.disposed) {
+        return;
+      }
       this.logger.info(`[ueDiagnosticWatcher] .generated.h detected: ${filePath}`);
       changedFiles.push(filePath);
-      if (timeout) {
-        clearTimeout(timeout);
+      if (this.notifyTimer) {
+        clearTimeout(this.notifyTimer);
       }
-      timeout = setTimeout(notifyClangd, 1000);
+      this.notifyTimer = setTimeout(notifyClangd, 1000);
     };
     this.fileWatcher.on('add', handleFile);
     this.fileWatcher.on('change', handleFile);
@@ -568,11 +593,15 @@ export class UeDiagnosticWatcher {
       this.logger.warn(`[ueDiagnosticWatcher] chokidar error: ${err.message}`);
     });
 
-    // 30 秒后超时清理
-    setTimeout(() => {
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
+    // 30 秒后超时清理。定时器句柄存实例字段 watchTimeout,
+    // dispose() 时同步 clearTimeout,避免进程最多延迟 30s 才退出。
+    this.watchTimeout = setTimeout(() => {
+      if (this.disposed) {
+        return;
+      }
+      if (this.notifyTimer) {
+        clearTimeout(this.notifyTimer);
+        this.notifyTimer = null;
       }
       notifyClangd(); // 即使没有变化也尝试通知（UBT 可能没改文件但可能修复了状态）
       this.disposeFileWatcher();
@@ -647,6 +676,20 @@ export class UeDiagnosticWatcher {
    * 现在先杀 UBT 子进程 + 整棵进程树,再 dispose chokidar watcher。
    */
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    // [F2-8] 先清掉定时器:不清理的话 1s 聚合/30s 兜底定时器继续跑,
+    // 进程最多延迟 30s 才退出,且回调还会向已关闭的 bridge 发消息。
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = null;
+    }
+    if (this.watchTimeout) {
+      clearTimeout(this.watchTimeout);
+      this.watchTimeout = null;
+    }
     if (this.currentUbtChild) {
       const child = this.currentUbtChild;
       this.currentUbtChild = null;

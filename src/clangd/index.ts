@@ -17,14 +17,13 @@
  *   - discoverSystemIncludes: 发现 MSVC + Windows SDK 路径
  */
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import * as path from 'node:path';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from './clangdOps';
 import type { DetectionHandles } from '@detection';
-import { WorkspaceBackup } from './workspaceBackup';
 import { CompletionModeController } from './completionMode';
 import { ClangdProxyManager } from './proxyManager';
 // [H1] 保存 .h 后自动触发 UHT codegen
@@ -133,7 +132,6 @@ export {
 
 export interface ClangdHandles {
   completionMode: CompletionModeController;
-  backup: WorkspaceBackup;
   proxyManager: ClangdProxyManager;
   /** [H1] 保存 .h 后自动 UHT codegen 入口。undefined 表示未激活。 */
   ueLink?: UeLinkManager;
@@ -152,9 +150,6 @@ export function activateClangd(
   if (clangdOps) {
     completionMode.setClangdOps(clangdOps);
   }
-  // [Phase 9 SSoT] WorkspaceBackup 接收 .uproject 路径走 WorkspaceState —— 删除 vscode.workspace.workspaceFolders 直读
-  // detection 未 ready 时 projectFile 为 null，WorkspaceBackup.snapshot/restore 自然 no-op（设计如此）
-  const backup = new WorkspaceBackup(workspace?.projectFile ?? '');
   // 传 workspace 引用而非 projectDir/engineRoot 快照：activateClangd 同步执行时 detection
   // 尚未 ready，读 workspace.projectDir 会触发 _notifyMissing 永久污染 getter。改成在
   // enable/buildProxyArgs 时动态读（此时 ready 已完成）。
@@ -222,16 +217,7 @@ export function activateClangd(
   });
 
   // Plan B: 状态栏按钮已删除（toggle 完成模式 → 命令面板项移除），CompletionModeController
-  //        现在仅承载 rewriteClangd() 用于首次激活/refresh，不再需要 show()/dispose()。
-  //        onDidChange 监听配置变化仍用于触发 .clangd 重写。
-  context.subscriptions.push(
-    config.onDidChange((e) => {
-      if (e.affectsConfiguration('vscodeUEHelper.completionMode')) {
-        // Plan B: fast/slow 等价后无需刷新 UI（无 status bar item），但保留 hook 触发 rewrite。
-        void completionMode.rewriteClangd();
-      }
-    }),
-  );
+  //        现在仅承载 rewriteClangd() 用于首次激活/refresh。
   context.subscriptions.push(ueMacroCompletionProvider);
   context.subscriptions.push(ueReflectionLinter);
 
@@ -303,9 +289,6 @@ export function activateClangd(
     logger.info(`[clangd] incremental watcher started for: ${projectDir}`);
   });
 
-  // TODO Phase 4: replace the WorkspaceBackup constructor argument with a real
-  // projectPath sourced from the detection layer (after the user picks one).
-  // For Phase 3 we just register the contract.
   logger.info('[clangd] activated (status bar + perf ready)');
-  return { completionMode, backup, proxyManager, ...(ueLink ? { ueLink } : {}) };
+  return { completionMode, proxyManager, ...(ueLink ? { ueLink } : {}) };
 }

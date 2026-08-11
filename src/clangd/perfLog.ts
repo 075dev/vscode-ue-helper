@@ -21,7 +21,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger, sharedLogger } from '@core/logger';
+import { type Logger, sharedLogger } from '@core/logger';
 import type { PerfEvent, PerfMetricSnapshot } from './types';
 
 /**

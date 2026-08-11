@@ -21,7 +21,7 @@
 import * as fs from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import * as path from 'node:path';
-import { Logger, sharedLogger } from '@core/logger';
+import { type Logger, sharedLogger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { getUeClangdCompatPath, getUeClangdCompatContent } from './ueClangdCompat';
 import { collectIntermediateUhtDirs } from './intermediateUhtCollector';
@@ -400,7 +400,7 @@ async function scanReflectedHeadersForEntries(projectDir: string): Promise<strin
  * 约束：
  *   - 不覆盖真实产物（任何路径写入前 fs.access 探测，存在则跳过）
  *   - 不为无反射宏的普通 .h 写 stub（噪声防护）
- *   - atomic write（先 .tmp 再 rename，参考 headerCache.recordHeader）
+ *   - atomic write（先 .tmp 再 rename）
  *
  * @returns stub 写入数 + stub 根目录绝对路径（用于加入 includeCandidates）
  */
@@ -630,13 +630,18 @@ export async function generateFallbackCompileCommands(
     // 丢弃后续诊断，导致某些关键错误（如 .generated.h 真正缺失）被截断隐藏。设为 0 让所有
     // 诊断都进入 Problems 面板，便于排查。注意：此 flag 仅影响 clangd 索引；真实编译仍走 UBT。
     '-ferror-limit=0',
-    ...[...includePaths].map((p) => `-I${p}`),
+    ...[...includePaths].map((p) => {
+      // [F2-10] 路径含空格/反斜杠时,直接拼 `-I${p}` 会被 clangd 按空格拆裂。
+      // 反斜杠转正斜杠(Windows 路径统一) + 引号包裹,保证 command 里是单个 token。
+      return `-I"${p.replace(/\\/g, '/')}"`;
+    }),
     // [-include 兼容头] fallback 路径下 .generated.h 可能缺失或过期，强制在所有其他 include
     // 之前 include ueClangdCompat.h。重写 BODY_MACRO_COMBINE 后，UCLASS() / GENERATED_BODY()
     // 仍能展开为合法 C++ stub，避免 clangd 报 unknown_typename 以及后续补全失效。
     // 注意：此 -include 仅影响 clangd 索引；真实编译仍由真正的 .generated.h 驱动。
     '-include',
-    compatPath,
+    // [F2-10] compatPath 同样处理:反斜杠转正斜杠 + 引号包裹,防路径含空格时被拆裂
+    `"${compatPath.replace(/\\/g, '/')}"`,
   ];
 
   const entries = allSourceFiles.map((file) => ({

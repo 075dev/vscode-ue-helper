@@ -26,7 +26,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { Logger, sharedLogger } from '@core/logger';
+import { type Logger, sharedLogger } from '@core/logger';
 
 /** LSP 帧方向 */
 export type LspFrameDirection = 'in' | 'out';

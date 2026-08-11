@@ -116,7 +116,6 @@ function createDetectionHandles(): DetectionHandles {
   return {
     scanner: { maxResults: 1 } as never,
     discovery: {} as never,
-    vsBuildTools: {} as never,
     workspaceContext: {} as never,
     ready: Promise.resolve({
       projects: [project],

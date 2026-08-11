@@ -296,6 +296,55 @@ describe('tryCompileCommandsFastPath', () => {
       expect(result.cachedCcPath).toBeUndefined();
     }
   });
+
+  it('[W10/F2-4] 引擎根共享 DB 被另一项目覆盖 → 内容哈希不一致 → miss', async () => {
+    // 模拟引擎根：DB 位于 projectDir 之外（共享位置，多项目共用）
+    const engineRoot = await fs.mkdtemp(path.join(tmpdir(), 'cc-engine-shared-'));
+    try {
+      const ccPath = path.join(engineRoot, 'compile_commands.json');
+      await fs.writeFile(ccPath, '[{"directory": "/projectA"}]', 'utf-8');
+
+      // 项目 A 首次生成 → 写缓存（共享 DB 应记录内容哈希 ccContentHash）
+      await writeCompileCommandsCache(projectDir, ccPath, { engineRoot, logger: undefined });
+      const cache = new CompileCommandsCache();
+      const entry = await cache.tryRead(projectDir);
+      expect(entry?.ccContentHash).toBeDefined();
+
+      // 首次 fast path：内容一致 → hit
+      const first = await tryCompileCommandsFastPath(projectDir, undefined, engineRoot);
+      expect(first.hit).toBe(true);
+
+      // 项目 B 在同一引擎根上重新生成 → 覆盖共享 DB 文件
+      await fs.writeFile(ccPath, '[{"directory": "/projectB"}]', 'utf-8');
+
+      // 项目 A 再次 fast path：内容哈希不一致 → miss（不得命中错误/陈旧 DB）
+      const second = await tryCompileCommandsFastPath(projectDir, undefined, engineRoot);
+      expect(second.hit).toBe(false);
+      if (!second.hit && !('error' in second)) {
+        expect(second.hadCache).toBe(true);
+        expect(second.cachedCcPath).toBe(ccPath);
+      }
+    } finally {
+      await fs.rm(engineRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('[W10/F2-4] 项目本地 DB（projectDir 内）无共享风险 → 不记录内容哈希、不做内容校验', async () => {
+    const ccPath = path.join(projectDir, 'compile_commands.json');
+    await fs.writeFile(ccPath, '[]', 'utf-8');
+
+    await writeCompileCommandsCache(projectDir, ccPath, { logger: undefined });
+
+    // 项目本地 DB：不记录 ccContentHash
+    const cache = new CompileCommandsCache();
+    const entry = await cache.tryRead(projectDir);
+    expect(entry?.ccContentHash).toBeUndefined();
+
+    // 本地 DB 内容变更（fingerprint 未变）→ 仍应命中（仅共享 DB 才做内容校验）
+    await fs.writeFile(ccPath, '[{"directory": "/local-changed"}]', 'utf-8');
+    const result = await tryCompileCommandsFastPath(projectDir);
+    expect(result.hit).toBe(true);
+  });
 });
 
 describe('writeCompileCommandsCache', () => {

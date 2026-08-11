@@ -17,7 +17,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { Logger } from '@core/logger';
+import { type Logger } from '@core/logger';
 import type { CachedCompileCommands } from './types';
 
 /** 缓存大小上限 5MB（per Security 防御 2） */

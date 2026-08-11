@@ -24,13 +24,13 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
-import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { WorkspaceState } from '@core/workspace';
-import { ClangdConfig } from './types';
+import type * as vscode from 'vscode';
+import { type Logger } from '@core/logger';
+import { type WorkspaceState } from '@core/workspace';
+import { type ClangdConfig } from './types';
 // [Phase 9 SSoT] clangdOps 内部使用 clangdConfig（仅 defaultClangdConfig + renderClangdConfig——fs 写由本类 _atomicWrite 单一处理）
 // eslint-disable-next-line no-restricted-imports
-import { ClangdConfigOptions, defaultClangdConfig, renderClangdConfig } from './clangdConfig';
+import { type ClangdConfigOptions, defaultClangdConfig, renderClangdConfig } from './clangdConfig';
 
 export interface ClangdOpsOptions {
   workspace: WorkspaceState;

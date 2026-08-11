@@ -122,7 +122,6 @@ async function setupHarness(
   const ops = new ClangdOps({ workspace, logger });
   const config = new Config();
   const controller = new CompletionModeController(config);
-  controller.setConfig(config);
   controller.setClangdOps(ops);
 
   if (engineRoot) {
@@ -182,7 +181,6 @@ describe('CompletionModeController (Plan Add 收束)', () => {
       const ops = new ClangdOps({ workspace, logger });
       const config = new Config();
       const controller = new CompletionModeController(config);
-      controller.setConfig(config);
       controller.setClangdOps(ops);
 
       const result = await controller.rewriteClangd('slow');
@@ -203,7 +201,6 @@ describe('CompletionModeController (Plan Add 收束)', () => {
       });
       const config = new Config();
       const controller = new CompletionModeController(config);
-      controller.setConfig(config);
       controller.setProjectContext({ projectPath: path.join(projectDir, 'X.uproject') });
 
       const result = await controller.rewriteClangd('slow');
@@ -213,20 +210,7 @@ describe('CompletionModeController (Plan Add 收束)', () => {
     }
   });
 
-  it('Given Config 未注入 When rewriteClangd Then 返回 no-config', () => {
-    // 用 setConfig 不调：构造后控制器不知道 Config，应当返回 no-config。
-    const projectDir = '';
-    void projectDir;
-    const logger = new Logger('completionModeTestNoConfig');
-    // 直接构造：跳过 setupHarness。
-    const ctrl = new CompletionModeController({} as never);
-    // 不调 setConfig 也不调 setClangdOps；
-    // 但 on-call 验证 no-config 顺序很关键。先验证 no-clangdOps 在前。
-    void logger;
-    void ctrl;
-  });
-
-  it('Given 顺序敏感: 缺 config 与缺 clangdOps 时返回 no-clangdOps 优先', async () => {
+  it('Given 缺 clangdOps When rewriteClangd Then 返回 no-clangdOps 优先', async () => {
     const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cm-order-'));
     try {
       vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
@@ -237,11 +221,9 @@ describe('CompletionModeController (Plan Add 收束)', () => {
       });
       const config = new Config();
       const controller = new CompletionModeController(config);
-      controller.setConfig(config);
       controller.setProjectContext({ projectPath: path.join(projectDir, 'X.uproject') });
       const result = await controller.rewriteClangd('slow');
-      expect(result.written).toBe(false);
-      expect(['no-clangdOps', 'no-config']).toContain(result.warning);
+      expect(result).toEqual({ written: false, warning: 'no-clangdOps' });
     } finally {
       await fs.rm(projectDir, { recursive: true, force: true });
     }

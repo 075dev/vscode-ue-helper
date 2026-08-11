@@ -134,6 +134,14 @@ export interface CachedCompileCommands {
    * UBT 成功后覆盖为 undefined。
    */
   fallback?: boolean;
+  /**
+   * W10/F2-4: 共享 DB（引擎根等 projectDir 之外位置）的写入时内容哈希。
+   * 写缓存时对 ccPath 文件内容计算 SHA256 记录；快路径命中时重新计算当前
+   * ccPath 内容哈希比对——被其他项目覆盖后内容不一致 → 视为 miss 重新生成，
+   * 避免多项目共享引擎根 compile_commands.json 时错误静默命中（缓存串味）。
+   * 项目本地（projectDir 内）DB 无共享风险，不记录该字段。
+   */
+  ccContentHash?: string;
 }
 
 /**
@@ -147,20 +155,6 @@ export interface FingerprintResult {
   fingerprint: string;
   files: { path: string; size: number; mtimeMs: number }[];
   computedMs: number;
-}
-
-/**
- * 头文件 SHA256 + mtime 缓存条目
- *
- * 仅当 compile_commands 缓存命中（fingerprint 一致）时此缓存生效，
- * 避免 fingerprint 错误时给出过期数据。
- */
-export interface HeaderCacheEntry {
-  headerPath: string;
-  sha256: string;
-  mtimeMs: number;
-  sizeBytes: number;
-  recordedAt: string;
 }
 
 /**

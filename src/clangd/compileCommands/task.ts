@@ -35,7 +35,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import { type Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { getUbtPath, getBuildTargetNames } from '@clangd/ueHelpers';
 
@@ -69,6 +69,13 @@ const POWERSHELL_FILE_NAME = 'PowerShell.exe';
 
 /** Task 名称 */
 const UPDATE_COMPILE_COMMANDS_DBGCFG_NAME = 'unreal-clangd: Update Compile Commands';
+
+/**
+ * UBT 任务超时兜底：5 分钟。
+ * 任务卡死（无输出、进程挂起）时 reject,避免 executeShellTask 的 Promise 永不 settle。
+ * 正常完成路径（onDidEndTaskProcess）会 clearTimeout。
+ */
+const TASK_TIMEOUT_MS = 5 * 60 * 1000;
 
 /* ------------------------------------------------------------------ */
 /*  类型定义                                                            */
@@ -129,7 +136,15 @@ export function getShellQuoting(
  *   - cwd = unrealWorkspace（引擎根目录）
  *   - problemMatchers = ['$msCompile']
  *
- * @param signal AbortSignal 触发时立即 disposes listener + reject('Task cancelled')
+ * [F2-9] 相比原实现的三个修复：
+ *   1. 超时兜底：任务卡死 5 分钟无结束事件时 reject（TASK_TIMEOUT_MS）；
+ *   2. abort 分支不再只 dispose + reject——会通过 executeTask 解析出的 execution
+ *      引用（兜底扫 vscode.tasks.taskExecutions 按 task 对象匹配）调 terminate()
+ *      真正终止 UBT 子进程；
+ *   3. onDidEndTaskProcess 监听器在 executeTask 之前注册,避免任务先结束、
+ *      监听器还没就位的竞态（用 executions 集合匹配属于本调用的 execution）。
+ *
+ * @param signal AbortSignal 触发时终止 UBT 任务并 reject('Task cancelled')
  * @returns exit code（UBT -projectfiles 和 -mode=GenerateClangDataBase 可能返回 1，视为正常）
  */
 export function executeShellTask(
@@ -141,6 +156,12 @@ export function executeShellTask(
   signal?: AbortSignal,
 ): Promise<number> {
   return new Promise<number>((resolve, reject) => {
+    // [F2-9] signal 已 abort：直接拒绝,不再启动任务
+    if (signal?.aborted) {
+      reject(new Error('Task cancelled'));
+      return;
+    }
+
     // [Phase 11 SSoT 包 6] 反查 vscode.WorkspaceFolder 必须用原生 vscode API——vscode.Task(scope:) 签名只接受原生类型
     // eslint-disable-next-line no-restricted-syntax -- vscode.Task(scope:) 签名只接受原生 vscode.WorkspaceFolder
     const unrealFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd));
@@ -176,36 +197,90 @@ export function executeShellTask(
     log.info(`[compileCommands/task] executing: ${cmd} ${[...args].join(' ')}`);
     log.info(`[compileCommands/task] cwd: ${cwd}, shell: ${shellExec ?? 'default'}`);
 
-    vscode.tasks.executeTask(task).then(
-      (execution) => {
-        const disposable = vscode.tasks.onDidEndTaskProcess((e) => {
-          if (e.execution === execution) {
-            disposable.dispose();
-            if (e.exitCode === 0 || e.exitCode === 1) {
-              // UBT -projectfiles 和 -mode=GenerateClangDataBase 都可能返回 exit code 1
-              // 在成功场景下，对齐原版行为视为正常完成
-              log.info(`[compileCommands/task] task exited with code ${e.exitCode}`);
-              resolve(e.exitCode ?? -1);
-            } else {
-              reject(new Error(`UBT task exited with code ${e.exitCode}`));
-            }
-          }
-        });
+    /* ── [F2-9] settle 守卫 + 清理 ── */
+    // settled 保证 resolve/reject 只发生一次（超时 / abort / 结束事件三者竞速）
+    let settled = false;
+    /** 已由 executeTask 解析出的 execution（供 abort / 超时终止用）。 */
+    const executions = new Set<vscode.TaskExecution>();
 
-        // AbortSignal：参数化（per 拆分清理，去掉模块级全局变量）
-        if (signal) {
-          const onAbort = (): void => {
-            disposable.dispose();
-            reject(new Error('Task cancelled'));
-          };
-          if (signal.aborted) {
-            onAbort();
-          } else {
-            signal.addEventListener('abort', onAbort, { once: true });
+    const finish = (action: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+      endDisposable.dispose();
+      action();
+    };
+
+    // [F2-9] 超时兜底：任务卡死时 reject,并终止仍在运行的 UBT 任务
+    const timeout: NodeJS.Timeout = setTimeout(() => {
+      for (const exec of executions) {
+        try {
+          void exec.terminate();
+        } catch {
+          /* ignore */
+        }
+      }
+      finish(() => reject(new Error(`UBT task timed out after ${TASK_TIMEOUT_MS / 1000}s`)));
+    }, TASK_TIMEOUT_MS);
+
+    // [F2-9] onDidEndTaskProcess 监听器在 executeTask 之前注册,避免竞态。
+    // 用 executions 集合匹配——executeTask 解析成功后才把 execution 加入集合,
+    // 不会误匹配到其他 UBT 任务的结束事件。
+    const endDisposable = vscode.tasks.onDidEndTaskProcess((e) => {
+      if (!executions.has(e.execution)) {
+        return;
+      }
+      executions.delete(e.execution);
+      finish(() => {
+        if (e.exitCode === 0 || e.exitCode === 1) {
+          // UBT -projectfiles 和 -mode=GenerateClangDataBase 都可能返回 exit code 1
+          // 在成功场景下，对齐原版行为视为正常完成
+          log.info(`[compileCommands/task] task exited with code ${e.exitCode}`);
+          resolve(e.exitCode ?? -1);
+        } else {
+          reject(new Error(`UBT task exited with code ${e.exitCode}`));
+        }
+      });
+    });
+
+    // AbortSignal：参数化（per 拆分清理，去掉模块级全局变量）
+    const onAbort = (): void => {
+      // [F2-9] 真正终止 UBT 任务：优先用 executeTask 解析出的 execution 引用;
+      // 兜底扫 vscode.tasks.taskExecutions 按 task 对象匹配（abort 可能早于 executeTask 解析）
+      for (const exec of executions) {
+        try {
+          void exec.terminate();
+        } catch {
+          /* ignore */
+        }
+      }
+      for (const exec of vscode.tasks.taskExecutions) {
+        if (exec.task === task) {
+          try {
+            void exec.terminate();
+          } catch {
+            /* ignore */
           }
         }
+      }
+      finish(() => reject(new Error('Task cancelled')));
+    };
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    vscode.tasks.executeTask(task).then(
+      (execution) => {
+        executions.add(execution);
       },
-      (err) => reject(err),
+      (err) => finish(() => reject(err)),
     );
   });
 }

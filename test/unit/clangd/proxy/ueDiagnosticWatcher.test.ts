@@ -27,6 +27,12 @@ import {
 import type { LspBridge } from '@clangd/proxy/bridge';
 
 /**
+ * 测试注入 private 字段 currentUbtChild 用的类型。
+ * 避免 `as any` 触发 no-unsafe-member-access。
+ */
+type UbtChildInjection = { currentUbtChild: ChildProcessWithoutNullStreams | null };
+
+/**
  * 跟踪 execFile 调用的 mock 实现。
  *
  * vi.mock 必须在文件顶层(import 之前)声明,vitest 才会把它 hoist 到所有 import 之上,
@@ -49,7 +55,7 @@ vi.mock('node:child_process', async () => {
       execFileCalls.push({ cmd, args });
       const cp = new EE() as unknown as import('node:child_process').ChildProcess;
       if (cb) {
-        Promise.resolve().then(() => cb(null));
+        void Promise.resolve().then(() => cb(null));
       }
       return cp;
     },
@@ -181,8 +187,7 @@ describe('UeDiagnosticWatcher.dispose() kills in-flight UBT child (P0 regression
     const fakeChild = makeFakeUbtChild(12345);
 
     // 注入 private 字段(模拟 runUbt() spawn 后赋值的状态)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (watcher as any).currentUbtChild = fakeChild;
+    (watcher as unknown as UbtChildInjection).currentUbtChild = fakeChild;
 
     // 调 dispose (fire-and-forget: 内部 void killUbtTree().catch(...))
     watcher.dispose();
@@ -204,15 +209,13 @@ describe('UeDiagnosticWatcher.dispose() kills in-flight UBT child (P0 regression
   it('dispose() 后 currentUbtChild 被清空(防止重复杀)', () => {
     const watcher = makeWatcher();
     const fakeChild = makeFakeUbtChild(99999);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (watcher as any).currentUbtChild = fakeChild;
+    (watcher as unknown as UbtChildInjection).currentUbtChild = fakeChild;
 
     watcher.dispose();
 
     // 同步断言:dispose() 内部已把 currentUbtChild 置 null
     // (killUbtTree 异步,但字段同步清空)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((watcher as any).currentUbtChild).toBeNull();
+    expect((watcher as unknown as UbtChildInjection).currentUbtChild).toBeNull();
   });
 
   it('dispose() 在 currentUbtChild 为 null 时不调 taskkill(无 child 不杀)', () => {
@@ -228,8 +231,7 @@ describe('UeDiagnosticWatcher.dispose() kills in-flight UBT child (P0 regression
   it('dispose() 幂等:重复调用只杀一次', async () => {
     const watcher = makeWatcher();
     const fakeChild = makeFakeUbtChild(55555);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (watcher as any).currentUbtChild = fakeChild;
+    (watcher as unknown as UbtChildInjection).currentUbtChild = fakeChild;
 
     watcher.dispose();
     // 第二次 dispose:currentUbtChild 已被同步清空,内部 if (this.currentUbtChild) 直接跳过

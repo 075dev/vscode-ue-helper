@@ -12,7 +12,7 @@
  */
 
 import { genericTranslate } from './genericTranslator';
-import { UeDocLookup } from './ueDocLookup';
+import { type UeDocLookup } from './ueDocLookup';
 
 // ===== 词典实例（模块级单例） =====
 

@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { ProxyOverheadMeter } from '@clangd/perfProxy';
 import type { Logger } from '@core/logger';
 

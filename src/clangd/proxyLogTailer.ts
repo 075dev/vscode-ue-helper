@@ -18,8 +18,8 @@
  */
 
 import * as fs from 'node:fs';
-import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
+import type * as vscode from 'vscode';
+import { type Logger } from '@core/logger';
 
 /** 轮询间隔（毫秒）—— 平衡实时性与 CPU 开销 */
 const POLL_INTERVAL_MS = 500;

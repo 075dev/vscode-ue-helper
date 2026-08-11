@@ -142,8 +142,8 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     const entries = JSON.parse(raw) as Array<{ directory: string; command: string; file: string }>;
     expect(entries.length).toBeGreaterThan(0);
 
-    // 兼容头完整路径字面量(Windows / Unix 共用 path.sep,JSON 序列化时反斜杠成对出现,.includes 按字符串字面匹配)
-    const compatTail = `vscodeuehelper${path.sep}ueClangdCompat.h`;
+    // 兼容头完整路径字面量(统一正斜杠:command 里的路径已做反斜杠→正斜杠归一化,不能用 path.sep)
+    const compatTail = `vscodeuehelper${path.sep}ueClangdCompat.h`.replace(/\\/g, '/');
 
     for (const entry of entries) {
       // 1) -include 标志必须出现
@@ -243,7 +243,7 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     const entries = JSON.parse(raw) as Array<{ directory: string; command: string; file: string }>;
     expect(entries.length).toBeGreaterThan(0);
 
-    const fallbackGenTail = `vscodeuehelper${path.sep}fallback-generated`;
+    const fallbackGenTail = `vscodeuehelper${path.sep}fallback-generated`.replace(/\\/g, '/');
     for (const entry of entries) {
       expect(entry.command).toContain('-I');
       expect(entry.command).toContain(fallbackGenTail);
@@ -446,13 +446,61 @@ describe('generateFallbackCompileCommands (Intermediate/UHT 注入)', () => {
     const raw = await fs.readFile(ccPath, 'utf-8');
     const entries = JSON.parse(raw) as Array<{ command: string }>;
 
-    const uhtInCommand = entries.some((e) => e.command.includes(uhtDir));
+    // command 里路径已做反斜杠→正斜杠归一化,比较前同样归一化
+    const uhtInCommand = entries.some((e) => e.command.includes(uhtDir.replace(/\\/g, '/')));
     expect(uhtInCommand).toBe(true);
 
     // fallback-generated 不应被作为 stubDir 加入
-    const fallbackGenTail = `vscodeuehelper${path.sep}fallback-generated`;
+    const fallbackGenTail = `vscodeuehelper${path.sep}fallback-generated`.replace(/\\/g, '/');
     // fallback-generated 仍可能作为其它源目录被加入(非 stubDir 用途),这里只验证
     // manifest 路径确实被 include 了
     void fallbackGenTail;
+  });
+
+  /* ================================================================ */
+  /*  Case J: 含空格/反斜杠路径的 command 引号包裹 (F2-10)                */
+  /* ================================================================ */
+
+  it('Case J: 含空格路径的 -I 与 -include 被引号包裹且反斜杠转正斜杠', async () => {
+    // 项目放在含空格的子目录下(模拟真实 Windows 用户目录含空格)
+    const spaceDir = path.join(fixture.tmpDir, 'My Project');
+    const projectPath = path.join(spaceDir, 'MassTest.uproject');
+    await fs.mkdir(spaceDir, { recursive: true });
+    await fs.writeFile(projectPath, '{}', 'utf-8');
+
+    const gameDir = path.join(spaceDir, 'Source', 'Game');
+    await fs.mkdir(gameDir, { recursive: true });
+    await fs.writeFile(path.join(gameDir, 'Game.cpp'), '// game code', 'utf-8');
+
+    // 引擎根也含空格 → ENGINE_CORE_MODULES 的 include 候选路径含空格
+    const engineRoot = path.join(fixture.tmpDir, 'fake engine');
+    const coreDir = path.join(engineRoot, 'Source', 'Runtime', 'Core', 'Public');
+    await fs.mkdir(coreDir, { recursive: true });
+
+    const result = await generateFallbackCompileCommands({
+      project: projectPath,
+      engineRoot,
+    });
+    expect(result).toBeDefined();
+
+    const raw = await fs.readFile(result!.ccPath, 'utf-8');
+    const entries = JSON.parse(raw) as Array<{ command: string }>;
+    expect(entries.length).toBeGreaterThan(0);
+
+    // 1) 含空格的 include 路径必须被 -I"..." 包裹,且反斜杠已转正斜杠
+    const coreInclude = coreDir.replace(/\\/g, '/');
+    for (const entry of entries) {
+      expect(entry.command).toContain(`-I"${coreInclude}"`);
+    }
+
+    // 2) -include 后的 compat 头路径必须被引号包裹、无反斜杠、且含项目路径(空格目录)
+    const m = entries[0]!.command.match(/-include\s+("(?:[^"]+)"|\S+)/);
+    expect(m).toBeDefined();
+    const includeArg = m![1]!;
+    expect(includeArg.startsWith('"')).toBe(true);
+    expect(includeArg.endsWith('"')).toBe(true);
+    expect(includeArg).not.toContain('\\');
+    expect(includeArg).toContain('ueClangdCompat.h');
+    expect(includeArg).toContain('My Project');
   });
 });

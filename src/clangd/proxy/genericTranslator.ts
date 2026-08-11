@@ -363,8 +363,10 @@ function extractIdentifiers(text: string): { text: string; identifiers: string[]
     return `\x00ID${identifiers.length - 1}\x00`;
   });
   // 保护反引号中的代码
+  // 与单引号分支同构：压入带反引号的原文，而非压入占位符自身，
+  // 否则 restoreIdentifiers 恢复时会残留 \x00IDn\x00 占位符文本。
   result = result.replace(/`([^`]+)`/g, (_m, _id) => {
-    identifiers.push(`\x00ID${identifiers.length}\x00`);
+    identifiers.push(`\`${_id}\``);
     return `\x00ID${identifiers.length - 1}\x00`;
   });
   // 保护单引号中的标识符
@@ -462,7 +464,11 @@ export function genericTranslate(message: string): string | null {
   for (const template of TEMPLATES) {
     const match = protectedText.match(template.pattern);
     if (match) {
-      const groups = match.slice(1);
+      // 注意：TEMPLATES 的 translate 统一用 1-based 捕获组索引（g[1] = 第 1 个捕获组，
+      // 与 RegExpMatchArray 的 match[1] 对齐）。这里必须传完整 match 数组——
+      // 传 match.slice(1) 会把索引错位成 0-based,导致 g[1] 取到第 2 个捕获组
+      // （通常 undefined）,输出变成"无法undefined"之类的坏结果。
+      const groups: string[] = match;
       const translated = template.translate(groups, identifiers);
       // 对模板输出中的英文词汇进行短语翻译（仅短文本）
       let result = translated;

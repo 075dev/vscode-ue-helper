@@ -1,8 +1,8 @@
 /**
- * ueLinkManager.test.ts —— ueLinkManager 状态机 + mtime 跳过 + 5s 节流测试
+ * ueLinkManager.test.ts —— ueLinkManager 状态机 + 反射宏预过滤 + 5s 节流测试
  *
  * 覆盖：
- *   (a) 保存 .h → mtime 未变 → 0ms 跳过 UHT
+ *   (a) 同一文件再次保存（mtime 相同）→ 不走 mtime 跳过,节流后重跑 UHT
  *   (b) 保存 .h → 内容含反射宏 → 走 UHT codegen
  *   (c) 保存 .h → 不含反射宏 → 0ms 跳过 UHT
  *   (d) 5s 内多次保存 → 合并成 1 次 UHT
@@ -10,6 +10,8 @@
  *   (f) UHT 失败 → state=error，不弹错误通知
  *   (g) 非 .h 文件 → 0ms 跳过
  *   (h) 路径在 projectDir 外 → 0ms 跳过
+ *   (k) reset() 清掉 pending 补跑标记与节流状态
+ *   (l) UHT 运行中保存 → 不并发启动,完成后补跑一次（W18 running-uht 守卫）
  *
  * Mock 策略：
  *   - vi.mock('vscode')：控制 workspace API（stat/readFile/onDidSave/createStatusBarItem）
@@ -206,28 +208,32 @@ afterEach(() => {
 /* ─── 测试 ─── */
 
 describe('UeLinkManager', () => {
-  it('(a) mtime 未变 → 0ms 跳过 UHT（incremented mtimeSkippedCount）', async () => {
-    // Arrange：第一次保存（含反射宏）→ mtime 5000
+  it('(a) 同一文件再次保存（mtime 相同）→ 不走 mtime 跳过,节流后重跑 UHT', async () => {
+    // S3：mtime 层已删除——VS Code 每次保存都重写文件,mtime 恒变,
+    // 原"Ctrl+S 无变化→0ms 跳过"承诺不成立。相同 mtime 也走内容预过滤 + 节流。
     setupHappyUht();
     mockStatReturning(5000);
     mockReadFileReturning(SAMPLE_HEADER_WITH_REFLECTION);
     const mgr = makeManager();
+
+    // 第一次保存 → UHT codegen
     await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
-    // 跑 debounce 200ms + flush 微任务让 UHT promise resolve
     await vi.advanceTimersByTimeAsync(250);
     await flushMicrotasks();
     expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
     expect(mgr.snapshot().lastGeneratedCount).toBe(1);
 
-    // Act：第二次保存，mtime 还是 5000
+    // Act：第二次保存，mtime 还是 5000（内容仍含反射宏）
     mockStatReturning(5000);
     await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
     await vi.advanceTimersByTimeAsync(250);
     await flushMicrotasks();
 
-    // Assert：UHT 没被再调用，mtimeSkippedCount 增加
-    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
-    expect(mgr.snapshot().mtimeSkippedCount).toBeGreaterThanOrEqual(1);
+    // Assert：mtime 不再跳过——距上次完成 < 5s → 进 throttled,5s 后重跑
+    expect(mgr.snapshot().state).toBe('throttled');
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.runAllTimersAsync(); await flushMicrotasks();
+    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(2);
   });
 
   it('(b) 保存含反射宏的 .h → 走 UHT codegen', async () => {
@@ -238,15 +244,12 @@ describe('UeLinkManager', () => {
 
     // 提取到 const 避开 unbound-method + 顺手把诊断用 console.log 替换为正经断言
     // eslint-disable-next-line @typescript-eslint/unbound-method -- vitest mock accessor
-    const statMock = vi.mocked(vscode.workspace.fs.stat);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- vitest mock accessor
     const readFileMock = vi.mocked(vscode.workspace.fs.readFile);
-    expect(statMock).not.toHaveBeenCalled();
     expect(readFileMock).not.toHaveBeenCalled();
     await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
     await vi.advanceTimersByTimeAsync(250);
     await flushMicrotasks();
-    expect(statMock).toHaveBeenCalled();
+    // S3：mtime 层已删除,不再走 stat 快速路径;内容预过滤只读 readFile
     expect(readFileMock).toHaveBeenCalled();
     expect(mockRunUhtCodegen.mock.calls.length).toBeGreaterThanOrEqual(1);
 
@@ -390,27 +393,85 @@ describe('UeLinkManager', () => {
     expect(mockRunUhtCodegen).not.toHaveBeenCalled();
   });
 
-  it('(k) reset() 清掉所有状态包括 mtime 缓存', async () => {
-    setupHappyUht();
+  it('(k) reset() 清掉 pending 补跑标记 → UHT 完成后不再补跑', async () => {
+    // 第一次 UHT 用 deferred 挂起（保持在 running-uht 状态）
+    let resolveFirst!: (v: unknown) => void;
+    mockRunUhtCodegen.mockImplementationOnce(
+      () => new Promise((res) => { resolveFirst = res; }),
+    );
     mockStatReturning(5000);
     mockReadFileReturning(SAMPLE_HEADER_WITH_REFLECTION);
     const mgr = makeManager();
 
     await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
     await vi.advanceTimersByTimeAsync(250);
-    await vi.runAllTimersAsync(); await flushMicrotasks();
-    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
+    await flushMicrotasks();
+    expect(mgr.snapshot().state).toBe('running-uht');
 
-    // reset
+    // 运行中再保存 → 挂 pending
+    await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
+    await flushMicrotasks();
+
+    // reset() → pending 清掉,回到 idle
     mgr.reset();
+    expect(mgr.snapshot().state).toBe('idle');
 
-    // 第二次保存 mtime 还是 5000（未变）— 但 mtime 缓存被清，UHT 重新跑
-    mockRunUhtCodegen.mockClear();
-    mockStatReturning(5000);
+    // 当前 UHT 完成 → pending 已清,不再补跑
+    resolveFirst({
+      ran: true,
+      exitCode: 0,
+      generatedHeaderCount: 1,
+      generatedHeaderPaths: ['C:/proj/Intermediate/.../MyActor.generated.h'],
+      errorMessage: undefined,
+    });
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(5200);
+    await vi.runAllTimersAsync(); await flushMicrotasks();
+
+    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
+  });
+
+  it('(l) UHT 运行中保存 → 不并发启动,完成后补跑一次（W18 running-uht 守卫）', async () => {
+    // 第一次 UHT deferred 挂起,模拟 UHT 长时间运行
+    let resolveFirst!: (v: unknown) => void;
+    mockRunUhtCodegen.mockImplementationOnce(
+      () => new Promise((res) => { resolveFirst = res; }),
+    );
+    // 补跑那次用默认 happy 返回值
+    setupHappyUht();
+
+    mockStatReturning(1000);
+    mockReadFileReturning(SAMPLE_HEADER_WITH_REFLECTION);
+    const mgr = makeManager();
+
+    // 第一次保存 → debounce 200ms → 进入 running-uht
     await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
     await vi.advanceTimersByTimeAsync(250);
+    await flushMicrotasks();
+    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
+    expect(mgr.snapshot().state).toBe('running-uht');
+
+    // UHT 运行中再次保存 → 挂 pending,不并发启动第二个 UHT
+    mockStatReturning(2000);
+    await mgr.onDidSaveForTest(FILE_UNDER_SOURCE, 'cpp');
+    await vi.advanceTimersByTimeAsync(250);
+    await flushMicrotasks();
+    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
+    expect(mgr.snapshot().state).toBe('running-uht');
+
+    // 当前 UHT 完成 → 补跑一次（pending 触发,走 5s 节流）
+    resolveFirst({
+      ran: true,
+      exitCode: 0,
+      generatedHeaderCount: 1,
+      generatedHeaderPaths: ['C:/proj/Intermediate/.../MyActor.generated.h'],
+      errorMessage: undefined,
+    });
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(5200);
     await vi.runAllTimersAsync(); await flushMicrotasks();
 
-    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(1);
+    expect(mockRunUhtCodegen).toHaveBeenCalledTimes(2);
+    expect(mgr.snapshot().state).toBe('idle');
   });
 });

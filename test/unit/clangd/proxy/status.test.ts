@@ -25,6 +25,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 describe('buildStatus — 状态构建', () => {
   const defaultDeps: StatusDependencies = {
     enabled: false,
+    active: false,
     launcherPath: '/path/to/launcher',
     realClangdPath: undefined,
     keepaliveMax: 20,
@@ -41,6 +42,7 @@ describe('buildStatus — 状态构建', () => {
     const status = buildStatus(defaultDeps);
 
     expect(status.enabled).toBe(false);
+    expect(status.active).toBe(false);
     expect(status.launcherPath).toBe('/path/to/launcher');
     expect(status.realClangdPath).toBeUndefined();
     expect(status.keepaliveMax).toBe(20);
@@ -57,6 +59,13 @@ describe('buildStatus — 状态构建', () => {
   it('启用时 enabled 为 true', () => {
     const status = buildStatus({ ...defaultDeps, enabled: true });
     expect(status.enabled).toBe(true);
+  });
+
+  // ─── 激活状态 ───────────────────────────────────────────────
+
+  it('激活时 active 为 true', () => {
+    const status = buildStatus({ ...defaultDeps, active: true });
+    expect(status.active).toBe(true);
   });
 
   // ─── 真实 clangd 路径 ───────────────────────────────────────
@@ -105,6 +114,7 @@ describe('buildStatus — 状态构建', () => {
     const status = buildStatus({
       ...defaultDeps,
       enabled: true,
+      active: true,
       realClangdPath: '/usr/bin/clangd',
       logPath: '/tmp/proxy.log',
       hasBackup: true,
@@ -115,6 +125,7 @@ describe('buildStatus — 状态构建', () => {
     const parsed = JSON.parse(json) as ClangdProxyStatus;
 
     expect(parsed.enabled).toBe(true);
+    expect(parsed.active).toBe(true);
     expect(parsed.launcherPath).toBe('/path/to/launcher');
     expect(parsed.realClangdPath).toBe('/usr/bin/clangd');
     expect(parsed.keepaliveMax).toBe(20);

@@ -34,7 +34,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { Logger } from '@core/logger';
+import { type Logger } from '@core/logger';
 
 const execFileAsync = promisify(execFile);
 

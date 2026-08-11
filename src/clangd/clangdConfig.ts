@@ -26,7 +26,7 @@
  */
 
 import * as yaml from 'yaml';
-import { ClangdConfig, IfBlock } from './types';
+import { type ClangdConfig, type IfBlock } from './types';
 
 // ===== 默认 .clangd 内容 =====
 

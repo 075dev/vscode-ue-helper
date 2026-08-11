@@ -339,7 +339,15 @@ export class LspBridge {
    * 统一为 clangd 内部形式（盘符大写）作为 lastDocVersions 的 key。
    */
   private normalizeUri(uri: string): string {
-    return decodeURIComponent(uri).replace(
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(uri);
+    } catch {
+      // [F2-7] 畸形 URI(非法百分号编码如 %zz)会抛 URIError,直接把 proxy 进程打死。
+      // 兜底:解码失败按原值返回,后续用原值参与匹配(多数场景仍可工作)。
+      return uri;
+    }
+    return decoded.replace(
       /^file:\/\/\/([a-zA-Z]):/,
       (_m, drive: string) => `file:///${drive.toUpperCase()}:`,
     );

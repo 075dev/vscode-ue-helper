@@ -1,12 +1,13 @@
 /**
- * fingerprint —— .uproject + Build.cs + Target.cs 内容哈希指纹
+ * fingerprint —— .uproject + Build.cs + Target.cs + .uplugin + 引擎 Build.version 内容哈希指纹
  *
  * 目的（per D-09）：
- *   - 在二次激活时快速判断 .uproject / Build.cs / Target.cs 文件是否变更
+ *   - 在二次激活时快速判断工程/引擎配置相关文件是否变更
  *   - 与 CompileCommandsCache 配合，命中时跳过 5-30s 的 UBT 子进程调用
  *
  * 算法：
- *   1. 收集 projectDir 下的 .uproject 与 Source 目录下的 Build.cs / Target.cs
+ *   1. 收集 projectDir 下的 .uproject、Plugins 下的 .uplugin、
+ *      Source 目录下的 Build.cs / Target.cs，以及（可选）引擎 Engine/Build/Build.version
  *   2. 路径字典序排序（保证跨平台确定性）
  *   3. 对每个文件：hash.update(path) + 空字符 + hash.update(content) + 空字符
  *   4. 最终摘要作为 64 字符 hex 字符串
@@ -29,11 +30,18 @@ import type { FingerprintResult } from './types';
  * 计算完整内容指纹（含文件 IO + SHA256）
  *
  * @param projectDir .uproject 所在目录的绝对路径
+ * @param engineRoot [W11/F2-5] 可选引擎根目录绝对路径。
+ *   提供时会把 <engineRoot>/Engine/Build/Build.version 纳入哈希——引擎版本
+ *   变更后指纹变化 → 缓存 miss → UBT 重新生成，避免陈旧 DB。
+ *   不传时保持旧行为（仅工程文件），保证调用方向后兼容。
  * @returns 指纹结果 + 计算耗时 + 参与文件列表
  *
  * 空 Source 目录 → 稳定空指纹（'EMPTY' 哈希），不抛错
  */
-export async function computeFingerprint(projectDir: string): Promise<FingerprintResult> {
+export async function computeFingerprint(
+  projectDir: string,
+  engineRoot?: string,
+): Promise<FingerprintResult> {
   const startMs = performance.now();
   const normalized = normalizeProjectDir(projectDir);
   if (!normalized) {
@@ -46,7 +54,7 @@ export async function computeFingerprint(projectDir: string): Promise<Fingerprin
   }
 
   // 1. 收集所有需要纳入指纹的文件
-  const files = await collectFingerprintFiles(normalized);
+  const files = await collectFingerprintFiles(normalized, engineRoot);
   files.sort(); // 路径字典序固定 → 确定性（D-09）
 
   // 2. SHA256 拼接
@@ -85,14 +93,19 @@ export async function computeFingerprint(projectDir: string): Promise<Fingerprin
  *
  * 注意：light 指纹**不是绝对确定性** —— mtime/文件系统可能变更但内容不变
  * 此时必须再调一次 computeFingerprint 确认。仅作为快速预筛选。
+ *
+ * @param engineRoot [W11/F2-5] 可选引擎根，与 computeFingerprint 语义一致。
  */
-export async function computeLightFingerprint(projectDir: string): Promise<string> {
+export async function computeLightFingerprint(
+  projectDir: string,
+  engineRoot?: string,
+): Promise<string> {
   const normalized = normalizeProjectDir(projectDir);
   if (!normalized) {
     return emptyFingerprint();
   }
 
-  const files = await collectFingerprintFiles(normalized);
+  const files = await collectFingerprintFiles(normalized, engineRoot);
   files.sort();
 
   const hash = crypto.createHash('sha256');
@@ -125,12 +138,14 @@ export async function computeLightFingerprint(projectDir: string): Promise<strin
  *
  * 包含：
  *   - projectDir 下的 .uproject
+ *   - projectDir/Plugins 下递归所有 .uplugin（插件模块清单，W11/F2-5）
  *   - projectDir/Source 下所有 .Build.cs
  *   - projectDir/Source 下所有 .Target.cs
+ *   - [W11/F2-5] engineRoot 提供的 <engineRoot>/Engine/Build/Build.version
  *
  * 任意目录不存在 → 返回空数组（稳定空指纹）
  */
-async function collectFingerprintFiles(projectDir: string): Promise<string[]> {
+async function collectFingerprintFiles(projectDir: string, engineRoot?: string): Promise<string[]> {
   const out: string[] = [];
 
   // .uproject（项目根 + plugins 子目录）
@@ -162,6 +177,26 @@ async function collectFingerprintFiles(projectDir: string): Promise<string[]> {
     }
   } catch {
     // Plugins 目录不存在，跳过
+  }
+
+  // Plugins/**/*.uplugin（递归收集插件模块清单，W11/F2-5：
+  // 仅收集 .uproject 会漏掉纯 .uplugin 插件，模块增删/配置变更后缓存仍命中陈旧 DB）
+  await walkDir(path.join(projectDir, 'Plugins'), (filePath) => {
+    if (/\.uplugin$/i.test(filePath)) {
+      out.push(filePath);
+    }
+  });
+
+  // 引擎 Engine/Build/Build.version（W11/F2-5：
+  // 引擎版本/补丁变更会影响编译参数，变更后必须失效缓存重新生成）
+  if (engineRoot) {
+    const buildVersion = path.join(engineRoot, 'Engine', 'Build', 'Build.version');
+    try {
+      await fs.access(buildVersion);
+      out.push(buildVersion);
+    } catch {
+      // 引擎根没有 Build.version（如测试 fixture）→ 跳过，不参与哈希
+    }
   }
 
   // Source/**/*.Build.cs + Target.cs

@@ -24,8 +24,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Config } from '@core/config';
-import { Logger } from '@core/logger';
+import { type Config } from '@core/config';
+import { type Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveRealClangdPath } from './proxy/realClangdResolver';
 import { ClangdSettingsManager } from './proxy/settingsManager';
@@ -129,6 +129,8 @@ export class ClangdProxyManager implements vscode.Disposable {
   getStatus(): ClangdProxyStatus {
     return buildStatus({
       enabled: this.enabled,
+      // 实际激活状态：clangd.path 是否指向本扩展 launcher（与配置启用解耦）
+      active: this.isActive,
       launcherPath: this.launcherPath,
       realClangdPath: this.config.clangdProxyRealClangdPath,
       keepaliveMax: this.config.clangdProxyKeepaliveMax,

@@ -14,7 +14,8 @@
  *   - restore(): 从备份恢复
  *   - startWatching(): 监听变化自动恢复
  *
- * 当前未在 executeBuild 里调用(Phase 5 待接入)。
+ * 接入点：src/commands/build.ts 在 UBT 构建前 snapshot()、构建后（finally）restore()，
+ * 尊重 `autoBackupWorkspace` 设置（默认 true）。无 .code-workspace 文件时自然 no-op。
  */
 
 import * as fs from 'node:fs/promises';

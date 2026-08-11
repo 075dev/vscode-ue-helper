@@ -146,10 +146,11 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
 
   // [Phase 7 D-08/D-09] 指纹快路径：若 fingerprint 命中 + ccPath 存在 → 跳过 UBT 子进程
   // [Phase 3.2] cache 编排抽到 @clangd/compileCommands/cache,主文件保留 perf 埋点
+  // [W11/F2-5] 传 engineRoot：引擎 Build.version 纳入 fingerprint + 共享 DB 内容校验（W10/F2-4）
   const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
   // [P2-4] 阶段反馈：计算指纹
   opts.progress?.report({ message: 'Computing fingerprint...' });
-  const fastPath: FastPathResult = await tryCompileCommandsFastPath(projectDir, log);
+  const fastPath: FastPathResult = await tryCompileCommandsFastPath(projectDir, log, opts.engineRoot);
   if (fastPath.hit) {
     perfLog.record({
       event: 'compileCommands.cacheHit',
@@ -329,6 +330,7 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
           try {
             await writeCompileCommandsCache(path.dirname(opts.project), p, {
               logger: log,
+              engineRoot: opts.engineRoot,
             });
             log.info(
               `[perf] compileCommands cache WRITTEN (path changed: ${cachedCcPath ?? '(none)'} → ${p})`,
@@ -407,6 +409,7 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
           fallback: true,
           fileCount: fbResult.entryCount,
           logger: log,
+          engineRoot: opts.engineRoot,
         });
         log.info(`[perf] fallback cache WRITTEN (path=${fbResult.ccPath})`);
       } catch (cacheErr) {
