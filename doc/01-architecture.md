@@ -1,6 +1,7 @@
 # 01 — 整体架构
 
-> 适用版本：0.1.0+（Phase 8 架构）
+> 适用版本：0.1.0+（Phase 8 架构）。本指南受 [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) 治理：
+> 一切与宪法冲突的描述必须以宪法为准（见 §Governance）。宪法主要相关条款：I. Windows-First Unreal Scope；II. Single Sources of Truth（`WorkspaceState` / `ClangdOps`）；III. 双语 UX / 模块前缀日志 / 资源释放 / 原子写；IV. 验证门禁；V. 最小可追溯依赖与架构。
 
 ## 项目定位
 
@@ -12,6 +13,8 @@ VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 - 可选 MCP AI Agent 集成（Cursor / Claude Code 自动启用）
 - 状态栏 + 控制面板 Webview + QuickPick + Problems 面板
 
+**产品边界（宪法 I）**：本插件只支持 Windows 10/11 + Unreal Engine 5.2+ + MSVC + Windows SDK + VS Code 1.85+ + Node.js 18+。`package.json#platforms` 仅声明 `win32`；`vscodeUEHelper.platform` 配置虽有 `Win64/Mac/Linux` 三个枚举值，但产品对外承诺仅 Windows，Mac/Linux 不在支持范围。除非宪法明确修订，不引入 Mac/Linux 路径代码或文档。
+
 代码融合自两个上游项目（避免版本耦合，全部重写）：
 
 - `rmoubayed/engine-link`（v3）：UBT 流水线、Live Coding、引擎发现、MCP 集成
@@ -21,10 +24,10 @@ VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 
 `esbuild.config.mjs` 同时构建两个产物：
 
-| 产物 | 用途 | 依赖 |
-|---|---|---|
-| `out/extension.js` | 主扩展，VS Code 加载 | `vscode` 标 external，由运行时提供 |
-| `out/clangdProxy.js` | clangd LSP 代理 CLI，独立子进程 | 不依赖 `vscode`，纯 Node |
+| 产物                 | 用途                            | 依赖                               |
+| -------------------- | ------------------------------- | ---------------------------------- |
+| `out/extension.js`   | 主扩展，VS Code 加载            | `vscode` 标 external，由运行时提供 |
+| `out/clangdProxy.js` | clangd LSP 代理 CLI，独立子进程 | 不依赖 `vscode`，纯 Node           |
 
 构建时还会生成两个 launcher 脚本：
 
@@ -39,15 +42,15 @@ VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 
 ```
 1. initI18n()                  ← 必须最先（Logger 内部可能用翻译）
-2. new Logger('VSCodeUEHelper')
+2. new Logger('VSCodeUEHelper') / sharedLogger
 3. new Config()                ← 强类型封装 vscodeUEHelper.* 命名空间
 4. activateDetection(...)      ← 返回 DetectionHandles + ready Promise
 5. new WorkspaceState(...)     ← [Phase 8] 项目/引擎/路径单一真相源
 6. new ClangdOps(...)          ← [Phase 8] .clangd 统一 API
 7. activateBuild(...)          ← UBT Task Provider
 8. activateClangd(...)         ← 状态栏 / 备份 / completion mode / 代理
-9. activateUI(...)             ← 11 个状态栏按钮，await detection.ready
-10. activateCommands(...)      ← 19 个命令（依赖全部 handles）
+9. activateUI(...)             ← 8 个主状态栏按钮，await detection.ready
+10. activateCommands(...)      ← 21 个命令（依赖全部 handles）
 11. ControlPanelProvider.register(...)
 12. runFirstTimeInit(...)      ← fire-and-forget，首次使用弹 Initialize
 ```
@@ -67,11 +70,11 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 
 `folders[]` 规则（硬规则，**用户不允许自定义**）：
 
-| `path` | `name` | role |
-|---|---|---|
-| `.` | 任意 | `project` |
-| 绝对路径 | `UE5` | `engine` |
-| 其他 | 任意 | `unknown` |
+| `path`   | `name` | role      |
+| -------- | ------ | --------- |
+| `.`      | 任意   | `project` |
+| 绝对路径 | `UE5`  | `engine`  |
+| 其他     | 任意   | `unknown` |
 
 只有单文件夹打开（无 `.code-workspace` 文件）时，detection 返回空结果，UI 显示警告。
 
@@ -79,11 +82,11 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 
 `src/core/workspace.ts` 是项目/引擎/路径的**单一真相源**，分 4 层：
 
-| 层 | 字段 | 来源 |
-|---|---|---|
-| Level 0 根源 | `workspaceFile` / `workspaceFolders` / `projectFolder` / `engineFolder` / `project` / `engine` | detection 注入 |
-| Level 1 派生路径 | `workspaceRoot` / `projectDir` / `projectFile` / `projectName` / `engineRoot` / `engineVersion` | 从 Level 0 派生 |
-| Level 2 .clangd | `clangdConfigPath` / `clangdHelperDir` / `compileCommandsDir` / `compileCommandsPath` | 从 Level 1 派生 |
+| 层               | 字段                                                                                                                                            | 来源            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Level 0 根源     | `workspaceFile` / `workspaceFolders` / `projectFolder` / `engineFolder` / `project` / `engine`                                                  | detection 注入  |
+| Level 1 派生路径 | `workspaceRoot` / `projectDir` / `projectFile` / `projectName` / `engineRoot` / `engineVersion`                                                 | 从 Level 0 派生 |
+| Level 2 .clangd  | `clangdConfigPath` / `clangdHelperDir` / `compileCommandsDir` / `compileCommandsPath`                                                           | 从 Level 1 派生 |
 | Level 3 补全文件 | `macroHelperPath` / `ueClangdCompatPath` / `addCompletionsPath` / `addMacroCompletionsPath` / `completionHelperPath` / `defaultCompletionsPath` | 从 Level 2 派生 |
 
 **关键约束**：
@@ -96,12 +99,12 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 
 `src/clangd/clangdOps.ts` 把所有 `.clangd` 读写收束到 4 个核心 API：
 
-| 方法 | 用途 |
-|---|---|
-| `readConfig()` | 读取 + YAML 解析 |
-| `exists()` | 检查 `.clangd` 存在性 |
-| `writeFull(opts)` | 全量重写（用 `defaultClangdConfig` 重建） |
-| `mutate(closre)` | 事务性 read-modify-write（读 yaml → 应用 mutator → 原子写回） |
+| 方法              | 用途                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `readConfig()`    | 读取 + YAML 解析                                              |
+| `exists()`        | 检查 `.clangd` 存在性                                         |
+| `writeFull(opts)` | 全量重写（用 `defaultClangdConfig` 重建）                     |
+| `mutate(closre)`  | 事务性 read-modify-write（读 yaml → 应用 mutator → 原子写回） |
 
 **为什么收束到这个最小集**：之前细粒度 setter（`setAddFlag` / `removeAddFlag` / `replaceAddBlock` 等）只是 `mutate` 闭包的固化，对调用方没价值 —— 只增加 API 表面，难扩展，难组合。
 
@@ -125,13 +128,14 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 
 `src/mcp/lifecycle.ts` 用环境变量判断宿主：
 
-| 环境变量 | 宿主 |
-|---|---|
-| `CURSOR_TRACE_ID` 或 `CURSOR_USER_DATA_DIR` | Cursor |
-| `CLAUDE_CODE_ENTRYPOINT` 或 `CLAUDE_CODE_SSE_PORT` | Claude Code |
-| 其他 | 普通 VS Code（MCP no-op） |
+| 环境变量                                           | 宿主                      |
+| -------------------------------------------------- | ------------------------- |
+| `CURSOR_TRACE_ID` 或 `CURSOR_USER_DATA_DIR`        | Cursor                    |
+| `CLAUDE_CODE_ENTRYPOINT` 或 `CLAUDE_CODE_SSE_PORT` | Claude Code               |
+| 其他                                               | 普通 VS Code（MCP no-op） |
 
 `useMCP` 设置 `auto` / `always` / `never` 决定是否启动：
+
 - `auto`：仅在 Cursor / Claude Code 中启动
 - `always`：总是启动
 - `never`：不启动
@@ -152,13 +156,15 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
             UI (StatusBar / ControlPanel)
                   │
                   ▼
-            Commands (20 个) ──► BuildRunner / ClangdGenerator / ClangdProxyManager / ...
+            Commands (21 个) ──► BuildRunner / ClangdGenerator / ClangdProxyManager / ...
 ```
 
 并行：
 
 ```
-MCP Server ──► tools.ts (6 个工具) ──► executeXxx 函数（同 commands）
+MCP Server ──► tools.ts (6 个工具: ue_build / ue_launch_editor / ue_live_coding /
+                       ue_generate_compile_commands / ue_show_project_info / ue_set_system_includes)
+                  └─► callTool 派发到真实 executeXxx（fire-and-forget，非 stub）
 ```
 
 ## 模块依赖（编译期 import 方向）
@@ -181,13 +187,13 @@ extension.ts
 
 ## 持久化
 
-| 数据 | 存储位置 | API |
-|---|---|---|
-| `vscodeUEHelper.*` 配置 | VS Code settings.json（workspace scope） | `Config` getter/setter |
-| 用户选择的 engine / project | `.code-workspace` 的 `settings.vscodeUEHelper.*` | `WorkspaceContext` |
-| 首次初始化标记 | `.code-workspace` 的 `settings.vscodeUEHelper.initialized` | `firstRunInit.ts` 原子写 |
-| 备份 `.code-workspace` | `.vscode/.code-workspace.backup`（gitignore） | `WorkspaceBackup` |
-| UBT 解析缓存 / 编译数据库 | `.vscode/vscodeuehelper/`（gitignore） | `compileCommands*` |
+| 数据                        | 存储位置                                                   | API                      |
+| --------------------------- | ---------------------------------------------------------- | ------------------------ |
+| `vscodeUEHelper.*` 配置     | VS Code settings.json（workspace scope）                   | `Config` getter/setter   |
+| 用户选择的 engine / project | `.code-workspace` 的 `settings.vscodeUEHelper.*`           | `WorkspaceContext`       |
+| 首次初始化标记              | `.code-workspace` 的 `settings.vscodeUEHelper.initialized` | `firstRunInit.ts` 原子写 |
+| 备份 `.code-workspace`      | `.vscode/.code-workspace.backup`（gitignore）              | `WorkspaceBackup`        |
+| UBT 解析缓存 / 编译数据库   | `.vscode/vscodeuehelper/`（gitignore）                     | `compileCommands*`       |
 
 ## 关键不变式（破坏会导致 bug）
 
@@ -197,3 +203,6 @@ extension.ts
 4. **MSVC 错误正则**在 `package.json#contributes.problemMatchers` 和 `src/parsers/msvcParser.ts` **两处定义**，必须同步
 5. **所有 VS Code 资源**（命令、状态栏、Watcher、DiagnosticCollection）必须 push 到 `context.subscriptions`
 6. **新增命令 4 步**：`package.json` 定义 → `commands/xxx.ts` 实现 → `commands/index.ts` 注册 → i18n 双语 key
+7. **宪法优先**：当本指南、`README.md`、`AGENTS.md`、Spec Kit 命令、源码或 PR 描述出现冲突，以 `.specify/memory/constitution.md` 为准；不能解决的冲突按宪法 §Governance 升级为修订（MUST NOT silently ignored）。
+8. **MCP `callTool` 是真实派发**：`src/mcp/tools.ts:callTool` 当前把工具调用派发到 `commands/*:executeXxx`（`silent=true` 跳过 auto-pick），`fire-and-forget` 后通过 `Logger` + Problems 面板回报进度；不存在 stub 形态。
+9. **completionMode 已废弃**：`package.json` 不再暴露 `vscodeUEHelper.completionMode`，`Config` 的 `CompletionMode` 类型 alias 已删除（H4-B 决策）。所有补全走 `slow` 单路径；状态栏不再提供 fast/slow 切换。

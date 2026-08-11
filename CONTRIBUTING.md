@@ -2,15 +2,19 @@
 
 VSCodeUEHelper 的开发者 onboarding 文档。新人按本文档可独立走通"git clone → npm i → F5 → 跑测试 → 写新命令 → 提 PR"全流程。
 
+> **治理文档**:本仓库的最高优先级治理文件是
+> [`.specify/memory/constitution.md`](.specify/memory/constitution.md)(Windows-only 支持边界、
+> WorkspaceState/ClangdOps 边界、双语 UX、验证门禁、依赖最小化)。本文档若与宪法冲突,以宪法为准。
+
 ## 1. 环境准备
 
-| 依赖 | 版本 | 说明 |
-|---|---|---|
-| OS | **Windows 10/11 (必须)** | `package.json#platforms: ["win32"]` 强制;Mac/Linux 不在支持范围 |
-| Node.js | ≥ 18.0.0 | esbuild target=node18,需 ≥ 18 |
-| VS Code | ≥ 1.85.0 | ExtensionManifest 最低 1.85.0 |
-| Unreal Engine | 5.2+ | 验证用;本机安装路径示例 `D:\Program Files\UE_5.8\` |
-| MSVC 工具链 | Visual Studio 2022 Build Tools | UBT 构建必需,clangd 系统头发现依赖 |
+| 依赖          | 版本                           | 说明                                                            |
+| ------------- | ------------------------------ | --------------------------------------------------------------- |
+| OS            | **Windows 10/11 (必须)**       | `package.json#platforms: ["win32"]` 强制;Mac/Linux 不在支持范围 |
+| Node.js       | ≥ 18.0.0                       | esbuild target=node18,需 ≥ 18                                   |
+| VS Code       | ≥ 1.85.0                       | ExtensionManifest 最低 1.85.0                                   |
+| Unreal Engine | 5.2+                           | 验证用;本机安装路径示例 `D:\Program Files\UE_5.8\`              |
+| MSVC 工具链   | Visual Studio 2022 Build Tools | UBT 构建必需,clangd 系统头发现依赖                              |
 
 **为什么仅 Windows**:仓库专注于 Rider-on-Windows 的 UE5 C++ 体验对标(冷启动 + 内存),跨平台支持是显式 out-of-scope(见 `.planning/PROJECT.md` §Constraints)。Mac/Linux 用户请用 Rider 或 VSCode + 原始 clangd。
 
@@ -43,7 +47,7 @@ npm run package       # vsce package → .vsix
 
 调试: VS Code 里按 `F5` 启动 Extension Development Host(`launch.json` 配置 `Run Extension`)。日志在 Output 面板的 `VSCodeUEHelper` channel。
 
-**注意**:`npm run test:integration` 已坏,脚本指向 `test/integration/runTests.js`,该目录不存在。**只跑 unit**:`npm run test:unit`。
+**注意**:`npm test` 是 `npm run test:unit` 的别名(`package.json#scripts.test`),只跑 Vitest unit;`npm run test:integration` 已删除,集成测试不在本仓库验证范围。
 
 ## 4. 代码风格硬约束(摘 AGENTS.md)
 
@@ -71,15 +75,15 @@ npm run package       # vsce package → .vsix
 
 格式: `<type>(<scope>): <中文 summary>`
 
-| Type | 用途 |
-|---|---|
-| `feat` | 新功能 |
-| `fix` | 修复 bug |
-| `chore` | 工具链 / 资产 / 配置(无功能影响) |
-| `docs` | 纯文档 |
-| `refactor` | 重构(无功能变化) |
-| `test` | 仅测试 |
-| `perf` | 性能 |
+| Type       | 用途                             |
+| ---------- | -------------------------------- |
+| `feat`     | 新功能                           |
+| `fix`      | 修复 bug                         |
+| `chore`    | 工具链 / 资产 / 配置(无功能影响) |
+| `docs`     | 纯文档                           |
+| `refactor` | 重构(无功能变化)                 |
+| `test`     | 仅测试                           |
+| `perf`     | 性能                             |
 
 Scope(可选): `build` / `clangd` / `commands` / `core` / `detection` / `mcp` / `ui` / `i18n` / `extension` 等模块名。
 
@@ -116,7 +120,7 @@ reviewer 验收 PR 时逐项勾选:
 - [ ] 中文 JSDoc 覆盖 export 函数(D-07 硬约束)
 - [ ] 跑 `npm run test:unit` 全绿,新增功能有对应单测
 - [ ] 改 AGENTS.md 仓库陷阱条目时,末尾追加 `*(T-NN 闭环 YYYY-MM-DD: ...)*` 风格注释(per Phase 1 反漂移约定)
-- [ ] 不引入新 runtime 依赖(零依赖洁癖,见 PROJECT.md §Constraints)
+- [ ] 新 runtime 依赖有具体用途、tradeoff 与显式 review 决策（宪法 §V）
 
 ## 8. 提交前自检
 

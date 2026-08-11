@@ -1,6 +1,7 @@
 # 调试指南
 
-VSCodeUEHelper 扩展的调试手册。开发期 + 用户侧问题排查都查本文。
+> VSCodeUEHelper 扩展的调试手册。开发期 + 用户侧问题排查都查本文。本指南受 [`../.specify/memory/constitution.md`](../.specify/memory/constitution.md) 治理；
+> 产品边界（Windows-only）、单一真相源、日志 / 资源释放 / 原子写、验证门禁以宪法为准。
 
 ## 1. 启动 Extension Development Host (EDH)
 
@@ -12,14 +13,13 @@ EDH 是独立 VS Code 窗口,加载当前扩展源代码(非 Marketplace 版本)
 - 停止:EDH 窗口关闭即停;也可在主窗口 `Run → Stop Debugging`
 
 ## 2. 扩展日志位置
-
-| 位置 | 内容 | 路径/入口 |
-|---|---|---|
-| **EDH 窗口 "输出" 面板** | 所有模块日志(info/warn/error/debug) | 下拉选 `VSCodeUEHelper` (共享 channel,所有模块共用) |
-| **DevTools Console** | `console.log` / `console.warn` / `console.error` | EDH 窗口 `Ctrl+Shift+I` → Console |
-| **主进程终端** | esbuild 错误 / tsc 错误 / 启动崩溃 | 仓库根 `npm run watch` 终端 |
-| **clangd proxy 子进程日志** | LSP 协议层日志 | Windows: `%USERPROFILE%\.vscode\extensions\<publisher>.<name>-<version>\logs\`<br>命名: `vscode-ue-helper-proxy-<timestamp>.log` |
-| **UE 引擎侧输出** | UBT / Live Coding 进程输出 | Output 面板 `UE Build` / `UE Live Coding` channel(若启用) |
+| 位置                        | 内容                                             | 路径/入口                                                                                                                        |
+| --------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| **EDH 窗口 "输出" 面板**    | 所有模块日志(info/warn/error/debug)              | 下拉选 `VSCodeUEHelper` (共享 channel,所有模块共用)                                                                              |
+| **DevTools Console**        | `console.log` / `console.warn` / `console.error` | EDH 窗口 `Ctrl+Shift+I` → Console                                                                                                |
+| **主进程终端**              | esbuild 错误 / tsc 错误 / 启动崩溃               | 仓库根 `npm run watch` 终端                                                                                                      |
+| **clangd proxy 子进程日志** | LSP 协议层日志                                   | Windows: `%USERPROFILE%\.vscode\extensions\<publisher>.<name>-<version>\logs\`<br>命名: `vscode-ue-helper-proxy-<timestamp>.log` |
+| **UE 引擎侧输出**           | UBT / Live Coding 进程输出                       | Output 面板 `UE Build` / `UE Live Coding` channel(若启用)                                                                        |
 
 ## 3. Attach 到 clangd proxy 子进程
 
@@ -67,14 +67,20 @@ proxy 是独立 Node 子进程,默认不阻塞 LSP。Attach 步骤:
 
 ### 4.6 MCP 工具不生效
 
-- **症状**: Cursor / Claude Code 里 `ue_build` 等工具不出现
-- **检查**: `Settings → Extensions → VSCodeUEHelper → Use MCP` 必须设 `'auto'` / `'always'`(`'auto'` 仅在 Cursor/Claude Code 启动时激活)
-- **修复**: 重启 Cursor/Claude Code;检查 `process.env.CURSOR_TRACE_ID` 等环境变量(见 `src/mcp/AGENTS.md`)
+- **症状**: Cursor / Claude Code 里 `ue_build` / `ue_launch_editor` / `ue_live_coding` / `ue_generate_compile_commands` / `ue_show_project_info` / `ue_set_system_includes` 不出现；普通 VS Code 里完全无 MCP 是设计选择（MCP 限定 Cursor / Claude Code，按宪法 I / §MCP 生命周期）
+- **检查**: `Settings → Extensions → VSCodeUEHelper → Use MCP` 必须设 `'auto'` / `'always'`（`'auto'` 仅在 Cursor / Claude Code 启动时激活）；MCP context 必须已注入（`src/mcp/tools.ts:getMCPContext()` 非 null），否则 `callTool` 返回 `{ok:false, error}` 而不是 stub
+- **修复**: 重启 Cursor / Claude Code；检查 `process.env.CURSOR_TRACE_ID` / `CURSOR_USER_DATA_DIR` / `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_SSE_PORT`（见 `src/mcp/lifecycle.ts`）；`callTool` 实际派发到 `commands/*:executeXxx`（fire-and-forget），进度通过 Output 通道 + Problems 面板回报
+
+### 4.7 Windows-only 路径报错
+### 4.7 Windows-only 路径报错
+- **症状**: Mac / Linux 上安装或运行时出现 `platforms` / `isWindows` 失败
+- **检查**: `package.json#platforms` 仅声明 `win32`，`package.json#contributes.menus.commandPalette` 中 `vscodeUEHelper.liveCoding` / `setSystemIncludes` 限定 `when: isWindows`
+- **修复**: 按宪法 I，本插件不在 Mac / Linux 提供支持；需在该平台使用 Unreal C++ 工作流请用替代工具，不要把失败归类为本插件的 bug
 
 ## 5. 性能 / 内存问题
 
 - **冷启动慢**: 看 EDH 启动时间,仓库承诺 < 3s(vs Rider ~10s)。若 > 5s,检查 `npm run build` 产物大小
-- **索引慢**: 跑 `> Toggle Performance Log` 命令 + 看 `VSCodeUEHelper-perf` 面板。`genMs` / `hitRate` / `incrMs` 三指标
+- **索引慢**: 设置 `vscodeUEHelper.showPerfInStatusBar = true`，重启 EDH，看 `VSCodeUEHelper-perf` 面板。`genMs` / `hitRate` / `incrMs` 三指标。perf 埋点始终记录到 Output（`perfLog` 单例），设置只切 UI 显隐
 - **内存高**: 任务管理器看 `code.exe` 进程,仓库承诺 < 1.5GB(中等 UE5 项目)。若 > 2GB,八成是 LSP proxy 句柄泄漏,重启 EDH
 
 ## 6. 报告 Bug

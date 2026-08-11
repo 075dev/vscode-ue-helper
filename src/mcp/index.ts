@@ -15,9 +15,9 @@
  * Plan 12 处理 dispatch 接入。这里只是把 index.ts 改造好,方便后续接入。
  */
 
-import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import type * as vscode from 'vscode';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';

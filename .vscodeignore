@@ -20,12 +20,26 @@ vitest.config.ts
 # AI辅助开发文件
 CLAUDE.md
 .claude/**
+.omc/**
+.omp/**
+.specify/**
+.serena/**
 .planning/**
+.hermes/**
 .codegraph/**
-.cursor/         # Phase 2 Plan 02-03 D-21: AI 规则目录(后续 .cursor/rules/*.mdc 不应进 .vsix)
-.github/**       # Phase 2 Plan 02-03 D-21: PR 模板等开发协作文件不应进 .vsix
+.code-review-graph/**
+.cursor/**
+specs/**
+.github
+.github/**       # PR 模板等开发协作文件不应进 .vsix
 AGENTS.md
 .gsd-id
+
+# 内部审计与开发文档
+AUDIT-REPORT.md
+REMEDIATION-PLAN.md
+doc/**
+docs/**
 
 # 日志：全局所有层级 log
 **/*.log

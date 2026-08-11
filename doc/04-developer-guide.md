@@ -1,16 +1,16 @@
 # 04 — 开发指南
 
-> 面向维护者和贡献者：环境搭建、命令清单、新增/修改/调试、测试、打包。
+> 面向维护者和贡献者：环境搭建、命令清单、新增/修改/调试、测试、打包。本指南受 [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) 治理；质量门禁、依赖纪律、修订流程以宪法 IV–V 为准。
 
 ## 1. 环境要求
 
-| 工具 | 版本 | 说明 |
-|---|---|---|
-| Node.js | ≥ 18 | 见 `package.json#engines.node` |
-| VS Code | ≥ 1.85 | 见 `package.json#engines.vscode` |
-| Unreal Engine | 5.2+（运行时） | 5.4+ 推荐（preparseIncludes 头列表 5.4 为基准） |
-| clangd | 22.x | 由扩展包依赖 `llvm-vs-code-extensions.vscode-clangd` 自动安装 |
-| MSBuild + MSVC | Windows only | vswhere.exe 在标准安装位置会被自动发现 |
+| 工具           | 版本           | 说明                                                          |
+| -------------- | -------------- | ------------------------------------------------------------- |
+| Node.js        | ≥ 18           | 见 `package.json#engines.node`                                |
+| VS Code        | ≥ 1.85         | 见 `package.json#engines.vscode`                              |
+| Unreal Engine  | 5.2+（运行时） | 5.4+ 推荐（preparseIncludes 头列表 5.4 为基准）               |
+| clangd         | 22.x           | 由扩展包依赖 `llvm-vs-code-extensions.vscode-clangd` 自动安装 |
+| MSBuild + MSVC | Windows only   | vswhere.exe 在标准安装位置会被自动发现                        |
 
 ## 2. 首次搭建
 
@@ -32,11 +32,12 @@ npm run build           # clean + esbuild → out/extension.js + out/clangdProxy
 npm run watch           # esbuild watch 模式（VS Code F5 用此）
 npm run clean           # 只删 out/src 和 out/test（防 .vsix 残留），不动 out/extension.js
 
-# ===== 质量门禁（按推荐顺序）=====
+# ===== 质量门禁（按推荐顺序，宪法 IV）=====
 npm run typecheck       # tsc --noEmit，必须零错误
 npm run lint            # ESLint src test
-npm run format:check    # Prettier
-npm run test:unit       # Vitest（~50 文件，注意：test:integration 已坏，别跑）
+npm run format:check    # Prettier（仅校验；CI/release 不强制）
+npm run test:unit       # Vitest（vitest run 单次；测试组织见 §4）
+# npm test == npm run test:unit：test 脚本是 test:unit 的别名（package.json#scripts.test = "npm run test:unit"），不存在 test:integration 入口
 
 # ===== 性能 / 调试辅助 =====
 npm run perf:baseline   # LSP 代理开销基线 → .vscode/clangd-perf-cache/proxy-baseline.json
@@ -45,12 +46,13 @@ npm run perf:diff       # 对比两个 JSON，< 1% 偏差算通过
 
 # ===== 打包发布 =====
 npm run package         # vsce package → .vsix（自动 prepackage: build）
+npm run publish         # vsce publish（需先 vsce login）
 ```
 
-**禁止**：
+**禁止 / 注意**：
 
-- `npm test`（包含已坏的 `test:integration`）
 - 直接 `node out/extension.js`（缺 VS Code runtime）
+- 在没有真实 Unreal 项目的 CI 环境声称"已通过烟雾测试"——按宪法 IV 必须记录不可用环境或延迟验证；不要用脚手架或窄测试冒充交付
 
 ## 4. 测试
 
@@ -86,12 +88,12 @@ npx vitest run --coverage
 
 阈值（vitest.config.ts）：
 
-| 维度 | 阈值 |
-|---|---|
-| lines | 80% |
-| functions | 80% |
-| branches | 75% |
-| statements | 80% |
+| 维度       | 阈值 |
+| ---------- | ---- |
+| lines      | 80%  |
+| functions  | 80%  |
+| branches   | 75%  |
+| statements | 80%  |
 
 排除：`src/extension.ts`、`src/**/*.d.ts`。
 
@@ -181,18 +183,23 @@ node out/clangdProxy.js \
 # <模块名> 模块知识库
 
 ## 模块概述
+
 （一句话职责）
 
 ## 核心文件
+
 | 文件 | 职责 |
 
 ## 关键类型
+
 （TypeScript 代码片段）
 
 ## 关键约定
+
 （错误处理、用户交互、依赖管理）
 
 ## 新增 X 步骤
+
 （如果适用）
 ```
 
@@ -243,13 +250,19 @@ await fs.writeFile(workspace.clangdConfigPath!, modifiedText);
 ```bash
 # 1. 改 package.json#repository.url（占位符是 YOUR_USERNAME/vscode-ue-helper）
 # 2. 改 CHANGELOG.md，加新版本
-# 3. 跑质量门禁
+# 3. 跑质量门禁（宪法 IV：按受影响范围必跑）
 npm run typecheck && npm run lint && npm run test:unit
-# 4. 打包
+# 4. 涉及 package metadata / 打包 / 编译产物时，加跑
+npm run build
+# 5. 涉及 build / clangd 行为改动时，按宪法 IV 跑真实 Windows Unreal 烟雾场景；
+#    没有 Windows Unreal 环境必须显式记录不可用，不得以脚手架/窄测试冒充交付
+# 6. 打包
 npm run package
-# 5. 产物是 vscode-ue-helper-<version>.vsix，本地测试：
+# 7. 产物是 vscode-ue-helper-<version>.vsix，本地测试：
 code --install-extension vscode-ue-helper-<version>.vsix
 ```
+
+完整细节与回滚流程见 [docs/RELEASE.md](../../docs/RELEASE.md)。
 
 `.vsix` 内容（由 `.vscodeignore` 控制）：
 
@@ -259,7 +272,7 @@ code --install-extension vscode-ue-helper-<version>.vsix
 - `resources/icon.png`
 - `package.json`
 
-**不会打包**：`src/`、`test/`、`tsconfig.json`、`*.mjs`、`AGENTS.md`、`CLAUDE.md`、`.planning/`、`.codegraph/`、`scripts/`、`*.log`、`*.map`、`doc/`、`docs/`。
+**不会打包**：`src/`、`test/`、`tsconfig.json`、`*.mjs`、`AGENTS.md`、`CLAUDE.md`、`.codegraph/`、`scripts/`、`*.log`、`*.map`、`doc/`、`docs/`。
 
 发布到 Marketplace：
 
@@ -269,6 +282,8 @@ npm run publish    # 需要 vsce 已登录 publisher: 'vscode-ue-helper'
 
 ## 12. 关键约定回顾
 
+- **产品边界（宪法 I）**：Windows 10/11 + UE 5.2+ + MSVC + Windows SDK 是唯一受支持环境；`package.json#platforms = ["win32"]`；非 Windows 路径 / 文档 / 测试需宪法修订才能引入
+- **21 个命令**：完整列表见 `package.json#contributes.commands` 与 [doc/02-modules.md §6](../02-modules.md#6-srccommands--21-个-vs-code-命令)；新增命令按宪法 II 通过 `WorkspaceState` / `ClangdOps` 派生状态，遵守 §6.4 步流程
 - **TypeScript strict 全开**（`strict` / `noUncheckedIndexedAccess` / `noUnusedLocals/Parameters` / `noImplicitReturns` / `noFallthroughCasesInSwitch`）
 - **路径别名**（`@core/*` 等），**禁止**相对导入
 - **i18n**：所有用户可见字符串走 `t('key', params)`
@@ -281,24 +296,24 @@ npm run publish    # 需要 vsce 已登录 publisher: 'vscode-ue-helper'
 
 ## 13. 仓库陷阱（避坑）
 
-| 陷阱 | 后果 | 怎么避免 |
-|---|---|---|
-| `npm test` 包含已坏的 `test:integration` | 流程失败 | 只跑 `npm run test:unit` |
-| `completionMode` 设置已废弃 | 不要新增 fast/slow 分支代码 | 看 `package.json#deprecationMessage` |
-| `.bak` 测试文件未 gitignore | 可能误提交 | `test/unit/commands/*.bak` 别 commit |
-| MCP 在普通 VS Code no-op | 改 MCP 时假设 always-on 会出错 | 看 `src/mcp/lifecycle.ts` |
-| chokidar 没 mock | fileWatcher 测试卡住进程 | `test/unit/setup.ts` 已 mock |
-| headerWatcher 已删 | 不要重新加回主动 watcher | Phase 8 改被动诊断模式 |
-| `out/` 必须清理 | `npm run clean` 只清 out/src test | `npm run build` 内部已 clean + bundle |
-| `@platform` 别名是死的 | 用了会找不到 | 别用，用 `@core` / `@build` 等 |
-| 代理 stdout 是 LSP 协议 | 写日志会破坏 LSP | 用 stderr 或 `--log-path` |
+| 陷阱                                         | 后果                                                               | 怎么避免                                                                                                      |
+| -------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `npm test` 实际是 `npm run test:unit` 的别名 | 别误以为存在 `test:integration` 而跳过                             | 看 `package.json#scripts.test`：`"test": "npm run test:unit"`，无 integration 入口                            |
+| `completionMode` 设置已删除（H4-B）          | 不要再写 fast/slow 分支或新增 `vscodeUEHelper.completionMode` 设置 | `package.json` 已无该键；`src/core/config.ts` 的 `CompletionMode` 类型 alias 已删除；所有补全走 `slow` 单路径 |
+| `.bak` 测试文件未 gitignore                  | 可能误提交                                                         | `test/unit/commands/*.bak` 别 commit                                                                          |
+| MCP 在普通 VS Code no-op                     | 改 MCP 时假设 always-on 会出错                                     | 看 `src/mcp/lifecycle.ts`                                                                                     |
+| chokidar 没 mock                             | fileWatcher 测试卡住进程                                           | `test/unit/setup.ts` 已 mock                                                                                  |
+| headerWatcher 已删                           | 不要重新加回主动 watcher                                           | Phase 8 改被动诊断模式                                                                                        |
+| `out/` 必须清理                              | `npm run clean` 只清 out/src test                                  | `npm run build` 内部已 clean + bundle                                                                         |
+| 历史 `@platform` 别名已删除                  | 不要恢复无对应目录的别名                                           | 只用 `tsconfig.json` 当前列出的 `@core` / `@build` 等别名                                                     |
+| 代理 stdout 是 LSP 协议                      | 写日志会破坏 LSP                                                   | 用 stderr 或 `--log-path`                                                                                     |
 
 ## 14. 辅助脚本
 
-| 脚本 | 用途 |
-|---|---|
-| `scripts/clean-out.mjs` | 清 `out/src` `out/test`（防打包残留） |
-| `scripts/measure-proxy-overhead.mjs` | LSP 代理性能采样（baseline/after/diff） |
-| `scripts/extract-ue-docs.ts` | UE 源码头注释抽取（用 `npx tsx scripts/extract-ue-docs.ts --engine="..." --output="..."`） |
+| 脚本                                 | 用途                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `scripts/clean-out.mjs`              | 清 `out/src` `out/test`（防打包残留）                                                      |
+| `scripts/measure-proxy-overhead.mjs` | LSP 代理性能采样（baseline/after/diff）                                                    |
+| `scripts/extract-ue-docs.ts`         | UE 源码头注释抽取（用 `npx tsx scripts/extract-ue-docs.ts --engine="..." --output="..."`） |
 
 无 CI / pre-commit / Husky 配置。所有门禁靠开发者本地命令。

@@ -2,6 +2,13 @@
 
 > All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, optional MCP AI agent integration, and an embedded clangd LSP proxy with localization support.
 
+## Governance
+
+Project governance, supported-platform scope, and architectural principles live in
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md). All operational and
+runtime claims in this README are subordinate to that constitution; any conflict MUST be
+resolved in favor of the constitution.
+
 ## Status
 
 ✅ **All 8 phases complete.** Ready for development use.
@@ -9,7 +16,7 @@
 | Phase | Status | Feature                                                                                             |
 | ----- | ------ | --------------------------------------------------------------------------------------------------- |
 | 0     | ✅     | Project skeleton, command palette, configuration schema                                             |
-| 1     | ✅     | `.uproject` scanning, engine discovery (Windows-only), VS Build Tools detection                |
+| 1     | ✅     | `.uproject` scanning, engine discovery (Windows-only), VS Build Tools detection                     |
 | 2     | ✅     | UBT Build/Rebuild/Clean, Live Coding, MSVC parsing, Problems panel, Task provider                   |
 | 3     | ✅     | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes, workspace backup |
 | 4     | ✅     | Status bar, QuickPick pickers, **21 commands**                                                      |
@@ -35,7 +42,7 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 - Live Coding hot-reload (`Ctrl+Alt+F11`)
 - MSVC error parsing → Problems panel with file:line:col click-through
 - Build progress in status bar notification
-- Cross-platform editor launch (Windows / Mac / Linux) — **本插件仅支持 Windows**
+- Editor launch via `cmd /c start` (Windows-only spawn path)
 
 ### Engine & Project Detection
 
@@ -51,7 +58,7 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 
 - **`.uproject` 解析**：`UprojectScanner` 用 `json5` 库解析（Epic 在 `.uproject` 里用了 trailing commas，标准 JSON 不支持）。
 - **引擎版本读取**：`EngineDiscovery` 验证候选路径下存在 `Engine/Build/Build.version`，按版本号倒序去重。
-- **VS Build Tools 检测**（仅 Windows）：`VsBuildTools` 通过 `vswhere.exe -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64` 发现 MSVC 安装，拼接 `VC/Tools/MSVC/<version>/bin/Hostx64/x64`。
+- **系统包含路径发现**（仅 Windows）：`discoverSystemIncludes`（`src/clangd/windowsSdk.ts`）通过 clang/clangd 探测 MSVC 与 Windows SDK 的 include 路径，供 `.clangd` 的 `system-include-windows` flag 使用。
 - **持久化用户选择**：`WorkspaceContext` 把"用户选定的项目路径 / 引擎路径"存到 `context.workspaceState`（VS Code Memento API），跨会话保留；下次打开同一工作区直接恢复。
 - **`WorkspaceState` 统一读取入口**（Phase 8）：`src/core/workspace.ts` 把 detection 结果封装成 lazy 派生字段（`projectFolder` / `engineFolder` / `projectDir` / `engineDir` 等），所有消费模块统一从这里读，不再直接读 detection 句柄。
 
@@ -69,7 +76,7 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 ### MCP AI Agent Integration
 
 - Auto-starts in Cursor / Claude Code (detected via env vars)
-- 6 tools exposed: `ue_build`, `ue_launch_editor`, `ue_live_coding`, `ue_generate_compile_commands`, `ue_show_project_info`, `ue_toggle_completion_mode`
+- 6 tools exposed: `ue_build`, `ue_launch_editor`, `ue_live_coding`, `ue_generate_compile_commands`, `ue_show_project_info`, `ue_set_system_includes`
 - Stdio transport via `@modelcontextprotocol/sdk`
 - AI agent rules generated to `.cursor/rules/unreal-cpp.mdc` and `.github/copilot-instructions.md`
 
@@ -115,7 +122,6 @@ Settings live under the `vscodeUEHelper.*` namespace.
 | `clangdProxy.realClangdPath`       | string | `""`          | Path to real clangd binary. Empty = auto-detect.                                                                  |
 | `clangdProxy.localization.enabled` | bool   | `false`       | Enable hover localization (UE docs dict).                                                                         |
 | `clangdProxy.localization.mode`    | enum   | `append`      | append = 中文追加 / zh-only = 仅中文                                                                              |
-| `clangdHeaderWatcher.enabled`      | bool   | `true`        | Auto-trigger UBT regen when UE reflection headers saved.                                                          |
 | `clangd.userAddFlags`              | array  | `[]`          | Custom flags injected into `.clangd` `CompileFlags.Add`.                                                          |
 | `showPerfInStatusBar`              | bool   | `false`       | Show performance metrics (compile_commands gen time, preparse cache hit, incremental scan latency) in status bar. |
 
@@ -130,8 +136,8 @@ Settings live under the `vscodeUEHelper.*` namespace.
 | `vscodeUEHelper.build`                   | Build                             | UBT build of selected target/config       |
 | `vscodeUEHelper.rebuild`                 | Rebuild                           | Clean + Build                             |
 | `vscodeUEHelper.clean`                   | Clean                             | Remove intermediates                      |
-| `vscodeUEHelper.launchEditor`            | Launch Unreal Editor              | Windows spawn (`cmd /c start`)           |
-| `vscodeUEHelper.liveCoding`              | Live Coding (Hot Reload)          | Triggers UE Live Coding                  |
+| `vscodeUEHelper.launchEditor`            | Launch Unreal Editor              | Windows spawn (`cmd /c start`)            |
+| `vscodeUEHelper.liveCoding`              | Live Coding (Hot Reload)          | Triggers UE Live Coding                   |
 | `vscodeUEHelper.generateCompileCommands` | Generate compile_commands.json    | For clangd                                |
 | `vscodeUEHelper.diagnoseProject`         | Diagnose Clangd Project           | First stop when clangd indexing is broken |
 | `vscodeUEHelper.createProject`           | Create Unreal Clangd Project      | Scaffold `.clangd` + customization        |
@@ -174,7 +180,7 @@ npm run perf:diff          # Compare two JSON files (< 1% deviation = pass)
 src/
 ├── extension.ts                 # Entry point — wires 5 modules
 ├── core/                        # Logger, Config, command-registry, WorkspaceState
-├── detection/                   # uproject scan, engine discovery, vswhere
+├── detection/                   # uproject scan, engine discovery, workspace context
 ├── build/                       # UBT CLI, runner, live coding, launch editor
 ├── clangd/                      # compile_commands, .clangd, ClangdOps, preparse, proxy/
 │   └── proxy/                   # Standalone LSP proxy CLI

@@ -18,7 +18,7 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
   - 13 个 `test/unit/core/ssot.test.ts` 回归守卫 + 12 个 `test/unit/core/workspace.test.ts` 行为测试
 - **deactivate 子进程清理**：`SubprocessRegistry` (`src/core/subprocessRegistry.ts`) 统一管理本插件启动的所有 child_process 子进程,deactivate 走 `taskkill /F /T /PID` 优雅杀进程树,3s 升级强杀。`ClangdProxyManager` 实现 `vscode.Disposable` 在 deactivate 时恢复 `clangd.path` 备份。`ueLinkManager` 传 AbortSignal 给 `runUhtCodegen`,dispose 时 abort 取消 in-flight UHT。
 - **21 个命令**（`package.json#contributes.commands`），8 个主状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
-- 单元测试 71 个文件（共约 12k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 80/80/75/80。
+- 单元测试 71 个文件（共约 12k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 75/70/70/75。覆盖率阈值按 FIX-PLAN 阶梯校准（Phase 4 测试补强后逐阶段上调至 80）。
 
 ## 模块文档
 
@@ -96,7 +96,7 @@ import { Logger } from '@core/logger'; // ✅
 import { Logger } from '../../core/logger'; // ❌ 违反风格
 ```
 
-可用别名：`@core`、`@detection`、`@build`、`@clangd`、`@commands`、`@ui`、`@parsers`、`@mcp`、`@i18n`。
+可用别名：`@core`、`@detection`、`@build`、`@clangd`、`@commands`、`@ui`、`@parsers`、`@mcp`、`@i18n`、`@rules`。
 
 ### `.code-workspace` 检测模型
 
@@ -129,7 +129,6 @@ import { Logger } from '../../core/logger'; // ❌ 违反风格
     - `src/clangd/compileCommands/task.ts:274/291` `execFileAsync('where', ...)` (clang/clangd 路径探测) — ms 级 await
     - `src/clangd/windowsSdk.ts:34` `runWithEofStdin` (clang/clang++ `-v -E` 探测 SDK) — Promise 框定
     - `src/clangd/windowsSdk.ts:339/390/492` `execFileAsync`/`spawn` (clangd 探测 + cl.exe banner) — ms 级 await
-    - `src/detection/vsBuildTools.ts` `vswhere.exe` 探测 — ms 级 await
       任何**新增** spawn/execFile 调用前,先判断是否符合"短探测 + Promise 框定"或"Task system 托管"两条豁免;否则必须接入 SubprocessRegistry。
 
 ## 风格与约定
@@ -173,13 +172,13 @@ Scope(可选): `build` / `clangd` / `commands` / `core` / `detection` / `mcp` / 
 src/
 ├── extension.ts        # 唯一入口
 ├── core/               # Logger, Config, command-registry, WorkspaceState
-├── detection/          # uprojectScanner, engineDiscovery, vsBuildTools, workspaceContext
+├── detection/          # uprojectScanner, engineDiscovery, workspaceContext
 ├── build/              # ubt, buildRunner, taskProvider, liveCoding, launchEditor
 │   └── domain/         # DDD 风格: entities, value-objects, events, repositories
 ├── clangd/             # clangdConfig, compileCommands, completionMode, completionFiles
 │   ├── diagnostics/    # Diagnose Clangd Project 命令用的检查器
 │   └── proxy/          # 独立 LSP 代理 CLI: cli, bridge, processBridge, framing
-├── parsers/            # msvcParser, ubtParser, linkerParser, uprojectParser
+├── parsers/            # msvcParser, ubtParser, uprojectParser
 ├── commands/           # 21 个命令处理器
 ├── ui/                 # statusBar, quickPicks, notifications, problemsPanel, outputChannel
 ├── mcp/                # Model Context Protocol 服务器（Cursor/Claude Code）
