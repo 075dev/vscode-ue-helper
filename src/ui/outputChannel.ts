@@ -7,7 +7,7 @@
  * getOutputChannel() 获取共享通道，disposeOutputChannel() 释放。
  */
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { disposeLoggerOutputChannel, getLoggerOutputChannel } from '@core/logger';
 
 export function getOutputChannel(): vscode.OutputChannel {

@@ -20,7 +20,7 @@
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
 import * as JSON5 from 'json5';
-import { ProjectInfo } from './types';
+import { type ProjectInfo } from './types';
 
 interface RawUProject {
   EngineAssociation?: string;

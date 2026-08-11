@@ -27,17 +27,6 @@ export interface EngineInstall {
   isLauncherInstall: boolean;
 }
 
-export interface VSInstallation {
-  /** Display name as reported by vswhere (e.g., "Visual Studio Enterprise 2022"). */
-  displayName: string;
-  /** Path to the installation root (contains VC\Tools\MSVC). */
-  installationPath: string;
-  /** Full vswhere version string (e.g., "17.8.34309.116"). */
-  version: string;
-  /** Path to the MSVC toolset (e.g., "C:\\Program Files\\...\\VC\\Tools\\MSVC\\14.39.33519"). */
-  vcToolsPath?: string;
-}
-
 export interface WorkspaceSelection {
   /** Path of the selected project (must be a key into Scanner results). */
   selectedProject?: string;

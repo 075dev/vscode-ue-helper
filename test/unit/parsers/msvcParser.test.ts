@@ -48,6 +48,19 @@ describe('MsvcParser', () => {
     expect(d.message).toContain('unresolved external symbol');
   });
 
+  it('parses LNK fatal error as error (F1-7)', () => {
+    const p = new MsvcParser();
+    const diags = p.parse(
+      "LINK : fatal error LNK1104: cannot open file 'UE5Editor.exe'\n",
+    );
+    p.flush();
+    expect(diags).toHaveLength(1);
+    const d = diags[0]!;
+    expect(d.severity).toBe('error');
+    expect(d.code).toBe('LNK1104');
+    expect(d.message).toContain("cannot open file 'UE5Editor.exe'");
+  });
+
   it('returns empty for unrelated lines', () => {
     const p = new MsvcParser();
     const diags = p.parse('Some random output line\nAnother line\n');

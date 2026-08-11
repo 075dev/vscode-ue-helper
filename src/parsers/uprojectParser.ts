@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as JSON5 from 'json5';
 
 export interface UProjectRaw {
   FileVersion?: number;
@@ -22,7 +23,9 @@ export async function readUProject(projectPath: string): Promise<UProjectRaw | n
   try {
     const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(projectPath));
     const text = new TextDecoder('utf-8').decode(bytes);
-    return JSON.parse(text) as UProjectRaw;
+    // 真实 UE .uproject 允许注释/尾部逗号,严格 JSON.parse 会失败,改用 JSON5.parse
+    // 返回类型由函数返回类型 UProjectRaw 上下文推断,无需显式断言
+    return JSON5.parse(text);
   } catch {
     return null;
   }

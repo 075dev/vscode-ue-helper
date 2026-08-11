@@ -3,8 +3,8 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdHandles } from '@clangd';
@@ -14,6 +14,72 @@ import { resolveFlags, getGlossaryForWebview } from '@clangd/flagGlossary';
 import { getControlPanelHtml } from './controlPanel.html';
 import { COMMAND_MAP, CONFIG_KEY_MAP } from './controlPanelMessages';
 import type { WebViewMessage, PanelMessage } from './controlPanelMessages';
+
+/**
+ * 合法消息 type 白名单。与 controlPanelMessages.ts 的 WebViewMessage union 保持同步——
+ * 白名单外 / 形状错误的消息一律在入口拒绝,不回推进 switch。
+ */
+const MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  'executeCommand',
+  'panelReady',
+  'getConfig',
+  'getProxyConfig',
+  'updateConfig',
+  'updateProxyConfig',
+  'saveConfig',
+  'saveProxyConfig',
+  'getStatus',
+  'getAddFlags',
+  'saveAddFlags',
+]);
+
+/** 校验单条 ConfigUpdate 形状:必须是 { key: string } 对象 */
+function isConfigUpdate(u: unknown): u is import('./controlPanelMessages').ConfigUpdate {
+  return typeof u === 'object' && u !== null && typeof (u as { key?: unknown }).key === 'string';
+}
+
+/**
+ * CONFIG_KEY_MAP 白名单查表:已知 UI key 返回对应配置 key,未知返回 undefined。
+ *
+ * [F2-16/W23] 统一入口,替代旧的 `CONFIG_KEY_MAP[key] ?? key` 击穿模式 ——
+ * 未知 key 不再透传写入 config,由调用方拒绝并回推错误。
+ */
+function getConfigKey(key: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(CONFIG_KEY_MAP, key) ? CONFIG_KEY_MAP[key] : undefined;
+}
+
+/**
+ * [F2-16/W23] WebView 消息运行时校验。
+ *
+ * 损坏消息(非对象 / type 缺失 / type 不在白名单 / 必填字段缺失)返回 null,
+ * 调用方回推错误,避免 handleMessage 崩溃或把不可信输入写进 config。
+ */
+function validateMessage(msg: unknown): WebViewMessage | null {
+  if (typeof msg !== 'object' || msg === null) {
+    return null;
+  }
+  const m = msg as Record<string, unknown>;
+  if (typeof m['type'] !== 'string' || !MESSAGE_TYPES.has(m['type'])) {
+    return null;
+  }
+  switch (m['type']) {
+    case 'executeCommand':
+      return typeof m['command'] === 'string' ? (msg as WebViewMessage) : null;
+    case 'updateConfig':
+    case 'updateProxyConfig':
+      return typeof m['key'] === 'string' ? (msg as WebViewMessage) : null;
+    case 'saveConfig':
+    case 'saveProxyConfig':
+      return Array.isArray(m['updates']) && (m['updates'] as unknown[]).every(isConfigUpdate)
+        ? (msg as WebViewMessage)
+        : null;
+    case 'saveAddFlags':
+      return Array.isArray(m['selectedIds']) ? (msg as WebViewMessage) : null;
+    default:
+      // panelReady / getConfig / getProxyConfig / getStatus / getAddFlags 无必填载荷
+      return msg as WebViewMessage;
+  }
+}
 
 export interface ControlPanelDeps {
   context: vscode.ExtensionContext;
@@ -135,8 +201,9 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
+          // [F2-17/W24] 只刷新标题信息,不再重设 .html —— 重设 html 会整页 reload,
+          // 清空用户在表单里填了一半的内容。refreshTitleInfo 只 postMessage 不重建 html。
           void this.refreshTitleInfo();
-          webviewView.webview.html = this.getHtmlContent(webviewView.webview);
         }
       }),
     );
@@ -175,6 +242,15 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
 
   private async handleMessage(msg: WebViewMessage): Promise<void> {
     const { logger, config } = this.deps;
+
+    // [F2-16/W23] 入口校验:损坏消息(type 白名单外 / 载荷形状错)不崩,回推错误后直接返回。
+    const validated = validateMessage(msg);
+    if (!validated) {
+      logger.warn(`[controlPanel] invalid message rejected: ${JSON.stringify(msg)}`);
+      this.postMessage({ type: 'showError', message: 'Invalid message' });
+      return;
+    }
+    msg = validated;
 
     switch (msg.type) {
       case 'panelReady':
@@ -234,45 +310,87 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         this.pushProxyConfig();
         break;
 
-      case 'updateConfig':
+      case 'updateConfig': {
+        // [F2-16/W23] 未知 key 直接拒绝并回推错误,不再 `?? msg.key` 击穿把不可信 key 写进 config
+        const configKey = getConfigKey(msg.key);
+        if (!configKey) {
+          logger.warn(`[controlPanel] unknown config key rejected: ${msg.key}`);
+          this.postMessage({ type: 'showError', message: `Unknown config key: ${msg.key}` });
+          return;
+        }
         logger.info(`[controlPanel] update config: ${msg.key}=${String(msg.value)}`);
         try {
-          await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value);
+          await config.update(configKey, msg.value);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] update config failed: ${msg.key}`, errMsg);
         }
         break;
+      }
 
-      case 'updateProxyConfig':
+      case 'updateProxyConfig': {
+        // [F2-16/W23] 同 updateConfig:未知 key 拒绝并回推错误
+        const configKey = getConfigKey(msg.key);
+        if (!configKey) {
+          logger.warn(`[controlPanel] unknown proxy config key rejected: ${msg.key}`);
+          this.postMessage({ type: 'showError', message: `Unknown proxy config key: ${msg.key}` });
+          return;
+        }
         logger.info(`[controlPanel] update proxy config: ${msg.key}=${String(msg.value)}`);
         try {
-          await config.update(CONFIG_KEY_MAP[msg.key] ?? msg.key, msg.value);
+          await config.update(configKey, msg.value);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[controlPanel] update proxy config failed: ${msg.key}`, errMsg);
         }
         break;
+      }
 
-      case 'saveConfig':
-        this.postMessage({
-          type: 'saveResult',
-          scope: 'config',
-          result: await this.batchSave(msg.updates),
-        });
+      case 'saveConfig': {
+        // [F2-16/W23] batchSave 包 try/catch:意外异常也回推 saveResult,不让 handleMessage 抛出去
+        try {
+          const result = await this.batchSave(msg.updates);
+          this.postMessage({ type: 'saveResult', scope: 'config', result });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error('[controlPanel] saveConfig batch failed:', errMsg);
+          this.postMessage({
+            type: 'saveResult',
+            scope: 'config',
+            result: {
+              success: false,
+              saved: 0,
+              failed: msg.updates.length,
+              firstError: errMsg,
+            },
+          });
+        }
         // [Status 同步 bug 修复] 保存顶层配置后也推一次 statusValues，Status Tab 上的
         // configuration / target / clangdPath / lspLoggingLevel 等字段才能即时反映。
         // config.onDidChange 监听器也会触发（异步），这里显式同步先推一份保证 webview
         // 立即收到，避免刷新时序空白。
         this.pushStatus();
         break;
+      }
 
-      case 'saveProxyConfig':
-        this.postMessage({
-          type: 'saveResult',
-          scope: 'proxy',
-          result: await this.batchSave(msg.updates),
-        });
+      case 'saveProxyConfig': {
+        try {
+          const result = await this.batchSave(msg.updates);
+          this.postMessage({ type: 'saveResult', scope: 'proxy', result });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error('[controlPanel] saveProxyConfig batch failed:', errMsg);
+          this.postMessage({
+            type: 'saveResult',
+            scope: 'proxy',
+            result: {
+              success: false,
+              saved: 0,
+              failed: msg.updates.length,
+              firstError: errMsg,
+            },
+          });
+        }
         // [Status 同步 bug 修复] 保存 Proxy 配置后必须再推一次 statusValues。原代码只
         // 回 saveResult，导致用户在 Status Tab 上看到的 proxyEnabled / keepalive /
         // localization / logPath / backup 等状态一直停留在旧值，要切走/刷新按钮才更新。
@@ -282,6 +400,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         // 仍派生显示 enabled）。pushProxyConfig 内部仍走 isActive||enabled 派生。
         this.pushProxyConfig();
         break;
+      }
 
       case 'getStatus':
         this.pushStatus();
@@ -359,7 +478,14 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       firstError: string | undefined;
     const localizationModeChanged = updates.some((u) => u.key === 'localizationMode');
     for (const u of updates) {
-      const configKey = CONFIG_KEY_MAP[u.key] ?? u.key;
+      // [F2-16/W23] 未知 key 直接计入失败,不再 `?? u.key` 击穿把不可信 key 写进 config
+      const configKey = getConfigKey(u.key);
+      if (!configKey) {
+        failed++;
+        firstError ??= `Unknown config key: ${u.key}`;
+        logger.warn(`[controlPanel] unknown key skipped: ${u.key}`);
+        continue;
+      }
       try {
         await config.update(configKey, u.value);
         saved++;

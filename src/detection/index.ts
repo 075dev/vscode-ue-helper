@@ -21,22 +21,21 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import { UprojectScanner } from './uprojectScanner';
 import { EngineDiscovery } from './engineDiscovery';
-import { VsBuildTools } from './vsBuildTools';
 import { WorkspaceContext } from './workspaceContext';
 import { readBuildVersion } from './workspaceFolders';
 import type { ProjectInfo, EngineInstall, WorkspaceFolderInfo } from './types';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import * as JSON5 from 'json5';
 
-export { UprojectScanner, EngineDiscovery, VsBuildTools, WorkspaceContext };
+export { UprojectScanner, EngineDiscovery, WorkspaceContext };
 export type {
   ProjectInfo,
   EngineInstall,
-  VSInstallation,
   WorkspaceSelection,
   WorkspaceFolderInfo,
 } from './types';
@@ -44,8 +43,8 @@ export { readBuildVersion, type ClassifiedFolder } from './workspaceFolders';
 
 export interface DetectionHandles {
   scanner: UprojectScanner;
-  discovery: EngineDiscovery;
-  vsBuildTools: VsBuildTools;
+  /** 引擎路径验证器。IIFE 检测完成后一次性赋值；ready 前为 null，读取方需防御。 */
+  discovery: EngineDiscovery | null;
   workspaceContext: WorkspaceContext;
   ready: Promise<DetectionResult>;
 }
@@ -82,8 +81,9 @@ export function activateDetection(
 
   const handles: DetectionHandles = {
     scanner: new UprojectScanner(),
-    discovery: new EngineDiscovery({ candidates: [] }),
-    vsBuildTools: new VsBuildTools(),
+    // 不预建空 candidates 实例：ready 前任何读取都是 null（消费方已防御）。
+    // IIFE 检测完成后在下方一次性赋值真实 EngineDiscovery。
+    discovery: null,
     workspaceContext: new WorkspaceContext(context.workspaceState),
     ready,
   };
@@ -113,12 +113,36 @@ export function activateDetection(
       const workspaceRootDir = path.dirname(workspaceFilePath);
 
       // 读取 .code-workspace 并解析 folders 配置
+      // .code-workspace 是 JSONC(允许注释/尾逗号),严格 JSON.parse 会失败导致检测静默降级,
+      // 改用 JSON5.parse(同 uprojectScanner.ts 的教训,json5 已是 dependencies)。
       const workspaceRaw = await fs.readFile(workspaceFilePath, 'utf-8');
-      const wsData = JSON.parse(workspaceRaw) as {
-        folders?: Array<{ name?: string; path?: string }>;
-      };
+      let wsData: { folders?: Array<{ name?: string; path?: string } | null> };
+      try {
+        // wsData 已声明目标类型,JSON5.parse<T> 由上下文推断 T,无需显式断言
+        wsData = JSON5.parse(workspaceRaw);
+      } catch (err) {
+        // 解析语法错误单独 log 具体错误信息(JSON5 错误消息含行号列号,
+        // 能直接定位 .code-workspace 里的注释/尾逗号问题),而不是被外层 catch-all 吞成一行 "pre-warm failed"。
+        logger.error(
+          `[detection] failed to parse ${workspaceFilePath}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        resolveReady({
+          projects: [],
+          engines: [],
+          workspaceFile: undefined,
+          workspaceRoot: undefined,
+          workspaceFolders: [],
+          projectFolder: null,
+          engineFolder: null,
+        });
+        return;
+      }
+      // W20 空值守卫:folders 数组可能含 null 条目,直接访问 f.name 会抛 TypeError → catch-all 全空。
+      // 先把 null 条目映射为空 name/path,保证后续逻辑不崩。
       const rawEntries: Array<{ name: string; path: string }> = (wsData.folders ?? []).map(
-        (f: { name?: string; path?: string }) => ({ name: f.name ?? '', path: f.path ?? '' }),
+        (f: { name?: string; path?: string } | null) =>
+          // eslint-disable-next-line eqeqeq -- 空值守卫:宽松等于同时覆盖 null 与 undefined
+          f == null ? { name: '', path: '' } : { name: f.name ?? '', path: f.path ?? '' },
       );
 
       // [Phase 8] 解析 folders[] 为 WorkspaceFolderInfo（含 role + absPath）
@@ -191,24 +215,25 @@ export function activateDetection(
           'Build.version',
         );
 
-        try {
-          await fs.access(buildVersionPath);
-        } catch {
+        // [F2-13/W21] Build.version 读不到时不 push 引擎(遵循模块契约"读不到 → engines = []")。
+        // 旧代码缺失时仍 push version='unknown',违反 src/detection/AGENTS.md 错误处理策略,
+        // 会让下游把假引擎当成真实引擎。缺失直接 log error + 不 push。
+        const version = await readBuildVersion(engineFolder.absPath);
+        if (version === null) {
           logger.error(
             `[detection] engine Build.version not found at ${buildVersionPath}. ` +
               `Check that the folder with name="UE5" points to a UE engine root.`,
           );
+        } else {
+          engines.push({
+            path: engineFolder.absPath,
+            version,
+            isLauncherInstall: false,
+          });
+          logger.info(
+            `[detection] engine: name="${engineFolder.name}" path="${engineFolder.absPath}" version=${version}`,
+          );
         }
-
-        const version = await readBuildVersion(engineFolder.absPath);
-        engines.push({
-          path: engineFolder.absPath,
-          version: version ?? 'unknown',
-          isLauncherInstall: false,
-        });
-        logger.info(
-          `[detection] engine: name="${engineFolder.name}" path="${engineFolder.absPath}" version=${version ?? 'unknown'}`,
-        );
       }
 
       handles.discovery = new EngineDiscovery({ candidates: engines.map((e) => e.path) });

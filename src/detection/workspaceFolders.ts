@@ -105,12 +105,21 @@ export async function readBuildVersion(engineRoot: string): Promise<string | nul
       path.join(engineRoot, 'Engine', 'Build', 'Build.version'),
       'utf-8',
     );
+    // [F2-13/W22] 补字段类型校验:字段类型异常(如字符串 "5")时返回 null,
+    // 避免产出 "5.undefined.undefined" 畸形版本号(参考 engineDiscovery.readVersion 的校验)。
     const v = JSON.parse(text) as {
-      MajorVersion: number;
-      MinorVersion: number;
-      PatchVersion: number;
+      MajorVersion?: unknown;
+      MinorVersion?: unknown;
+      PatchVersion?: unknown;
     };
-    return `${v.MajorVersion}.${v.MinorVersion}.${v.PatchVersion}`;
+    if (
+      typeof v.MajorVersion === 'number' &&
+      typeof v.MinorVersion === 'number' &&
+      typeof v.PatchVersion === 'number'
+    ) {
+      return `${v.MajorVersion}.${v.MinorVersion}.${v.PatchVersion}`;
+    }
+    return null;
   } catch {
     return null;
   }

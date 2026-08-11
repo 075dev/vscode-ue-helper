@@ -44,7 +44,23 @@ function createMockWebviewView(): MockWebviewView {
   } as unknown as MockWebviewView;
 }
 
-function createMockLogger() {
+/** mock logger 视图:公开方法声明为 Mock 属性(而非方法签名),避免 unbound-method。 */
+type MockLogger = {
+  info: ReturnType<typeof vi.fn>;
+  warn: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+  debug: ReturnType<typeof vi.fn>;
+  show: ReturnType<typeof vi.fn>;
+  setLevel: ReturnType<typeof vi.fn>;
+  dispose: ReturnType<typeof vi.fn>;
+};
+
+/** 把 Logger 转成 Mock 属性视图,供 spy 断言使用 */
+function asMockLogger(logger: import('@core/logger').Logger): MockLogger {
+  return logger as unknown as MockLogger;
+}
+
+function createMockLogger(): import('@core/logger').Logger {
   return {
     info: vi.fn(),
     warn: vi.fn(),
@@ -230,6 +246,10 @@ function createDeps() {
     logger: createMockLogger(),
     detection: createMockDetectionHandles() as unknown as import('@detection').DetectionHandles,
     clangd: createMockClangdHandles(config) as unknown as import('@clangd').ClangdHandles,
+    // clangdOps 可选:默认不注入,由各测试按需赋值。
+    // 必须显式标注联合类型——若只写 undefined,推断出的属性类型是字面量 undefined,
+    // 后续 deps.clangdOps = {...} 赋值会 TS2322。
+    clangdOps: undefined as import('@clangd/clangdOps').ClangdOps | undefined,
   };
 }
 
@@ -769,5 +789,302 @@ describe('ControlPanelProvider', () => {
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'workbench.view.extension.ueHelper',
     );
+  });
+
+  // ===== A3: handleMessage 未覆盖分支 =====
+
+  // 辅助:建立已 resolve 的 provider + 返回 listener
+  function setupResolvedProvider() {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    return { deps, listener };
+  }
+
+  it('handleMessage: updateConfig 调 config.update(走 CONFIG_KEY_MAP 翻译)', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    listener({ type: 'updateConfig', key: 'clangdProxyEnabled', value: true });
+    await drain();
+    // CONFIG_KEY_MAP 把 'clangdProxyEnabled' 翻译为 'clangdProxy.enabled'
+    expect(deps.config._updateCalls).toContainEqual(['clangdProxy.enabled', true]);
+    expect(asMockLogger(deps.logger).info).toHaveBeenCalled();
+  });
+
+  it('handleMessage: updateConfig 失败时记 error 但不抛', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    deps.config.update = vi.fn().mockRejectedValue(new Error('write fail'));
+    expect(() =>
+      listener({ type: 'updateConfig', key: 'configuration', value: 'Shipping' }),
+    ).not.toThrow();
+    await drain();
+    expect(asMockLogger(deps.logger).error).toHaveBeenCalled();
+  });
+
+  it('handleMessage: updateProxyConfig 调 config.update(走 CONFIG_KEY_MAP 翻译)', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    listener({ type: 'updateProxyConfig', key: 'localizationMode', value: 'zh-only' });
+    await drain();
+    expect(deps.config._updateCalls).toContainEqual(['clangdProxy.localization.mode', 'zh-only']);
+  });
+
+  it('handleMessage: getAddFlags 推送 addFlagValues 消息,含 entries + 当前 selectedIds', async () => {
+    const { listener } = setupResolvedProvider();
+    listener({ type: 'getAddFlags' });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'addFlagValues',
+    );
+    expect(call).toBeDefined();
+    const values = (call![0] as { values: { entries: unknown[]; selectedIds: unknown } }).values;
+    expect(Array.isArray(values.entries)).toBe(true);
+    // selectedIds 来自 config.userAddFlags(当前 mock 中未定义,getter 返回 undefined)—
+    // 这里只断言"键存在",不强求数组形态(以反映真实行为:若 config 没设,后端兜底空数组)。
+    expect('selectedIds' in values).toBe(true);
+  });
+
+  it('handleMessage: saveAddFlags 在 clangdOps 未注入时优雅降级', async () => {
+    // createDeps 默认不传 clangdOps
+    const { listener } = setupResolvedProvider();
+    listener({ type: 'saveAddFlags', selectedIds: ['compat-header'] });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'addFlagSaveResult',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({
+      result: { success: false, failed: 1, firstError: 'ClangdOps 未注入' },
+    });
+  });
+
+  it('handleMessage: saveAddFlags 在 clangdOps 注入 + applyAddFlags ok 时返回 success', async () => {
+    const deps = createDeps();
+    const applyAddFlags = vi.fn().mockResolvedValue({ ok: true });
+    deps.clangdOps = { applyAddFlags } as unknown as import('@clangd/clangdOps').ClangdOps;
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    listener({ type: 'saveAddFlags', selectedIds: ['compat-header', 'preparse-system'] });
+    await drain();
+    expect(applyAddFlags).toHaveBeenCalled();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'addFlagSaveResult',
+    );
+    expect(call![0]).toMatchObject({
+      result: { success: true, saved: 2, failed: 0 },
+    });
+  });
+
+  it('handleMessage: saveAddFlags 在 applyAddFlags 返回失败时上报 firstError', async () => {
+    const deps = createDeps();
+    const applyAddFlags = vi.fn().mockResolvedValue({ ok: false, reason: 'disk full' });
+    deps.clangdOps = { applyAddFlags } as unknown as import('@clangd/clangdOps').ClangdOps;
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    listener({ type: 'saveAddFlags', selectedIds: ['x'] });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'addFlagSaveResult',
+    );
+    expect(call![0]).toMatchObject({
+      result: { success: false, firstError: 'applyAddFlags disk full' },
+    });
+  });
+
+  it('handleMessage: saveAddFlags 在 applyAddFlags 抛异常时记 error 并返回 failure', async () => {
+    const deps = createDeps();
+    const applyAddFlags = vi.fn().mockRejectedValue(new Error('boom'));
+    deps.clangdOps = { applyAddFlags } as unknown as import('@clangd/clangdOps').ClangdOps;
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    expect(() =>
+      listener({ type: 'saveAddFlags', selectedIds: ['x'] }),
+    ).not.toThrow();
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'addFlagSaveResult',
+    );
+    expect(call![0]).toMatchObject({
+      result: { success: false, firstError: 'boom' },
+    });
+    expect(asMockLogger(deps.logger).error).toHaveBeenCalled();
+  });
+
+  it('handleMessage: unknown type 在入口被拒绝,warn + 回推 showError 但不抛(F2-16/W23)', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    // 类型断言绕过 WebViewMessage union 检查——这里故意构造未知 type
+    expect(() =>
+      listener({ type: 'totallyUnknown', payload: 'x' } as unknown as { type: string }),
+    ).not.toThrow();
+    await drain();
+    expect(asMockLogger(deps.logger).warn).toHaveBeenCalled();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(call).toBeDefined();
+  });
+
+  // ===== F2-16/W23:消息校验与 key 白名单 =====
+
+  it('handleMessage: 损坏消息(非对象)不挂起,回推 showError', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    expect(() => listener(null as unknown as { type: string })).not.toThrow();
+    expect(() => listener(undefined as unknown as { type: string })).not.toThrow();
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(call).toBeDefined();
+    expect(asMockLogger(deps.logger).warn).toHaveBeenCalled();
+  });
+
+  it('handleMessage: type 非字符串 / 白名单外 type 拒绝并回推 showError', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    expect(() => listener({ type: 42 } as unknown as { type: string })).not.toThrow();
+    expect(() =>
+      listener({ type: 'notInWhitelist' } as unknown as { type: string }),
+    ).not.toThrow();
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const showErrors = calls.filter(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(showErrors.length).toBeGreaterThanOrEqual(2);
+    expect(asMockLogger(deps.logger).warn).toHaveBeenCalled();
+  });
+
+  it('handleMessage: 必填字段缺失(executeCommand 无 command / updateConfig 无 key / saveConfig 无 updates)拒绝', async () => {
+    const { listener } = setupResolvedProvider();
+    expect(() =>
+      listener({ type: 'executeCommand' } as unknown as { type: string }),
+    ).not.toThrow();
+    expect(() =>
+      listener({ type: 'updateConfig', value: 1 } as unknown as { type: string }),
+    ).not.toThrow();
+    expect(() => listener({ type: 'saveConfig' } as unknown as { type: string })).not.toThrow();
+    await drain();
+    const calls = mockView.webview.postMessage.mock.calls;
+    const showErrors = calls.filter(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(showErrors.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('handleMessage: updateConfig 未知 key 拒绝并回推 showError,不调 config.update', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    listener({ type: 'updateConfig', key: 'notARealKey', value: 1 } as unknown as {
+      type: string;
+    });
+    await drain();
+    expect(deps.config._updateCalls).toHaveLength(0);
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(call).toBeDefined();
+    expect((call![0] as { message?: string }).message).toContain('notARealKey');
+  });
+
+  it('handleMessage: updateProxyConfig 未知 key 拒绝并回推 showError', async () => {
+    const { listener } = setupResolvedProvider();
+    listener({ type: 'updateProxyConfig', key: 'bogus', value: true } as unknown as {
+      type: string;
+    });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(call).toBeDefined();
+  });
+
+  it('handleMessage: saveConfig 含未知 key 时计入失败并回推 saveResult', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    listener({
+      type: 'saveConfig',
+      updates: [
+        { key: 'configuration', value: 'Shipping' },
+        { key: 'notARealKey', value: 1 },
+      ],
+    });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'saveResult',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({
+      scope: 'config',
+      result: { success: false, saved: 1, failed: 1 },
+    });
+    expect(deps.config._updateCalls).toContainEqual(['configuration', 'Shipping']);
+  });
+
+  it('handleMessage: executeCommand 未知 commandId 回写 commandResult(success=false)', async () => {
+    const { listener } = setupResolvedProvider();
+    // 'notInMap' 不在 COMMAND_MAP 中
+    listener({ type: 'executeCommand', command: 'notInMap' });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'commandResult',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({
+      type: 'commandResult',
+      command: 'notInMap',
+      success: false,
+    });
+  });
+
+  it('handleMessage: saveConfig 批量含失败项时,result 聚合 saved/failed/firstError', async () => {
+    const { deps, listener } = setupResolvedProvider();
+    // 让 update 在特定 key 上失败
+    const originalUpdate = deps.config.update.bind(deps.config);
+    let count = 0;
+    deps.config.update = vi.fn().mockImplementation((k: string, v: unknown) => {
+      count++;
+      if (k === 'target') {return Promise.reject(new Error('write target fail'));}
+      return originalUpdate(k, v);
+    });
+    listener({
+      type: 'saveConfig',
+      updates: [
+        { key: 'configuration', value: 'Shipping' },
+        { key: 'target', value: 'Game' },
+        { key: 'lspLoggingLevel', value: 'debug' },
+      ],
+    });
+    void count;
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'saveResult',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({
+      result: { success: false, saved: 2, failed: 1, firstError: 'write target fail' },
+    });
   });
 });

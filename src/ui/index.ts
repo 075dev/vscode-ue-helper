@@ -22,8 +22,8 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from '@core/logger';
-import { Config } from '@core/config';
+import { type Logger } from '@core/logger';
+import { type Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
 import type { WorkspaceState } from '@core/workspace';
@@ -107,9 +107,16 @@ export function activateUI(
     logger.warn(t('projectExplorer.noProject'));
   }
 
-  const renderOnce = async (): Promise<void> => {
+  /**
+   * 完整重绘 —— 依赖 detection.ready 解析后的 ctx（含项目/引擎 + 用户选择）。
+   * 用于初始激活、projectExplorer 刷新等需要全量重绘的场景。
+   *
+   * 因为依赖 detection,内部需要 await detection.ready,意味着这是异步路径。
+   * 走这条路径会引入 microtask 延迟,**不**用于 config.onDidChange（详见 renderConfigOnly）。
+   */
+  const renderFull = async (): Promise<void> => {
     try {
-      logger.info('[ui] renderOnce: awaiting detection.ready...');
+      logger.info('[ui] renderFull: awaiting detection.ready...');
       const result = await detection.ready;
       logger.info(
         `[ui] detection.ready resolved: projects=${result.projects.length} engines=${result.engines.length}`,
@@ -156,16 +163,48 @@ export function activateUI(
     }
   };
 
-  // Initial render once detection has finished pre-warm.
-  void renderOnce();
+  /**
+   * **同步**重绘仅依赖 config 的按钮 —— 不走 detection.ready,同一 tick 内更新。
+   *
+   * 修复状态栏配置变更反馈延迟 bug：之前 config.onDidChange 走 renderFull(async),
+   * 第一个 await detection.ready 会让出当前 tick,把 statusBar.update 推到 microtask,
+   * 用户在 selectConfig / selectTarget 后能感知到状态栏按钮的更新滞后。改走
+   * statusBar.updateConfig(settings) 同步重绘 configBtn / targetBtn / projectInfoBtn
+   * 的 platform 段,用户点完按钮立刻看到新值。
+   *
+   * 不重绘 build/launch/rebuild/clean/liveCoding 按钮(那些由 ctx 决定 visibility,
+   * 不依赖 config 变化)。
+   */
+  const renderConfigOnly = (): void => {
+    const settings = settingsFromConfig(config);
+    logger.info(
+      `[ui] statusBar.updateConfig (sync): cfg=${settings.buildConfiguration} target=${settings.buildTarget} platform=${settings.platform}`,
+    );
+    statusBar.updateConfig(settings);
+  };
 
-  // Re-render when the user changes any relevant config field. We listen
-  // broadly and re-render — cheap and avoids missing config keys.
+  // Initial render once detection has finished pre-warm.
+  void renderFull();
+
+  // Re-render when the user changes any relevant config field. **同步**路径 —— 不走 async
+  // renderFull,避免 microtask 延迟导致状态栏按钮更新滞后于用户操作。
   context.subscriptions.push(
     config.onDidChange(() => {
-      void renderOnce();
+      renderConfigOnly();
     }),
   );
+
+  // [F2-15/W17/A4] 用户通过 QuickPick 切换项目/引擎后,状态栏必须刷新显示新选择。
+  // workspace.setSelectedProject / setSelectedEngine 持久化成功后 fire 事件,这里全量重绘
+  // (renderFull 依赖 detection.ready 解析 ctx,内部会走 workspace.resolveSelectedProject,
+  // 能反映刚写入的新 selection)。workspace 可选——未注入时不订阅(仅测试/legacy 调用路径)。
+  if (workspace) {
+    context.subscriptions.push(
+      workspace.onDidChangeSelection(() => {
+        void renderFull();
+      }),
+    );
+  }
 
   context.subscriptions.push({
     dispose: () => {

@@ -19,8 +19,8 @@
  *   const selectedPath = ctx.getSelectedProject();  // 下次拿来用
  */
 
-import * as vscode from 'vscode';
-import { ProjectInfo, EngineInstall, WorkspaceSelection } from './types';
+import type * as vscode from 'vscode';
+import { type ProjectInfo, type EngineInstall, type WorkspaceSelection } from './types';
 
 const KEY = 'vscodeUEHelper.selection';
 

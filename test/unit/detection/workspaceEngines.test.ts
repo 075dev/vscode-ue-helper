@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { readWorkspaceFolders, classifyFolders } from '@detection/workspaceFolders';
+import {
+  readWorkspaceFolders,
+  classifyFolders,
+  readBuildVersion,
+} from '@detection/workspaceFolders';
 
 describe('readWorkspaceFolders', () => {
   let tmpDir: string;
@@ -122,5 +126,53 @@ describe('classifyFolders', () => {
     const result = await classifyFolders([empty]);
     expect(result[0]?.isProject).toBe(false);
     expect(result[0]?.isEngine).toBe(false);
+  });
+});
+
+describe('readBuildVersion (F2-13/W22)', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'build-version-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeBuildVersion(engineName: string, body: string): Promise<string> {
+    const engineRoot = path.join(tmpDir, engineName);
+    await fs.mkdir(path.join(engineRoot, 'Engine', 'Build'), { recursive: true });
+    await fs.writeFile(path.join(engineRoot, 'Engine', 'Build', 'Build.version'), body, 'utf-8');
+    return engineRoot;
+  }
+
+  it('正常字段返回 Major.Minor.Patch', async () => {
+    const root = await writeBuildVersion(
+      'UE_5.8',
+      JSON.stringify({ MajorVersion: 5, MinorVersion: 8, PatchVersion: 0 }),
+    );
+    expect(await readBuildVersion(root)).toBe('5.8.0');
+  });
+
+  it('字段类型异常时返回 null,不再产出 5.undefined.undefined', async () => {
+    // 字符串类型的 MajorVersion 会击穿模板字符串 → 畸形版本号
+    const root = await writeBuildVersion(
+      'UE_BadType',
+      JSON.stringify({ MajorVersion: '5', MinorVersion: 8, PatchVersion: 0 }),
+    );
+    expect(await readBuildVersion(root)).toBeNull();
+  });
+
+  it('字段缺失时返回 null', async () => {
+    const root = await writeBuildVersion(
+      'UE_Missing',
+      JSON.stringify({ MajorVersion: 5 }),
+    );
+    expect(await readBuildVersion(root)).toBeNull();
+  });
+
+  it('文件不存在时返回 null', async () => {
+    expect(await readBuildVersion(path.join(tmpDir, 'NoEngine'))).toBeNull();
   });
 });

@@ -12,7 +12,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ProjectInfo, EngineInstall } from '@detection';
+import { type ProjectInfo, type EngineInstall } from '@detection';
 import { t } from '@i18n';
 
 export async function pickProject(projects: ProjectInfo[]): Promise<ProjectInfo | undefined> {

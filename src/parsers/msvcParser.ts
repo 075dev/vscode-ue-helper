@@ -11,7 +11,7 @@
  * 解析后的 ParsedDiagnostic 推到 Problems 面板(file:line:col 可点击跳转)。
  */
 
-import { ParsedDiagnostic } from '@core/types/diagnostic';
+import { type ParsedDiagnostic } from '@core/types/diagnostic';
 
 // Pattern 1: file(line,col): severity Code: message
 // Group 1: file, 2: line, 3: column (optional), 4: severity, 5: code, 6: message
@@ -20,7 +20,7 @@ const MSVC_RE =
 
 // Pattern 2: linker LNK2019 / LNK1120 — file path on its own line then
 //   ": error LNK2019: ..."  OR  "Module : error LNK2019: ..."
-const LINKER_RE = /^(.*?)\s*:\s*(error|warning)\s+(LNK\d+)\s*:\s*(.*)$/;
+const LINKER_RE = /^(.*?)\s*:\s*(error|warning|fatal error)\s+(LNK\d+)\s*:\s*(.*)$/;
 
 export class MsvcParser {
   private buffer = '';

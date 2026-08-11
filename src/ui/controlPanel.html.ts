@@ -343,7 +343,10 @@ export function getControlPanelHtml(
       const toast = document.getElementById('result-toast');
       let toastTimer = null;
       // [Plan Add 收束] 注入 glossary 元数据 + 当前 selectedIds 由后续 addFlagValues 消息覆盖
-      const ADD_FLAG_ENTRIES = ${JSON.stringify(addFlagEntries)};
+      // [Script-context XSS 防护] 在 </script 前插入反斜杠,防止 id/description 等字符串
+      // 被攻击者构造 "</script><script>..." 逃出当前 script 块。OWASP:JSON.stringify
+      // 默认不转义 < / >,需手工 escape。
+      const ADD_FLAG_ENTRIES = ${JSON.stringify(addFlagEntries).replace(/<\/script/gi, '<\\/script')};
       let addFlagSelectedIds = [];
       document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -637,3 +640,6 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// 导出仅供 XSS 单测直接断言;运行时调用走上方私有函数。
+export { escapeHtml as escapeHtmlForTest };
