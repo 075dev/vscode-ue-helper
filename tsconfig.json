@@ -48,7 +48,9 @@
       "@ui": ["src/ui/index"],
       "@ui/*": ["src/ui/*"],
       "@mcp": ["src/mcp/index"],
-      "@mcp/*": ["src/mcp/*"]
+      "@mcp/*": ["src/mcp/*"],
+      "@rules": ["src/rules/index"],
+      "@rules/*": ["src/rules/*"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],

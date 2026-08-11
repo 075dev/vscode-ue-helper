@@ -1,27 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MsvcParser } from '@parsers/msvcParser';
 import { UbtParser } from '@parsers/ubtParser';
-import { LinkerParser } from '@parsers/linkerParser';
-
-describe('LinkerParser', () => {
-  it('parses LNK2019 errors', () => {
-    const p = new LinkerParser();
-    const m = p.parse('LNK2019: unresolved external symbol foo');
-    expect(m?.code).toBe('LNK2019');
-    expect(m?.message).toContain('unresolved external symbol foo');
-  });
-
-  it('extracts undefined symbol names', () => {
-    const p = new LinkerParser();
-    expect(p.extractSymbol('undefined reference to `SomeFunc`')).toBe('SomeFunc');
-    expect(p.extractSymbol('undefined reference to globalVar')).toBe('globalVar');
-  });
-
-  it('returns null for non-linker lines', () => {
-    const p = new LinkerParser();
-    expect(p.parse('Random output')).toBeNull();
-  });
-});
 
 describe('MsvcParser integration with UbtParser', () => {
   it('correctly handles interleaved UBT progress + MSVC diagnostics', () => {

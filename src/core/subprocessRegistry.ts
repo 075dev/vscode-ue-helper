@@ -10,9 +10,9 @@
  * ## 关闭流程
  *
  * 1. `dispose()` 被 VS Code 通过 `context.subscriptions` 触发
- * 2. 对每个注册的 child,Windows-only 走 `taskkill /F /T /PID <pid>`
- *    (杀整个进程树,Plain `child.kill()` 只杀顶层 cmd.exe,UBT/dotnet 仍在跑)
- * 3. 3 秒后仍未退出的进程,升级 `taskkill /F` 强杀
+ * 2. 对每个注册的 child,Windows-only 第一刀直接 `taskkill /F /T /PID <pid>`
+ *    (`/F` 本身就是强杀并带进程树,Plain `child.kill()` 只杀顶层 cmd.exe,UBT/dotnet 仍在跑)
+ * 3. 3 秒后仍未退出的进程,再补一刀 `taskkill /F`(无 `/T`,直接 PID 兜底)
  * 4. 所有操作 best-effort,失败仅 warn
  *
  * ## 设计原则
@@ -35,6 +35,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { ChildProcess } from 'node:child_process';
 import type { Disposable } from 'vscode';
+import { type Logger, sharedLogger } from '@core/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -79,6 +80,15 @@ export class SubprocessRegistry implements Disposable {
   private readonly entries = new Set<RegistryEntry>();
   private _disposed = false;
   private _killed = false;
+  /**
+   * 可选日志器:register 时机异常(dispose 后)时显式记录。
+   * 单例传入 `sharedLogger`;测试可直接不传(静默)。
+   */
+  private readonly logger?: Logger;
+
+  constructor(logger?: Logger) {
+    this.logger = logger;
+  }
 
   /** 当前注册的子进程数(测试 + 调试) */
   get size(): number {
@@ -95,13 +105,17 @@ export class SubprocessRegistry implements Disposable {
    *
    * - child 自然 exit 时自动 unregister(set 不会无限增长)
    * - 重复注册同一个 child 是 no-op
-   * - dispose 之后注册仅 warn 日志,不抛错
+   * - dispose 之后注册:显式 warn 一条日志并丢弃(不抛错)。注入 logger 后
+   *   从"静默 return"升级为可观测;不注入时保持静默(与旧行为一致)。
    */
   register(child: ChildProcess, label: string): void {
     if (this._disposed) {
-      // dispose 之后还 register 怎么办?大概率是某 dispose 顺序问题;不抛错,日志提醒
+      // dispose 之后还 register 怎么办?大概率是某 dispose 顺序问题;不抛错,仅日志提醒。
       // (理论上不会发生:registry 第一个 push 进 subscriptions,其他模块 dispose 之前
       //  我们已经 dispose 完。但 detached spawn 可能在 deactivate 中途发生。)
+      this.logger?.warn(
+        `[subprocessRegistry] register after dispose ignored: ${label} (pid ${child.pid ?? 'unknown'})`,
+      );
       return;
     }
     if (!child.pid) {
@@ -137,7 +151,8 @@ export class SubprocessRegistry implements Disposable {
   }
 
   /**
-   * 杀所有子进程:SIGTERM(Windows: taskkill /F /T) → 3s → SIGKILL(taskkill /F)。
+   * 杀所有子进程:Windows 下第一刀 `taskkill /F /T` 强杀进程树,
+   * 3s 后对仍未退出的进程再补一刀 `taskkill /F` 兜底。
    *
    * - 幂等:重复调用安全
    * - 不会等 child 真正 exit 才返回(每个 child 走独立 await,但不串行等)
@@ -183,7 +198,8 @@ export class SubprocessRegistry implements Disposable {
       return;
     }
 
-    // 第一刀:taskkill /F /T(优雅,走进程树)
+    // 第一刀:taskkill /F /T 强杀整个进程树(不是"优雅"关闭 —— /F 本身就是强杀)。
+    // 带 /T 才能连 cmd.exe 包装层一起杀,UBT/dotnet 才不会残留成孤儿。
     await killTree(child);
 
     // 检查是否已退出(可能在第一刀与第二刀之间自然退出了)
@@ -254,5 +270,8 @@ export class SubprocessRegistry implements Disposable {
   }
 }
 
-/** 全插件共享的 SubprocessRegistry 单例 */
-export const sharedSubprocessRegistry = new SubprocessRegistry();
+/**
+ * 全插件共享的 SubprocessRegistry 单例。
+ * 注入 `sharedLogger`:dispose 之后 register 这类异常时序能被显式记录(而非静默丢弃)。
+ */
+export const sharedSubprocessRegistry = new SubprocessRegistry(sharedLogger);

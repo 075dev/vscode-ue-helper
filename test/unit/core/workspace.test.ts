@@ -139,6 +139,48 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       await workspace.setSelectedEngine(undefined);
       expect(workspace.selectedEngine).toBeNull();
     });
+
+    // [F2-15/W17] selection 变更事件:setSelected* 成功后必须 fire,UI 靠它重绘状态栏
+    it('setSelectedProject 成功后 fire onDidChangeSelection', async () => {
+      const listener = vi.fn();
+      const sub = workspace.onDidChangeSelection(listener);
+      await workspace.setSelectedProject(fakeProject2);
+      expect(listener).toHaveBeenCalledTimes(1);
+      sub.dispose();
+    });
+
+    it('setSelectedEngine 成功后 fire onDidChangeSelection', async () => {
+      const listener = vi.fn();
+      const sub = workspace.onDidChangeSelection(listener);
+      await workspace.setSelectedEngine(fakeEngine2);
+      expect(listener).toHaveBeenCalledTimes(1);
+      sub.dispose();
+    });
+
+    it('dispose 释放 emitter,setSelected* 不再触发事件且不抛错', async () => {
+      const listener = vi.fn();
+      const sub = workspace.onDidChangeSelection(listener);
+      await workspace.setSelectedProject(fakeProject2);
+      expect(listener).toHaveBeenCalledTimes(1);
+      workspace.dispose();
+      // dispose 后 setter 是 no-op(无 workspaceContext),不会 fire,也不会抛错
+      await expect(workspace.setSelectedProject(fakeProject2)).resolves.toBeUndefined();
+      expect(listener).toHaveBeenCalledTimes(1);
+      sub.dispose();
+    });
+
+    // [F2-18/W25] Windows 路径大小写不敏感:持久化路径大小写与检测路径不同也能匹配
+    it('resolveSelectedProject 大小写不敏感匹配', async () => {
+      await workspace.setSelectedProject({ ...fakeProject2, path: fakeProject2.path.toLowerCase() });
+      const found = workspace.resolveSelectedProject([fakeProject2]);
+      expect(found?.path).toBe(fakeProject2.path);
+    });
+
+    it('resolveSelectedEngine 大小写不敏感匹配', async () => {
+      await workspace.setSelectedEngine({ ...fakeEngine2, path: fakeEngine2.path.toLowerCase() });
+      const found = workspace.resolveSelectedEngine([fakeEngine2]);
+      expect(found?.path).toBe(fakeEngine2.path);
+    });
   });
 
   describe('detection.ready 时序', () => {
@@ -279,6 +321,298 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       const workspace = new WorkspaceState({ detection, logger: noopLogger });
       workspace.dispose();
       await expect(workspace.setSelectedProject(fakeProject)).resolves.toBeUndefined();
+    });
+  });
+});
+
+// ===== A7: Level 0/1 派生 getter 单测 =====
+
+// 关键陷阱:WorkspaceState 构造时**会**订阅 detection.ready 并在 ready 解析时自动 setResult,
+// 覆盖我后续的 setResult。解决:在 setResult 之前用 never-resolving Promise 阻止自动注入,
+// setResult 之后再 resolve 来"无缝替换"——但更简单的是,绕开构造时注入:用一个永不 resolve
+// 的 ready,等 setResult 完成后手动 resolve 即可覆盖。
+function makePendingDetection() {
+  let resolve!: (r: import('@detection').DetectionResult) => void;
+  const ready = new Promise<import('@detection').DetectionResult>((r) => {
+    resolve = r;
+  });
+  return {
+    detection: {
+      ready,
+      workspaceContext: null as unknown as WorkspaceContext,
+    },
+    resolve,
+  };
+}
+
+describe('WorkspaceState — Level 0 根源 getter', () => {
+  function makeInjected(overrides: {
+    projectFolder?: { name: string; path: string; absPath: string; role: 'project' } | null;
+    engineFolder?: { name: string; path: string; absPath: string; role: 'engine' } | null;
+    workspaceFile?: string;
+    project?: ProjectInfo;
+    engine?: EngineInstall;
+  } = {}): WorkspaceState {
+    const { detection } = makePendingDetection();
+    const workspace = new WorkspaceState({ detection, logger: noopLogger });
+    // [关键] ready 永远不 resolve,不会覆盖我后续的 setResult
+    // 用 === undefined 区分"未传" vs "显式传 null"——项目 folder 显式 null 是合法场景
+    // (例如:没有 .uproject 但打开了 .code-workspace)。不可用 'in' 判断:TS 对可选属性
+    // 的 in 收窄不会去除 | undefined,直接传给 setResult 会 TS2322。
+    const defaultProjectFolder = { name: 'MyGame', path: 'D:/proj/MyGame', absPath: 'D:/proj/MyGame', role: 'project' as const };
+    const defaultEngineFolder = { name: 'UE5', path: 'D:/UE_5.5', absPath: 'D:/UE_5.5', role: 'engine' as const };
+    const projectFolder = overrides.projectFolder === undefined
+      ? defaultProjectFolder
+      : overrides.projectFolder;
+    const engineFolder = overrides.engineFolder === undefined
+      ? defaultEngineFolder
+      : overrides.engineFolder;
+    workspace.setResult({
+      projects: [overrides.project ?? fakeProject],
+      engines: [overrides.engine ?? fakeEngine],
+      workspaceFile: overrides.workspaceFile,
+      workspaceRoot: undefined,
+      workspaceFolders: [projectFolder, engineFolder].filter((f): f is NonNullable<typeof f> => f !== null),
+      projectFolder,
+      engineFolder,
+    });
+    return workspace;
+  }
+
+  describe('isInjected / workspaceFile / workspaceFolders', () => {
+    it('isInjected 在 setResult 后为 true', () => {
+      const ws = makeInjected();
+      expect(ws.isInjected).toBe(true);
+    });
+
+    it('isInjected 在构造但未 setResult 前为 false', () => {
+      const { detection } = makePendingDetection();
+      const ws = new WorkspaceState({ detection, logger: noopLogger });
+      expect(ws.isInjected).toBe(false);
+    });
+
+    it('workspaceFile 反映 setResult 传入值', () => {
+      const ws = makeInjected({ workspaceFile: 'D:/ws/MyGame.code-workspace' });
+      expect(ws.workspaceFile).toBe('D:/ws/MyGame.code-workspace');
+    });
+
+    it('workspaceFile 为 undefined 时返回 null', () => {
+      const ws = makeInjected({ workspaceFile: undefined });
+      expect(ws.workspaceFile).toBeNull();
+    });
+
+    it('workspaceFolders 返回 setResult 注入的数组', () => {
+      const ws = makeInjected();
+      const folders = ws.workspaceFolders;
+      expect(folders).toHaveLength(2);
+      expect(folders[0]?.name).toBe('MyGame');
+      expect(folders[1]?.name).toBe('UE5');
+    });
+  });
+
+  describe('projectFolder / engineFolder / project / engine', () => {
+    it('projectFolder 反映 role=project 的 folder', () => {
+      const ws = makeInjected();
+      expect(ws.projectFolder).toEqual({
+        name: 'MyGame',
+        path: 'D:/proj/MyGame',
+        absPath: 'D:/proj/MyGame',
+        role: 'project',
+      });
+    });
+
+    it('engineFolder 反映 role=engine 的 folder', () => {
+      const ws = makeInjected();
+      expect(ws.engineFolder).toEqual({
+        name: 'UE5',
+        path: 'D:/UE_5.5',
+        absPath: 'D:/UE_5.5',
+        role: 'engine',
+      });
+    });
+
+    it('project 返回首个 project', () => {
+      const ws = makeInjected();
+      expect(ws.project?.name).toBe('MyGame');
+    });
+
+    it('engine 返回首个 engine', () => {
+      const ws = makeInjected();
+      expect(ws.engine?.version).toBe('5.5.0');
+    });
+  });
+});
+
+describe('WorkspaceState — Level 1 派生路径 getter', () => {
+  function makeInjected(overrides: {
+    projectFolder?: { name: string; path: string; absPath: string; role: 'project' } | null;
+    engineFolder?: { name: string; path: string; absPath: string; role: 'engine' } | null;
+    workspaceFile?: string;
+    project?: ProjectInfo;
+    engine?: EngineInstall;
+  } = {}): WorkspaceState {
+    const { detection } = makePendingDetection();
+    const workspace = new WorkspaceState({ detection, logger: noopLogger });
+    const defaultProjectFolder = { name: 'MyGame', path: 'D:/proj/MyGame', absPath: 'D:/proj/MyGame', role: 'project' as const };
+    const defaultEngineFolder = { name: 'UE5', path: 'D:/UE_5.5', absPath: 'D:/UE_5.5', role: 'engine' as const };
+    const projectFolder = overrides.projectFolder === undefined
+      ? defaultProjectFolder
+      : overrides.projectFolder;
+    const engineFolder = overrides.engineFolder === undefined
+      ? defaultEngineFolder
+      : overrides.engineFolder;
+    workspace.setResult({
+      projects: [overrides.project ?? fakeProject],
+      engines: [overrides.engine ?? fakeEngine],
+      workspaceFile: overrides.workspaceFile,
+      workspaceRoot: undefined,
+      workspaceFolders: [projectFolder, engineFolder].filter((f): f is NonNullable<typeof f> => f !== null),
+      projectFolder,
+      engineFolder,
+    });
+    return workspace;
+  }
+
+  describe('workspaceRoot', () => {
+    it('有 workspaceFile 时返回其 dirname', () => {
+      const ws = makeInjected({ workspaceFile: 'D:/ws/MyGame.code-workspace' });
+      // 平台相关——只要包含上级目录名 'ws' 即可
+      expect(ws.workspaceRoot).toBe('D:/ws');
+    });
+
+    it('无 workspaceFile 时返回 null', () => {
+      const ws = makeInjected({ workspaceFile: undefined });
+      expect(ws.workspaceRoot).toBeNull();
+    });
+  });
+
+  describe('projectDir / projectFile / projectName', () => {
+    it('projectDir 优先用 projectFolder.absPath', () => {
+      const ws = makeInjected({
+        projectFolder: { name: 'MyGame', path: 'D:/detected/MyGame', absPath: 'D:/detected/MyGame', role: 'project' },
+      });
+      expect(ws.projectDir).toBe('D:/detected/MyGame');
+    });
+
+    it('projectDir fallback 到 project.path 的 dirname', () => {
+      const ws = makeInjected({ projectFolder: null });
+      // fakeProject.path = D:/proj/MyGame/MyGame.uproject
+      expect(ws.projectDir).toBe('D:/proj/MyGame');
+    });
+
+    it('projectDir 两者都缺失时返回 null', () => {
+      const { detection } = makePendingDetection();
+      const workspace = new WorkspaceState({ detection, logger: noopLogger });
+      workspace.setResult({
+        projects: [],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: undefined,
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      });
+      expect(workspace.projectDir).toBeNull();
+    });
+
+    it('projectFile 优先用 project.path(完整 .uproject 路径)', () => {
+      const ws = makeInjected();
+      expect(ws.projectFile).toBe(fakeProject.path);
+    });
+
+    it('projectFile 缺失 project 时由 projectDir + projectFolder.name 拼接', () => {
+      const { detection } = makePendingDetection();
+      const workspace = new WorkspaceState({ detection, logger: noopLogger });
+      workspace.setResult({
+        projects: [],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: undefined,
+        workspaceFolders: [
+          { name: 'MyGame', path: 'D:/detected/MyGame', absPath: 'D:/detected/MyGame', role: 'project' },
+        ],
+        projectFolder: { name: 'MyGame', path: 'D:/detected/MyGame', absPath: 'D:/detected/MyGame', role: 'project' },
+        engineFolder: null,
+      });
+      // 平台相关 path——只断言"以 MyGame.uproject 结尾 + 含 detected"
+      expect(workspace.projectFile).toMatch(/MyGame\.uproject$/);
+      expect(workspace.projectFile).toContain('detected');
+    });
+
+    it('projectName 优先用 projectFolder.name', () => {
+      const ws = makeInjected({
+        projectFolder: { name: 'DetectedName', path: 'D:/x', absPath: 'D:/x', role: 'project' },
+      });
+      expect(ws.projectName).toBe('DetectedName');
+    });
+
+    it('projectName fallback 到 project.path basename 去掉 .uproject 后缀', () => {
+      const ws = makeInjected({ projectFolder: null });
+      expect(ws.projectName).toBe('MyGame');
+    });
+
+    it('projectName 两者都缺失时返回 null', () => {
+      const { detection } = makePendingDetection();
+      const workspace = new WorkspaceState({ detection, logger: noopLogger });
+      workspace.setResult({
+        projects: [],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: undefined,
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      });
+      expect(workspace.projectName).toBeNull();
+    });
+  });
+
+  describe('engineRoot / engineVersion', () => {
+    it('engineRoot 优先用 engineFolder.absPath', () => {
+      const ws = makeInjected({
+        engineFolder: { name: 'UE5', path: 'D:/detected/UE', absPath: 'D:/detected/UE', role: 'engine' },
+      });
+      expect(ws.engineRoot).toBe('D:/detected/UE');
+    });
+
+    it('engineRoot fallback 到 engine.path', () => {
+      const ws = makeInjected({ engineFolder: null });
+      expect(ws.engineRoot).toBe(fakeEngine.path);
+    });
+
+    it('engineRoot 两者都缺失时返回 null', () => {
+      const { detection } = makePendingDetection();
+      const workspace = new WorkspaceState({ detection, logger: noopLogger });
+      workspace.setResult({
+        projects: [],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: undefined,
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      });
+      expect(workspace.engineRoot).toBeNull();
+    });
+
+    it('engineVersion 返回 engine.version', () => {
+      const ws = makeInjected();
+      expect(ws.engineVersion).toBe('5.5.0');
+    });
+
+    it('engineVersion engine 缺失时返回 null', () => {
+      const { detection } = makePendingDetection();
+      const workspace = new WorkspaceState({ detection, logger: noopLogger });
+      workspace.setResult({
+        projects: [],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: undefined,
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      });
+      expect(workspace.engineVersion).toBeNull();
     });
   });
 });

@@ -153,11 +153,6 @@ export class Config {
     return this.root.get<'error' | 'warn' | 'info' | 'debug'>('lspLoggingLevel') ?? 'info';
   }
 
-  /** Phase 0 占位符 —— 当前不暴露给用户 */
-  get showWelcomeOnActivation(): boolean {
-    return false;
-  }
-
   // ===== Clangd Proxy 配置 =====
 
   /** 是否启用 clangd LSP Proxy，默认 false */
@@ -225,14 +220,6 @@ export class Config {
    */
   get showPerfInStatusBar(): boolean {
     return this.root.get<boolean>('showPerfInStatusBar') ?? false;
-  }
-
-  /**
-   * Phase 8 D-05/D-06: UE reflection header 自动同步 watcher 是否启用。
-   * 默认开启，用户可关闭以避免频繁 UBT 调用。
-   */
-  get clangdHeaderWatcherEnabled(): boolean {
-    return this.root.get<boolean>('clangdHeaderWatcher.enabled') ?? true;
   }
 
   // ===== Plan Add 收束：自定义 Add Flags（控制面板勾选）=====

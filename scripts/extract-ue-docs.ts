@@ -27,7 +27,7 @@ import { sync as globSync } from 'glob';
 
 // ===== 类型定义 =====
 
-interface DocEntry {
+export interface DocEntry {
   /** 类型/函数名称 */
   name: string;
   /** 种类：type_alias / class / struct / function / variable / enum / macro */
@@ -44,7 +44,7 @@ interface DocEntry {
 
 // ===== 命令行参数 =====
 
-interface CliArgs {
+export interface CliArgs {
   engineRoot: string;
   output: string;
   include?: string;
@@ -52,18 +52,18 @@ interface CliArgs {
   minDocLength: number;
 }
 
-function parseArgs(): CliArgs {
-  const args = process.argv.slice(2);
+export function parseArgs(argv: readonly string[] = process.argv.slice(2)): CliArgs {
   const get = (prefix: string, def?: string): string | undefined => {
-    const arg = args.find((a) => a.startsWith(prefix));
+    const arg = argv.find((a) => a.startsWith(prefix));
     return arg ? arg.slice(prefix.length) : def;
   };
 
   const engineRoot = get('--engine=');
   if (!engineRoot || !fs.existsSync(engineRoot)) {
-    console.error('用法: npx tsx scripts/extract-ue-docs.ts --engine="D:/UE_5.5" --output="data/ue-docs.json"');
-    console.error('错误: --engine 路径不存在或未指定');
-    process.exit(1);
+    throw new Error(
+      '用法: npx tsx scripts/extract-ue-docs.ts --engine="D:/UE_5.5" --output="data/ue-docs.json"\n' +
+        '错误: --engine 路径不存在或未指定',
+    );
   }
 
   return {
@@ -71,7 +71,7 @@ function parseArgs(): CliArgs {
     output: get('--output=') ?? 'data/ue-docs.json',
     include: get('--include='),
     exclude: get('--exclude='),
-    minDocLength: parseInt(get('--min-doc-length=', '80'), 10),
+    minDocLength: parseInt(get('--min-doc-length=', '80') ?? '80', 10),
   };
 }
 
@@ -80,19 +80,31 @@ function parseArgs(): CliArgs {
 /**
  * 从源代码行中提取声明名称和类型。
  */
-function parseDeclaration(line: string): { name: string; kind: string } | null {
+export function parseDeclaration(line: string): { name: string; kind: string } | null {
   const trimmed = line.trim();
 
   // 去掉前置 template<...> 前缀（可能有多层嵌套 <>）
   const afterTemplate = trimmed.replace(/^template\s*<[^<>]*(?:<[^<>]*>[^<>]*)*>\s*/, '').trim();
 
-  // 使用去掉 template 后的文本匹配
+  // [Bug fix] 去掉前置 UE 宏（UCLASS()、USTRUCT()、UPROPERTY()、UFUNCTION()、UENUM()、
+  // UINTERFACE()、UDELEGATE()、GENERATED_BODY()、UE_API、UE_NODISCARD 等），再尝试匹配。
+  // 场景:findDeclaration 收集了 "UCLASS() class UMyComponent : public UObject {",parseDeclaration
+  // 若不先剥 UCLASS,所有 ^using|^class|^struct 都不匹配,导致反射宏后的真实声明丢失。
+  // 注意:UE_DECLARE_* 不在此处剥(parseDeclaration 后续分支单独识别为 macro)。
+  const afterMacros = afterTemplate
+    .replace(/^(UCLASS\s*\([^)]*\)|USTRUCT\s*\([^)]*\)|UENUM\s*\([^)]*\)|UINTERFACE\s*\([^)]*\)|UPROPERTY\s*\([^)]*\)|UFUNCTION\s*\([^)]*\)|UDELEGATE\s*\([^)]*\)|GENERATED_[A-Z_]*\s*\([^)]*\)|UE_API|UE_NODISCARD|UE_FORCEINLINE|UE_DEPRECATED)\s*/g, '')
+    .trim();
+
+  // 使用去掉 template + macros 后的文本匹配
   // template<...> using X = ...
-  const usingMatch = afterTemplate.match(/^using\s+(\w+)\s*=/);
+  const usingMatch = afterMacros.match(/^using\s+(\w+)\s*=/);
   if (usingMatch) return { name: usingMatch[1]!, kind: 'type_alias' };
 
   // [class|struct] [UE_API|...] X ...
-  const typeMatch = afterTemplate.match(/^(class|struct)\s+(?:\w+\s+)?(\w+)(?:\s*:\s*.*)?\s*\{?$/);
+  // 允许以 ; { 或 { } 或行尾结尾(findDeclaration 合并后通常带 ; 或 { 或 { ... })
+  const typeMatch = afterMacros.match(
+    /^(class|struct)\s+(?:\w+\s+)?(\w+)(?:\s*:\s*.*)?(?:\s*\{[^}]*\})?\s*[;{]?$/,
+  );
   if (typeMatch) {
     const name = typeMatch[2]!;
     const kind = typeMatch[1] === 'class' ? 'class' : 'struct';
@@ -100,20 +112,36 @@ function parseDeclaration(line: string): { name: string; kind: string } | null {
   }
 
   // enum class X ...
-  const enumMatch = trimmed.match(/^enum\s+(?:class\s+)?(\w+)\s*(?::\s*\w+)?\s*\{?$/);
+  const enumMatch = afterMacros.match(
+    /^enum\s+(?:class\s+)?(\w+)\s*(?::\s*\w+)?(?:\s*\{[^}]*\})?\s*[;{]?$/,
+  );
   if (enumMatch) return { name: enumMatch[1]!, kind: 'enum' };
 
   // UE_DECLARE_* macros
-  const macroMatch = trimmed.match(/^UE_DECLARE_(\w+)\(/);
+  const macroMatch = afterMacros.match(/^UE_DECLARE_(\w+)\(/);
   if (macroMatch) return { name: `UE_DECLARE_${macroMatch[1]}`, kind: 'macro' };
 
-  // ReturnType FunctionName(params) or ReturnType FunctionName()
-  const funcMatch = trimmed.match(
-    /^(?:\w+\s+)*(\w+)\s*\([^)]*\)\s*(?:const|override|final|;)*\s*\{?$/,
-  );
+  // [Bug fix] 简单变量声明:type-name + name + ; 或 = initial
+  // 场景:UPROPERTY() bool bReplicates; / int32 Count = 0;
+  // 限制:仅 type 与 name 都不含 < > (避免误吞 template/func)。允许 type 带 * & 引用。
+  // 必须放在 controlKeywords 引用之前——controlKeywords 在 funcMatch 检查时才声明。
   const controlKeywords = [
     'if', 'for', 'while', 'switch', 'catch', 'return', 'delete',
   ];
+  const varMatch = afterMacros.match(
+    /^(?:const\s+)?(?:unsigned\s+)?[\w:]+(?:\s+[*&]+)*\s+(\w+)\s*(?:=\s*[^;]+)?;?$/,
+  );
+  if (varMatch && varMatch[1] && !controlKeywords.includes(varMatch[1])) {
+    const reserved = ['class', 'struct', 'enum', 'union', 'typename', 'using', 'namespace'];
+    if (!reserved.includes(varMatch[1])) {
+      return { name: varMatch[1], kind: 'variable' };
+    }
+  }
+
+  // ReturnType FunctionName(params) or ReturnType FunctionName()
+  const funcMatch = afterMacros.match(
+    /^(?:\w+\s+)*(\w+)\s*\([^)]*\)\s*(?:const|override|final|;)*\s*\{?$/,
+  );
   if (funcMatch && !controlKeywords.includes(funcMatch[1]!)) {
     return { name: funcMatch[1]!, kind: 'function' };
   }
@@ -122,19 +150,21 @@ function parseDeclaration(line: string): { name: string; kind: string } | null {
 }
 
 /**
- * 判断一行是否可能是声明行（非空、不以 * 开头、不以 // 开头）。
+ * 判断一行是否可能是声明行（非空、不以 * 开头、不以 // 开头、不以 # 开头、不以 / 开头）。
  */
-function isDeclarationLine(line: string): boolean {
+export function isDeclarationLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
   if (trimmed.startsWith('*') || trimmed.startsWith('//')) return false;
+  if (trimmed.startsWith('#')) return false; // 预处理指令
+  if (trimmed.startsWith('/')) return false; // 块注释 /** */ 等
   return true;
 }
 
 /**
  * 从文件内容中提取文档注释及其声明。
  */
-function extractDocComments(
+export function extractDocComments(
   content: string,
   relativePath: string,
   minDocLength: number,
@@ -247,7 +277,7 @@ function extractDocComments(
  * 从指定行开始查找声明。
  * 跳过空行、宏、属性标记（如 UE_API、template 前缀行）。
  */
-function findDeclaration(
+export function findDeclaration(
   lines: string[],
   startLine: number,
 ): { name: string; kind: string; signature: string } | null {
@@ -272,6 +302,25 @@ function findDeclaration(
 
     // 收集 template 前缀
     if (trimmed.startsWith('template')) {
+      prefixLines.push(trimmed);
+      i++;
+      continue;
+    }
+
+    // [Bug fix] 必须在 isDeclarationLine 之前处理——否则 UCLASS() 自身会被当成
+    // 声明行进入 multi-line 收集,导致合并后 parseDeclaration 失败,真实 class 丢失。
+    if (
+      trimmed.startsWith('UE_') ||
+      trimmed.startsWith('UCLASS') ||
+      trimmed.startsWith('USTRUCT') ||
+      trimmed.startsWith('UENUM') ||
+      trimmed.startsWith('UINTERFACE') ||
+      trimmed.startsWith('UPROPERTY') ||
+      trimmed.startsWith('UFUNCTION') ||
+      trimmed.startsWith('UDELEGATE') ||
+      trimmed.startsWith('DECLARE_') ||
+      trimmed.startsWith('GENERATED_')
+    ) {
       prefixLines.push(trimmed);
       i++;
       continue;
@@ -309,25 +358,6 @@ function findDeclaration(
       return null;
     }
 
-    // 宏属性标记等（UE_API, UCLASS(), UPROPERTY() 等）
-    if (
-      trimmed.startsWith('UE_') ||
-      trimmed.startsWith('UCLASS') ||
-      trimmed.startsWith('USTRUCT') ||
-      trimmed.startsWith('UENUM') ||
-      trimmed.startsWith('UINTERFACE') ||
-      trimmed.startsWith('UPROPERTY') ||
-      trimmed.startsWith('UFUNCTION') ||
-      trimmed.startsWith('UDELEGATE') ||
-      trimmed.startsWith('DECLARE_') ||
-      trimmed.startsWith('GENERATED_')
-    ) {
-      prefixLines.push(trimmed);
-      i++;
-      continue;
-    }
-
-    // 其他不可识别的内容，放弃
     return null;
   }
 
@@ -336,9 +366,7 @@ function findDeclaration(
 
 // ===== 主流程 =====
 
-async function main(): Promise<void> {
-  const args = parseArgs();
-
+export async function runExtract(args: CliArgs): Promise<DocEntry[]> {
   console.log(`UE 引擎根目录: ${args.engineRoot}`);
   console.log(`最小文档长度: ${args.minDocLength}`);
   console.log('正在扫描头文件...');
@@ -397,6 +425,19 @@ async function main(): Promise<void> {
 
   console.log(`输出文件: ${outputPath}`);
   console.log('翻译字段已留空，请填入 translation 后使用。');
+
+  return uniqueEntries;
 }
 
-main().catch(console.error);
+async function main(): Promise<void> {
+  const args = parseArgs();
+  await runExtract(args);
+}
+
+// 仅在作为 CLI 直接调用时执行;被 import 不会触发副作用
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message ?? err);
+    process.exit(1);
+  });
+}

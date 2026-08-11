@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger, sharedLogger } from '@core/logger';
+import { type Logger, sharedLogger } from '@core/logger';
 import { Config } from '@core/config';
 import { WorkspaceState } from '@core/workspace';
 import { sharedSubprocessRegistry } from '@core/subprocessRegistry';
@@ -30,6 +30,16 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
   initI18n();
   logger = sharedLogger;
   const config = new Config();
+  // [F1-5] 激活时把 lspLoggingLevel 设置接到 Logger，用户设 debug 立即生效
+  logger.setLevel(config.lspLoggingLevel);
+  // [F1-5] 设置热更新：lspLoggingLevel 变化时动态调整 Logger 级别，无需重启
+  context.subscriptions.push(
+    config.onDidChange((e) => {
+      if (e.affectsConfiguration('vscodeUEHelper.lspLoggingLevel')) {
+        logger.setLevel(config.lspLoggingLevel);
+      }
+    }),
+  );
   const activationStart = Date.now();
   logger.info('Activating VSCodeUEHelper...');
 

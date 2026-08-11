@@ -118,12 +118,22 @@ export class Logger {
   /**
    * 格式化一条日志。
    * 时间戳精确到毫秒（ISO 8601 格式切到 11:23 位置开始）。
-   * 对象参数会被 JSON.stringify 序列化。
+   * 参数处理：字符串透传；Error 对象序列化为 `name: message`
+   * （JSON.stringify(Error) 会得到 '{}'，丢失错误详情）；其余对象走 JSON.stringify。
    */
   private format(level: LogLevel, args: unknown[]): string {
     const ts = new Date().toISOString().slice(11, 23);
     const tail = args
-      .map((a) => (typeof a === 'string' ? a : JSON.stringify(a, null, 2)))
+      .map((a) => {
+        if (typeof a === 'string') {
+          return a;
+        }
+        // a 类型是 unknown，instanceof 前无需再收窄；非 Error 对象走 JSON.stringify
+        if (a instanceof Error) {
+          return `${a.name}: ${a.message}`;
+        }
+        return JSON.stringify(a, null, 2);
+      })
       .join(' ');
     return `${ts} [${level.toUpperCase()}] ${this.prefix} ${tail}`;
   }

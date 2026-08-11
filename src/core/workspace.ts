@@ -28,7 +28,7 @@
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Logger } from './logger';
+import { type Logger } from './logger';
 import type { WorkspaceContext } from '@detection/workspaceContext';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
 import type { WorkspaceFolderInfo } from '@detection';
@@ -104,6 +104,17 @@ export class WorkspaceState implements vscode.Disposable {
 
   /** 已弹过报错的字段（整 session 只弹一次） */
   private readonly _notifiedFields = new Set<WorkspaceField>();
+
+  /**
+   * [F2-15/W17] 用户选择变更事件。
+   *
+   * setSelectedProject / setSelectedEngine 持久化成功后 fire,UI 层订阅它
+   * 重绘状态栏,避免 QuickPick 切换项目/引擎后状态栏不刷新。
+   */
+  private readonly _onDidChangeSelection = new vscode.EventEmitter<void>();
+
+  /** 用户选择变更事件(订阅方 push 到 context.subscriptions 回收) */
+  readonly onDidChangeSelection: vscode.Event<void> = this._onDidChangeSelection.event;
 
   /** 是否已注入（用于测试） */
   private _injected = false;
@@ -202,6 +213,8 @@ export class WorkspaceState implements vscode.Disposable {
       return;
     }
     await this._workspaceContext.setProject(project);
+    // [F2-15/W17] 持久化成功后通知 UI 刷新
+    this._onDidChangeSelection.fire();
   }
 
   /**
@@ -213,6 +226,8 @@ export class WorkspaceState implements vscode.Disposable {
       return;
     }
     await this._workspaceContext.setEngine(engine);
+    // [F2-15/W17] 持久化成功后通知 UI 刷新
+    this._onDidChangeSelection.fire();
   }
 
   // ===== [Phase 9 SSoT 收尾] 用户选择解析（命令层 helper） =====
@@ -228,7 +243,10 @@ export class WorkspaceState implements vscode.Disposable {
     if (!path) {
       return undefined;
     }
-    return projects.find((p) => p.path === path);
+    // [F2-18/W25] Windows 路径大小写不敏感:持久化的选择与检测到的路径可能大小写不同
+    // (如 D:/UE_5.5 vs D:/ue_5.5),统一小写比较避免误判为"未选择"。
+    const normalized = path.toLowerCase();
+    return projects.find((p) => p.path.toLowerCase() === normalized);
   }
 
   /** 同 resolveSelectedProject，引擎版。 */
@@ -237,7 +255,9 @@ export class WorkspaceState implements vscode.Disposable {
     if (!path) {
       return undefined;
     }
-    return engines.find((e) => e.path === path);
+    // [F2-18/W25] 同 resolveSelectedProject:Windows 路径大小写不敏感比较
+    const normalized = path.toLowerCase();
+    return engines.find((e) => e.path.toLowerCase() === normalized);
   }
 
   // ===== Level 1 派生路径 =====
@@ -313,7 +333,7 @@ export class WorkspaceState implements vscode.Disposable {
    *
    * 与 clangdHelperDir 同级（都在 .vscode/ 下但不同子目录）。
    * .vscode/vscodeuehelper 是给 clangd 看的 completion helper + compile_commands.json；
-   * .vscode/clangd-perf-cache 是 perfLog / compileCommandsCache / headerCache 的本地缓存区。
+   * .vscode/clangd-perf-cache 是 perfLog / compileCommandsCache 的本地缓存区。
    *
    * projectDir 不可派生时返回 null 并弹一次"重新生成工作区"警告。
    */
@@ -437,10 +457,10 @@ export class WorkspaceState implements vscode.Disposable {
   /**
    * 释放资源：
    * - 清空去重通知 Set
+   * - 释放 selection 变更 EventEmitter（订阅方在 dispose 后不再收到事件）
    * - 重置内部状态字段（与 _resetForTest 等价，避免外部继续访问到旧数据）
    * - 设置 disposed 标志（幂等，重复调用安全）
    *
-   * 不需要释放 EventEmitter——本类未持有任何 emitter。
    * 调用方负责把本实例 push 到 context.subscriptions，让 deactivate 时自动释放。
    */
   dispose(): void {
@@ -449,6 +469,8 @@ export class WorkspaceState implements vscode.Disposable {
     }
     this._disposed = true;
     this._notifiedFields.clear();
+    // [F2-15/W17] 释放 selection 事件 emitter
+    this._onDidChangeSelection.dispose();
     this._injected = false;
     this._project = null;
     this._engine = null;

@@ -17,6 +17,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
+import type { Logger } from '@core/logger';
 
 import { SubprocessRegistry } from '@core/subprocessRegistry';
 
@@ -54,8 +55,8 @@ vi.mock('node:child_process', async () => {
       execFileCalls.push({ cmd, args });
       const cp = new EventEmitter() as unknown as import('node:child_process').ChildProcess;
       if (cb) {
-        // 用 microtask 异步触发 callback(避免 promisify 同步检测冲突)
-        Promise.resolve().then(() => cb(null));
+        // 用 microtask 异步触发 callback(避免 promisify 同步检测冲突);void 标记有意忽略返回的 Promise
+        void Promise.resolve().then(() => cb(null));
       }
       return cp;
     },
@@ -75,7 +76,7 @@ function fakeChild(pid: number): {
   triggerExit: (code?: number) => void;
 } {
   const emitter = new EventEmitter();
-  const killSpy = vi.fn();
+  const killSpy = vi.fn<[], unknown>();
   const child = Object.assign(emitter, {
     pid,
     kill: killSpy,
@@ -162,6 +163,20 @@ describe('SubprocessRegistry', () => {
     expect(() => registry.register(child, 'after dispose')).not.toThrow();
     // dispose 后 register 是 no-op,size 仍是 0
     expect(registry.size).toBe(0);
+  });
+
+  it('dispose() 后 register 注入 logger 时显式 warn(而非静默丢弃)', () => {
+    // [F2-11] 单例注入 sharedLogger 后,dispose 之后 register 的异常时序要可观测
+    const warn = vi.fn();
+    const logger = { warn } as unknown as Logger;
+    const reg = new SubprocessRegistry(logger);
+    reg.dispose();
+
+    const { child } = fakeChild(3000);
+    reg.register(child, 'after dispose');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('register after dispose'));
+    expect(reg.size).toBe(0);
   });
 
   it('killAll 幂等', async () => {

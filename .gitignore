@@ -95,3 +95,11 @@ log.txt
 # OMC 运行时产物（多代理编排层）
 .omc/
 .claude-flow/
+# Added by code-review-graph
+.code-review-graph/
+
+# AI 辅助工具产物（不提交）
+.omp/
+.zcode/
+graphify-out/
+.specify/

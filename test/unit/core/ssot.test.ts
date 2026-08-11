@@ -152,7 +152,6 @@ describe('SSoT surface regression', () => {
     const EXEMPT_FILES = [
       'clangd/compileCommands/task.ts', // vscode.tasks.executeTask + ms 级 where 探测
       'clangd/windowsSdk.ts', // clang/clang++ -v -E + cl.exe banner 探测
-      'detection/vsBuildTools.ts', // vswhere.exe 探测
     ];
 
     it.each(EXEMPT_FILES)(
@@ -168,7 +167,7 @@ describe('SSoT surface regression', () => {
 
     it('根 AGENTS.md 仓库陷阱 #14 必须列出豁免清单', () => {
       const agents = readFileSync(path.resolve(__dirname, '../../..', 'AGENTS.md'), 'utf-8');
-      // 必须有 SubprocessRegistry 豁免清单 (windowsSdk.ts / task.ts / vsBuildTools.ts)
+      // 必须有 SubprocessRegistry 豁免清单 (windowsSdk.ts / task.ts)
       expect(agents).toMatch(/compileCommands\/task\.ts.*豁免|豁免.*compileCommands\/task\.ts/s);
       expect(agents).toMatch(/windowsSdk\.ts.*豁免|豁免.*windowsSdk\.ts/s);
     });
