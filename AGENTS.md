@@ -2,10 +2,18 @@
 
 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding 热重载、clangd 智能提示、可选 MCP AI Agent 集成。所有代码注释强制中文。
 
-> **治理依据**:本仓库的最高优先级治理文件是
-> [`.specify/memory/constitution.md`](.specify/memory/constitution.md)(Windows-only 支持边界、
-> WorkspaceState / ClangdOps 单一真相源、双语可观测资源安全 UX、验证门禁、最小可追溯演进)。
-> 本知识库与本文档以宪法为准 —— 任何冲突 MUST 倾向宪法或提 amendment,不可静默忽略。
+> **治理依据**：本仓库的最高优先级治理文件是
+> [`.planning/PROJECT.md`](.planning/PROJECT.md)（2026-08-18 起从 `.specify/memory/constitution.md`
+> v1.0.1 完整迁移；宪法 I–V 原则 verbatim 保留在 "扩展原则" 章节）。本知识库与本文档以
+> `.planning/PROJECT.md` 为准 —— 任何冲突 MUST 倾向 `.planning/PROJECT.md` 或提
+> amendment，不可静默忽略。`.specify/memory/constitution.md` 已冻结但保留存在（避免破坏
+> `.omp/commands/speckit.*` 命令注册），被 `.planning/PROJECT.md` 取代。
+
+> **GSD 工作流入口**：本项目自 2026-08-18 起重建 `.planning/` 工作流。Phase / plan / 进度
+> 见 [`.planning/ROADMAP.md`](.planning/ROADMAP.md) + [`.planning/STATE.md`](.planning/STATE.md)；
+> 需求 REQ-ID 见 [`.planning/REQUIREMENTS.md`](.planning/REQUIREMENTS.md)；工作流配置见
+> [`.planning/config.json`](.planning/config.json)。`REMEDIATION-PLAN.md` 与 `AUDIT-REPORT.md`
+> 已 deprecated，保留为历史档案。
 
 > **平台支持**：**仅 Windows**（`package.json#platforms: ["win32"]`，N1+N2+N3 死代码清理后强制）。Mac/Linux 不在支持范围。Engine 5.2+ / MSVC 工具链 / Windows SDK 是硬依赖。
 
