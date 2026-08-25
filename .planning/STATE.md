@@ -1,12 +1,19 @@
 ---
-gsd_state_version: '1.0'
+gsd_state_version: 1.0
+milestone: v0.1
+milestone_name: milestone
+current_phase: 0
+current_phase_name: 治理迁移启动
 status: planning
+stopped_at: Phase 1 context gathered
+last_updated: "2026-08-25T12:07:11.817Z"
+last_activity: 2026-08-18
+last_activity_desc: 完成 `/gsd-new-project` 会话；`.planning/{PROJECT,REQUIREMENTS,ROADMAP,config}.md` 全部落盘 + 提交
 progress:
-  total_phases: 6
-  completed_phases: 1
-  total_plans: 10
-  completed_plans: 1
-  percent: 10
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
@@ -31,6 +38,7 @@ Progress: [██░░░░░░░░] 10%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 1
 - Average duration: 0 min（本次会话一次性完成 Phase 0）
 - Total execution time: 0 hours
@@ -42,6 +50,7 @@ Progress: [██░░░░░░░░] 10%
 | 0. 治理迁移启动 | 1 | 1 | 1 |
 
 **Recent Trend:**
+
 - Last 5 plans: 1 (本次会话)
 - Trend: —
 
@@ -68,6 +77,7 @@ None yet.
 - **MCP 依赖**：`gsd-project-researcher` 等子 agent 依赖 context7/firecrawl/exa 等 MCP，
   当前会话未连接。研究阶段被强制 Skip；如果 Phase 4 需要外部知识，需手动补 MCP 或走
   /gsd-phase-researcher 单独调度
+
 - **历史 `.planning/` 教训**：`f71fa8d` 删除 5267 行旧 `.planning/`，原因包括与 `.specify/`
   治理重叠。本次重建已通过"`.planning/PROJECT.md` 演化真源 + `.specify/` 冻结保留"避免重蹈
 
@@ -85,3 +95,9 @@ Items deferred to future milestones:
 
 ---
 *Last updated: 2026-08-18 after brownfield initialization*
+
+## Session
+
+**Last session:** 2026-08-25T12:07:11.806Z
+**Stopped at:** Phase 1 context gathered
+**Resume file:** .planning/phases/01-p0/01-CONTEXT.md
