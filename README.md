@@ -5,9 +5,10 @@
 ## Governance
 
 Project governance, supported-platform scope, and architectural principles live in
-[`.specify/memory/constitution.md`](.specify/memory/constitution.md). All operational and
-runtime claims in this README are subordinate to that constitution; any conflict MUST be
-resolved in favor of the constitution.
+[`.planning/PROJECT.md`](.planning/PROJECT.md) (the constitution I–V 扩展原则章节 verbatim 迁自
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md) v1.0.1 on 2026-08-18). All
+operational and runtime claims in this README are subordinate to `.planning/PROJECT.md`; any
+conflict MUST be resolved in favor of `.planning/PROJECT.md` or escalated as an amendment.
 
 ## Status
 

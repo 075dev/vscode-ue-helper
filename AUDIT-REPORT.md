@@ -1,5 +1,7 @@
 # VSCodeUEHelper 项目审计报告
 
+> **DEPRECATED**: moved to `.planning/PROJECT.md` + `.planning/REQUIREMENTS.md` on 2026-08-18。本文件转为历史档案保留,所有 43+ finding 追踪以 `.planning/REQUIREMENTS.md` (v1/v2/Out of Scope 三组) 为唯一真源。Wave 1 闭环证据见 `.planning/phases/01-p0/01-VERIFICATION.md`。
+
 > **审计时间**：2026-07-16
 > **审计范围**：`D:\AIWorkSpace\VScodePlugin\VSCodeUEHelper`（141 个 src 文件 + 60 个 test 文件）
 > **审计方式**：4 路并行 explore agent + 直接文件读取 + `tsc --noEmit` + `eslint`

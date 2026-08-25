@@ -1,5 +1,7 @@
 # VSCodeUEHelper 修复执行蓝图（REMEDIATION-PLAN.md）
 
+> **DEPRECATED**: moved to `.planning/PROJECT.md` + `.planning/REQUIREMENTS.md` on 2026-08-18。本文件转为历史档案保留,所有 REM-* 需求追踪以 `.planning/REQUIREMENTS.md` 为唯一真源。Wave 1 闭环证据见 `.planning/phases/01-p0/01-VERIFICATION.md`。
+
 > **生成时间**：2026-07-16
 > **输入依据**：`AUDIT-REPORT.md` (901 行 / 43+ findings)
 > **目标**：把 43+ 项审计发现转化为**可独立验证**、**可原子回滚**的执行计划
