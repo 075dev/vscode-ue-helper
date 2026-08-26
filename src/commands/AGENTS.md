@@ -5,7 +5,7 @@
 
 ## 模块概述
 
-**21 个 VS Code 命令处理器**（`package.json#contributes.commands` 中实际暴露的命令数；`src/commands/index.ts` 的 `track` 计数器以单点数字报告），用户交互的主入口点。所有命令绑定到 `vscodeUEHelper.*` 命名空间。
+**22 个 VS Code 命令处理器**（`package.json#contributes.commands` 中实际暴露的命令数；`src/commands/index.ts` 的 `track` 计数器以单点数字报告），用户交互的主入口点。所有命令绑定到 `vscodeUEHelper.*` 命名空间。
 
 ## 命令列表
 
@@ -24,6 +24,7 @@
 | `uninstall`               | `uninstall.ts`               | 清理所有生成文件                                     |
 | `setSystemIncludes`       | `setSystemIncludes.ts`       | 设置 MSVC + Windows SDK 系统包含路径（Windows only） |
 | `openWorkspaceFile`       | `openWorkspaceFile.ts`       | 打开 `.code-workspace`                               |
+| `openTerminalInNewWindow`  | `openTerminalInNewWindow.ts` | 在独立 OS 窗口打开终端（cwd 取右键目录）              |
 | `selectConfig`            | `selectConfig.ts`            | 选择构建配置                                         |
 | `selectTarget`            | `selectTarget.ts`            | 选择构建目标                                         |
 | `enableClangdProxy`       | `enableClangdProxy.ts`       | 启用 Clangd LSP 代理                                 |

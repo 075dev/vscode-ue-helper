@@ -20,7 +20,7 @@ conflict MUST be resolved in favor of `.planning/PROJECT.md` or escalated as an 
 | 1     | ✅     | `.uproject` scanning, engine discovery (Windows-only), VS Build Tools detection                     |
 | 2     | ✅     | UBT Build/Rebuild/Clean, Live Coding, MSVC parsing, Problems panel, Task provider                   |
 | 3     | ✅     | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes, workspace backup |
-| 4     | ✅     | Status bar, QuickPick pickers, **21 commands**                                                      |
+| 4     | ✅     | Status bar, QuickPick pickers, **22 commands**                                                      |
 | 5     | ✅     | MCP server (auto-enabled in Cursor / Claude Code), AI agent rules                                   |
 | 6     | ✅     | Unit tests (Vitest, 812 tests / 71 files), CI-ready scripts                                         |
 | 7     | ✅     | clangd LSP proxy + control panel webview + preparse cache, perf instrumentation                     |
@@ -130,7 +130,7 @@ Settings live under the `vscodeUEHelper.*` namespace.
 
 ## Commands
 
-21 commands total. All bound to `vscodeUEHelper.*` namespace.
+22 commands total. All bound to `vscodeUEHelper.*` namespace.
 
 | Command                                  | Title                             | Notes                                     |
 | ---------------------------------------- | --------------------------------- | ----------------------------------------- |

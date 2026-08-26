@@ -25,7 +25,7 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
   - 全局 `.eslintrc.json` 锁定 3 类 syntax bypass + 1 类 import bypass
   - 13 个 `test/unit/core/ssot.test.ts` 回归守卫 + 12 个 `test/unit/core/workspace.test.ts` 行为测试
 - **deactivate 子进程清理**：`SubprocessRegistry` (`src/core/subprocessRegistry.ts`) 统一管理本插件启动的所有 child_process 子进程,deactivate 走 `taskkill /F /T /PID` 优雅杀进程树,3s 升级强杀。`ClangdProxyManager` 实现 `vscode.Disposable` 在 deactivate 时恢复 `clangd.path` 备份。`ueLinkManager` 传 AbortSignal 给 `runUhtCodegen`,dispose 时 abort 取消 in-flight UHT。
-- **21 个命令**（`package.json#contributes.commands`），8 个主状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
+- **22 个命令**（`package.json#contributes.commands`），8 个主状态栏按钮（`src/ui/statusBar.ts`）。`completionMode` 设置与 `toggleCompletionMode` 命令已删除（H4-B 决策）。
 - 单元测试 71 个文件（共约 12k 行），`npm run test:unit` 跑 Vitest；v8 覆盖率阈值 75/70/70/75。覆盖率阈值按 FIX-PLAN 阶梯校准（Phase 4 测试补强后逐阶段上调至 80）。
 
 ## 模块文档
@@ -37,7 +37,7 @@ VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：UBT 构建、Live Coding
 | build                  | `src/build/AGENTS.md`        | UBT 命令结构、MSVC 诊断解析、Task Provider、Live Coding、`domain/` DDD 参考目录              |
 | clangd                 | `src/clangd/AGENTS.md`       | compile_commands.json、`.clangd` 结构、workspace 备份、proxy/ 子目录索引                     |
 | clangd/proxy           | `src/clangd/proxy/AGENTS.md` | 独立 LSP 代理 CLI 进程、stdio 协议、汉化/TODO                                                |
-| commands               | `src/commands/AGENTS.md`     | 21 个命令注册表、新增命令 4 步流程                                                           |
+| commands               | `src/commands/AGENTS.md`     | 22 个命令注册表、新增命令 4 步流程                                                           |
 | detection              | `src/detection/AGENTS.md`    | "信任 .code-workspace" 检测模型、DetectionHandles、Phase 8 增强                              |
 | ui                     | `src/ui/AGENTS.md`           | 8 个主状态栏按钮布局、QuickPick 模式、ControlPanel Webview                                   |
 | core                   | `src/core/AGENTS.md`         | Logger/Config/WorkspaceState 横切基础设施、Config.update 陷阱、SubprocessRegistry 子进程清理 |
@@ -187,7 +187,7 @@ src/
 │   ├── diagnostics/    # Diagnose Clangd Project 命令用的检查器
 │   └── proxy/          # 独立 LSP 代理 CLI: cli, bridge, processBridge, framing
 ├── parsers/            # msvcParser, ubtParser, uprojectParser
-├── commands/           # 21 个命令处理器
+├── commands/           # 22 个命令处理器
 ├── ui/                 # statusBar, quickPicks, notifications, problemsPanel, outputChannel
 ├── mcp/                # Model Context Protocol 服务器（Cursor/Claude Code）
 ├── rules/              # AI Agent 规则生成（Cursor + Copilot）
