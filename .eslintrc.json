@@ -66,7 +66,7 @@
       }
     ]
   },
-  "ignorePatterns": ["out/", "dist/", "node_modules/", "*.js", "*.mjs", "coverage/"],
+  "ignorePatterns": ["out/", "dist/", "node_modules/", "*.js", "*.mjs", "coverage/", "test/e2e/"],
   "overrides": [
     {
       "files": ["test/**/*.ts"],
