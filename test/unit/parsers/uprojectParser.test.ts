@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { readUProject, getEnabledPlugins } from '@parsers/uprojectParser';
+import { readUProject, getEnabledPlugins } from '../../../src/parsers/uprojectParser';
 
 describe('readUProject —— F1-8 JSON5 解析', () => {
   // eslint-disable-next-line @typescript-eslint/unbound-method -- vitest mock accessor

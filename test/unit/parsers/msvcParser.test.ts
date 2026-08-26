@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MsvcParser } from '@parsers/msvcParser';
+import { MsvcParser } from '../../../src/parsers/msvcParser';
 
 describe('MsvcParser', () => {
   it('parses a basic MSVC error line', () => {

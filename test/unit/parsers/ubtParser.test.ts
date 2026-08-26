@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { UbtParser } from '@parsers/ubtParser';
+import { UbtParser } from '../../../src/parsers/ubtParser';
 
 describe('UbtParser', () => {
   it('parses a UBT progress line', () => {

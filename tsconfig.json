@@ -42,15 +42,12 @@
       "@clangd/*": ["src/clangd/*"],
       "@i18n": ["src/i18n/index"],
       "@i18n/*": ["src/i18n/*"],
-      "@parsers/*": ["src/parsers/*"],
       "@commands": ["src/commands/index"],
       "@commands/*": ["src/commands/*"],
       "@ui": ["src/ui/index"],
       "@ui/*": ["src/ui/*"],
       "@mcp": ["src/mcp/index"],
-      "@mcp/*": ["src/mcp/*"],
-      "@rules": ["src/rules/index"],
-      "@rules/*": ["src/rules/*"]
+      "@mcp/*": ["src/mcp/*"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],

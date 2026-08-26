@@ -15,7 +15,7 @@ import * as vscode from 'vscode';
 import { type Logger } from '@core/logger';
 import { t } from '@i18n';
 import type { WorkspaceState } from '@core/workspace';
-import { UE_HELPER_RULES_MDC, UE_HELPER_COPILOT_INSTRUCTIONS } from '@rules';
+import { UE_HELPER_RULES_MDC, UE_HELPER_COPILOT_INSTRUCTIONS } from '../rules';
 
 export async function executeInstallRules(
   logger: Logger,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MsvcParser } from '@parsers/msvcParser';
-import { UbtParser } from '@parsers/ubtParser';
+import { MsvcParser } from '../../../src/parsers/msvcParser';
+import { UbtParser } from '../../../src/parsers/ubtParser';
 
 describe('MsvcParser integration with UbtParser', () => {
   it('correctly handles interleaved UBT progress + MSVC diagnostics', () => {

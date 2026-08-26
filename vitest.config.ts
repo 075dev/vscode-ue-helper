@@ -33,11 +33,9 @@ export default defineConfig({
       '@build': resolve(__dirname, 'src/build'),
       '@clangd': resolve(__dirname, 'src/clangd'),
       '@i18n': resolve(__dirname, 'src/i18n'),
-      '@parsers': resolve(__dirname, 'src/parsers'),
       '@commands': resolve(__dirname, 'src/commands'),
       '@ui': resolve(__dirname, 'src/ui'),
       '@mcp': resolve(__dirname, 'src/mcp'),
-      '@rules': resolve(__dirname, 'src/rules'),
     },
   },
 });

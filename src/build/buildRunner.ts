@@ -16,8 +16,8 @@
 
 import { spawn, type ChildProcessWithoutNullStreams, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { MsvcParser } from '@parsers/msvcParser';
-import { UbtParser } from '@parsers/ubtParser';
+import { MsvcParser } from '../parsers/msvcParser';
+import { UbtParser } from '../parsers/ubtParser';
 import {
   sharedSubprocessRegistry,
   type SubprocessRegistry,
