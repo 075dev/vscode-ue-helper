@@ -12,12 +12,14 @@ MVP 模式 + Coarse 粒度（3–5 phases）。Phase 1–4 涵盖 v1 全部需�
 
 - [x] **Phase 0: 治理迁移启动** — `.planning/` 重建、constitution 迁入、`config.json` 与
   `REQUIREMENTS.md` 落盘（**当前已完成**：`db498c3` + `b0919da` + `59fb431`）
-- [ ] **Phase 1: P0 必修闭环** — Wave 1 全部 4 task 验证证据 + 门禁绿（REM-001）
-- [ ] **Phase 2: 治理迁移完结** — GOV-002 标 deprecated + GOV-003 AGENTS/README 同步
-  + MCP-001 现状确认（独立可并行的小 phase）
-- [ ] **Phase 3: 平台边界探索** — PLAT-001 macOS 工具链探测 RFC 草稿
-- [ ] **Phase 4: 修复轨道收尾** — REM-002/003/004/005 Wave 2–5 推进（5min~ 单项 task
-  单 phase 拆分；与宪法 IV "Verification Gates" 对齐）
+- [x] **Phase 1: P0 必修闭环** — Wave 1 全部 4 task 验证证据 + 门禁绿（REM-001）
+  （commit `5d282e8` 验证证据已落盘）
+- [x] **Phase 2: 治理迁移完结** — GOV-002 标 deprecated + GOV-003 AGENTS/README 同步
+  + MCP-001 现状确认（commit `7988023` + `f7bc1a0` 闭环）
+- [x] **Phase 3: 平台边界探索** — PLAT-001 macOS 工具链探测 RFC 草稿
+  （commit `81e6824` + 决策 = No-Go）
+- [x] **Phase 4: 修复轨道收尾** — REM-002/003/004/005 Wave 2–5 推进
+  （commit `ceb9e38` + `82be4cf` + `73ee4da` + `515c3bb` + `04-VERIFICATION.md`）
 - [ ] **Phase 5: 下一里程碑规划** — v2 需求（API-001 / PERF-001）评估与 v0.2.0 / 1.0.0
   路线图设计
 
