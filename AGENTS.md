@@ -168,7 +168,7 @@ Scope(可选): `build` / `clangd` / `commands` / `core` / `detection` / `mcp` / 
 
 ## 打包 / 发布注意
 
-- `package.json` 的 `repository.url` 还是 `YOUR_USERNAME/vscode-ue-helper` 占位符，发布前要改。
+- `package.json` 的 `repository.url` 已替换为 `https://github.com/075/vscode-ue-helper.git`（T4.9 闭环,基于 git user 与 publisher 推断;若仓库实际归属不同用户,release 前复查）
 - `.vscodeignore` 已排除 `src/`、`test/`、`tsconfig.json`、`*.mjs`、`AGENTS.md`、`CLAUDE.md`、`.planning/`、`.codegraph/`、`scripts/`、`*.log`、`*.map`、`doc/`、`docs/`。打包后只有 `out/extension.js`、`out/clangdProxy.js`、`out/launcher/*`、`resources/icon.png`、`package.json`、`package.nls.json`、`package.nls.zh.json` 进入 `.vsix`。
 - `npm run package` 内部 `prepackage` 钩子会自动 `npm run build`。
 - **命令 title 本地化**：在 `package.json#contributes.commands` 的 `title` 字段用 `%<commandId>%` 占位符，然后在 `package.nls.json`（英文 fallback）和 `package.nls.zh.json`（中文覆盖）提供字面量。VS Code 启动时根据 `vscode.env.language` 自动选用；非 `title@zh` 字段（VS Code 1.85+ 仍部分支持，但与 nls 机制并存易混淆，新代码统一走 nls）。

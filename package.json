@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/vscode-ue-helper.git"
+    "url": "https://github.com/075/vscode-ue-helper.git"
   },
   "publisher": "vscode-ue-helper",
   "engines": {
