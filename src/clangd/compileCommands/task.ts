@@ -1,0 +1,392 @@
+/**
+ * task —— UBT 子进程执行 + 参数构建 + 工具链发现
+ *
+ * 从 `compileCommands.ts` 拆出 (T4.5)，保持原行为 1:1：
+ *   - executeShellTask: VS Code Task API 包裹的 shell 执行，AbortSignal 通过参数传入
+ *   - getShellQuoting: Windows PowerShell strong 引用 + Unix weak 引用
+ *   - buildNativeArgs / buildNonNativeArgs: UBT 命令行参数构造（双路径）
+ *   - findClangToolchain: `where clang` → LLVM_PATH 反推
+ *   - isClangdAvailable: `which clangd` 检查
+ *
+ * 模块级 `optsSignal` 全局变量被去除（per 拆分清理），改为函数参数显式传递。
+ * 该变量是 module-private，原行为由调用顺序：generateCompileCommands → executeShellTask
+ * 同一 Promise tick 内完成，全局变量副作用可忽略，参数化更干净。
+ *
+ * [deactivate 子进程清理 — 决策记录 2026-07-31,见 AGENTS.md 仓库陷阱 #14]
+ *
+ * 本文件 4 处 `child_process` / `vscode.tasks` 调用,**全部不接入 SubprocessRegistry**:
+ *   - L161 `vscode.tasks.executeTask(task)`:UBT 生成 compile_commands.json。
+ *     委托给 VS Code Task system,扩展不持有 child 句柄(只能拿 `vscode.TaskExecution`),
+ *     Task system 自带 lifecycle(用户 cancel task / 关窗 / reload 都会自动杀进程)。
+ *     **无法注册到 SubprocessRegistry**:`executeTask` 不返回 ChildProcess,无法 `kill('SIGTERM')`。
+ *   - L274 `execFileAsync('where', ['clang'])`:探测 clang 路径,**短探测** (ms 级),
+ *     `await` 内完成,**不会 leak** 到函数返回之外。
+ *   - L291 `execFileAsync('where', ['clangd'])`:同上,探测 clangd 路径。
+ *   - L161 UBT 任务:同上,通过 Task system 托管,见上。
+ *
+ * 设计权衡:`SubprocessRegistry` 只跟踪**长时间运行 / 异步 / 跨函数生命周期**的子进程
+ * (UBT 编译、UHT codegen、UE Editor 启动、Live Coding 热重载等)。
+ * 单次 ms 级同步探测、Task system 托管的进程,不归 registry 管 ——
+ * 强行注册反而增加复杂度(需要在每个 await execFileAsync 前后 insert/remove,
+ * 但 await 期间 deactivate 来了也跑不到 dispose 路径)。
+ */
+
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import * as path from 'node:path';
+import * as vscode from 'vscode';
+import { type Logger } from '@core/logger';
+import type { WorkspaceState } from '@core/workspace';
+import { getUbtPath, getBuildTargetNames } from '@clangd/ueHelpers';
+
+/** Windows-only：本插件唯一支持的 Unreal 平台。 */
+const WIN64_PLATFORM = 'Win64';
+
+const execFileAsync = promisify(execFile);
+
+/* ------------------------------------------------------------------ */
+/*  常量（对齐原版 consts.ts）                                          */
+/* ------------------------------------------------------------------ */
+
+/** VS Code Task 类型 */
+const TASK_TYPE = 'shell';
+
+/** 配置 section */
+const CONFIG_SECTION_UNREAL_CLANGD = 'unreal-clangd';
+
+/** Non-Native 路径的 UBT 参数 */
+const UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT = 'Development';
+const UPDATE_COMPILE_COMMANDS_ARG_GEN_CLANGDB = '-Mode=GenerateClangDatabase';
+const UPDATE_COMPILE_COMMANDS_ARG_ARCHITECTURE_EMPTY = '-architecture=';
+/**
+ * 跳过 codegen（UHT 之外的编译动作）。GenerateClangDatabase 模式下加此参数，
+ * UBT 只生成 compile DB 不继续把 .cpp 编译成 .o，IntelliSense 场景省去无谓 codegen。
+ */
+const UPDATE_COMPILE_COMMANDS_ARG_NO_CODEGEN = '-NoExecCodeGenActions';
+
+/** Windows PowerShell 可执行文件名 */
+const POWERSHELL_FILE_NAME = 'PowerShell.exe';
+
+/** Task 名称 */
+const UPDATE_COMPILE_COMMANDS_DBGCFG_NAME = 'unreal-clangd: Update Compile Commands';
+
+/**
+ * UBT 任务超时兜底：5 分钟。
+ * 任务卡死（无输出、进程挂起）时 reject,避免 executeShellTask 的 Promise 永不 settle。
+ * 正常完成路径（onDidEndTaskProcess）会 clearTimeout。
+ */
+const TASK_TIMEOUT_MS = 5 * 60 * 1000;
+
+/* ------------------------------------------------------------------ */
+/*  类型定义                                                            */
+/* ------------------------------------------------------------------ */
+
+/** buildNativeArgs / buildNonNativeArgs 的输入参数（来自 GenerateOptions 的子集） */
+export interface BuildArgsOptions {
+  /** Absolute path to .uproject. */
+  project: string;
+  /** Absolute path to engine root. */
+  engineRoot: string;
+  /** [Phase 8] 可选 WorkspaceState 注入。提供时优先用 workspace 派生路径。 */
+  workspace?: WorkspaceState;
+  /** 目标平台（如 Win64 / Linux / Mac），默认自动检测。 */
+  platform?: string;
+  /** 目标架构（如 x64 / arm64），可选。 */
+  architecture?: string;
+  /**
+   * UBT buildType（如 Development / DebugGame / Debug），默认 'Development'。
+   * 联动 config.configuration。
+   */
+  buildType?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Shell 引用辅助                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 对齐原版 getShellQuoting（Windows-only）—— Windows 用 Strong 引用包裹 args。
+ */
+export function getShellQuoting(
+  command: string,
+  args: string[],
+): {
+  command: vscode.ShellQuotedString | string;
+  args: (vscode.ShellQuotedString | string)[];
+} {
+  const modArgs: vscode.ShellQuotedString[] = args.map((arg) => ({
+    value: arg,
+    quoting: vscode.ShellQuoting.Strong,
+  }));
+  return {
+    command: { value: command, quoting: vscode.ShellQuoting.Strong },
+    args: modArgs,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Task 执行                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 使用 VS Code Task API 执行一个 shell 任务并等待完成。
+ *
+ * 对齐原版 runUpdateCompileCommandsWithTask：
+ *   - Windows: executable = PowerShell.exe
+ *   - cwd = unrealWorkspace（引擎根目录）
+ *   - problemMatchers = ['$msCompile']
+ *
+ * [F2-9] 相比原实现的三个修复：
+ *   1. 超时兜底：任务卡死 5 分钟无结束事件时 reject（TASK_TIMEOUT_MS）；
+ *   2. abort 分支不再只 dispose + reject——会通过 executeTask 解析出的 execution
+ *      引用（兜底扫 vscode.tasks.taskExecutions 按 task 对象匹配）调 terminate()
+ *      真正终止 UBT 子进程；
+ *   3. onDidEndTaskProcess 监听器在 executeTask 之前注册,避免任务先结束、
+ *      监听器还没就位的竞态（用 executions 集合匹配属于本调用的 execution）。
+ *
+ * @param signal AbortSignal 触发时终止 UBT 任务并 reject('Task cancelled')
+ * @returns exit code（UBT -projectfiles 和 -mode=GenerateClangDataBase 可能返回 1，视为正常）
+ */
+export function executeShellTask(
+  cmd: string,
+  args: ReadonlyArray<string>,
+  cwd: string,
+  log: Logger,
+  env?: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    // [F2-9] signal 已 abort：直接拒绝,不再启动任务
+    if (signal?.aborted) {
+      reject(new Error('Task cancelled'));
+      return;
+    }
+
+    // [Phase 11 SSoT 包 6] 反查 vscode.WorkspaceFolder 必须用原生 vscode API——vscode.Task(scope:) 签名只接受原生类型
+    // eslint-disable-next-line no-restricted-syntax -- vscode.Task(scope:) 签名只接受原生 vscode.WorkspaceFolder
+    const unrealFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd));
+    const scope = unrealFolder;
+    if (!scope) {
+      reject(new Error('No workspace folder open. Please open a .code-workspace first.'));
+      return;
+    }
+
+    const task: vscode.Task = new vscode.Task(
+      { type: TASK_TYPE },
+      scope,
+      UPDATE_COMPILE_COMMANDS_DBGCFG_NAME,
+      CONFIG_SECTION_UNREAL_CLANGD,
+      vscode.ShellExecution,
+    );
+
+    task.group = vscode.TaskGroup.Build;
+    task.problemMatchers = ['$msCompile'];
+
+    // Shell quoting
+    const quoted = getShellQuoting(cmd, [...args]);
+
+    // Windows-only：使用 PowerShell 作为 shell executable
+    const shellExec = POWERSHELL_FILE_NAME;
+
+    (task as { execution: vscode.ShellExecution }).execution = new vscode.ShellExecution(
+      quoted.command,
+      quoted.args,
+      { cwd, executable: shellExec, env },
+    );
+
+    log.info(`[compileCommands/task] executing: ${cmd} ${[...args].join(' ')}`);
+    log.info(`[compileCommands/task] cwd: ${cwd}, shell: ${shellExec ?? 'default'}`);
+
+    /* ── [F2-9] settle 守卫 + 清理 ── */
+    // settled 保证 resolve/reject 只发生一次（超时 / abort / 结束事件三者竞速）
+    let settled = false;
+    /** 已由 executeTask 解析出的 execution（供 abort / 超时终止用）。 */
+    const executions = new Set<vscode.TaskExecution>();
+
+    const finish = (action: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+      endDisposable.dispose();
+      action();
+    };
+
+    // [F2-9] 超时兜底：任务卡死时 reject,并终止仍在运行的 UBT 任务
+    const timeout: NodeJS.Timeout = setTimeout(() => {
+      for (const exec of executions) {
+        try {
+          void exec.terminate();
+        } catch {
+          /* ignore */
+        }
+      }
+      finish(() => reject(new Error(`UBT task timed out after ${TASK_TIMEOUT_MS / 1000}s`)));
+    }, TASK_TIMEOUT_MS);
+
+    // [F2-9] onDidEndTaskProcess 监听器在 executeTask 之前注册,避免竞态。
+    // 用 executions 集合匹配——executeTask 解析成功后才把 execution 加入集合,
+    // 不会误匹配到其他 UBT 任务的结束事件。
+    const endDisposable = vscode.tasks.onDidEndTaskProcess((e) => {
+      if (!executions.has(e.execution)) {
+        return;
+      }
+      executions.delete(e.execution);
+      finish(() => {
+        if (e.exitCode === 0 || e.exitCode === 1) {
+          // UBT -projectfiles 和 -mode=GenerateClangDataBase 都可能返回 exit code 1
+          // 在成功场景下，对齐原版行为视为正常完成
+          log.info(`[compileCommands/task] task exited with code ${e.exitCode}`);
+          resolve(e.exitCode ?? -1);
+        } else {
+          reject(new Error(`UBT task exited with code ${e.exitCode}`));
+        }
+      });
+    });
+
+    // AbortSignal：参数化（per 拆分清理，去掉模块级全局变量）
+    const onAbort = (): void => {
+      // [F2-9] 真正终止 UBT 任务：优先用 executeTask 解析出的 execution 引用;
+      // 兜底扫 vscode.tasks.taskExecutions 按 task 对象匹配（abort 可能早于 executeTask 解析）
+      for (const exec of executions) {
+        try {
+          void exec.terminate();
+        } catch {
+          /* ignore */
+        }
+      }
+      for (const exec of vscode.tasks.taskExecutions) {
+        if (exec.task === task) {
+          try {
+            void exec.terminate();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      finish(() => reject(new Error('Task cancelled')));
+    };
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    vscode.tasks.executeTask(task).then(
+      (execution) => {
+        executions.add(execution);
+      },
+      (err) => finish(() => reject(err)),
+    );
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Non-Native 路径：构造 UBT 参数                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 构造 Non-Native（GenerateClangDatabase）路径的 UBT 参数：
+ *
+ *   <buildTargetName> <unrealPlatform> <buildType> <uprojectPath>
+ *   -Mode=GenerateClangDatabase [-architecture=<arch>] -NoExecCodeGenActions
+ *
+ * - buildType 联动 config.configuration（默认 Development）
+ * - -NoExecCodeGenActions 跳过 codegen，只产 compile DB（P0-1 提速）
+ */
+export async function buildNonNativeArgs(opts: BuildArgsOptions): Promise<string[]> {
+  const projectDir = opts.workspace?.projectDir ?? path.dirname(opts.project);
+
+  // 1. 查找 build target names
+  const targetNames = await getBuildTargetNames(projectDir);
+  if (targetNames.length === 0) {
+    throw new Error(
+      `No *.Target.cs files found in ${path.join(projectDir, 'Source')}. ` +
+        'A build target is required for Non-Native compile commands generation.',
+    );
+  }
+
+  // 取第一个（已按 Editor 后缀优先排序）
+  const buildTargetName = targetNames[0];
+  if (!buildTargetName) {
+    throw new Error('未找到可用的构建目标');
+  }
+
+  // 2. Unreal platform（Windows-only）
+  const unrealPlatform = opts.platform ?? WIN64_PLATFORM;
+
+  // buildType 联动 config.configuration（默认 Development）
+  const buildType = opts.buildType ?? UPDATE_COMPILE_COMMANDS_ARG_DEVELOPMENT;
+
+  const args: string[] = [
+    buildTargetName,
+    unrealPlatform,
+    buildType,
+    opts.project,
+    UPDATE_COMPILE_COMMANDS_ARG_GEN_CLANGDB,
+  ];
+
+  // 3. Architecture（可选）
+  if (opts.architecture) {
+    args.push(`${UPDATE_COMPILE_COMMANDS_ARG_ARCHITECTURE_EMPTY}${opts.architecture}`);
+  }
+
+  // 4. 跳过 codegen：GenerateClangDatabase 模式下只需 compile DB，无需继续编译 .cpp（P0-1）
+  args.push(UPDATE_COMPILE_COMMANDS_ARG_NO_CODEGEN);
+
+  return args;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Native 路径：构造 UBT 参数                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 对齐原版 Native 路径：
+ *
+ *   -projectfiles -project=<uprojectPath> -game -engine -dotnet
+ */
+export function buildNativeArgs(opts: Pick<BuildArgsOptions, 'project'>): string[] {
+  return ['-projectfiles', `-project=${opts.project}`, '-game', '-engine', '-dotnet'];
+}
+
+/* ------------------------------------------------------------------ */
+/*  LLVM 工具链发现                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 通过 `where clang` 定位 clang.exe，反推 LLVM 根目录。
+ * 返回 undefined 表示未找到——调用方应降级处理。
+ */
+export async function findClangToolchain(): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync('where', ['clang']);
+    const clangPath = stdout.trim().split('\n')[0]?.trim();
+    if (!clangPath) {
+      return undefined;
+    }
+    // clang.exe → bin/ → LLVM root
+    return path.dirname(path.dirname(clangPath));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 检查 clangd 是否在 PATH 中可执行。
+ */
+export async function isClangdAvailable(): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync('where', ['clangd']);
+    return stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// 重新导出 getUbtPath 方便调用方一处 import（公共 API 不变）
+export { getUbtPath };

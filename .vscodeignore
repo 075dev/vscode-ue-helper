@@ -1,0 +1,56 @@
+# IDE、测试、构建相关
+.vscode/**
+.vscode-test/**
+test/**
+out/test/**
+coverage/**
+
+# 源码与构建配置
+node_modules/**
+src/**
+tsconfig.json
+tsconfig.test.json
+esbuild.config.mjs
+vitest.config.ts
+.eslintrc.json
+.eslintrc.js
+.prettierrc
+.gitignore
+
+# AI辅助开发文件
+CLAUDE.md
+.claude/**
+.omc/**
+.omp/**
+.specify/**
+.serena/**
+.planning/**
+.hermes/**
+.codegraph/**
+.code-review-graph/**
+.cursor/**
+specs/**
+.github
+.github/**       # PR 模板等开发协作文件不应进 .vsix
+AGENTS.md
+.gsd-id
+
+# 内部审计与开发文档
+AUDIT-REPORT.md
+REMEDIATION-PLAN.md
+doc/**
+docs/**
+
+# 日志：全局所有层级 log
+**/*.log
+# 强制排除根目录日志文件
+/log.txt
+# 调试map：全局所有层级映射文件
+**/*.map
+
+# 打包产物、系统文件
+*.vsix
+.DS_Store
+
+# 本地构建脚本（用户不需要）
+scripts/**

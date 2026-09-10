@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **激活提示**: 补齐 `package.json#activationEvents` 的 18 个缺失 `onCommand` 事件,使全部 22 个命令 ID 在被点击时立即触发激活,不再显示 "Extension 'VSCodeUEHelper' is activating…"。仓库根 AGENTS.md 与 `src/commands/AGENTS.md` 同步把"在 `activationEvents` 加 `onCommand`"纳入新增命令铁律,避免回归。
+
 ## [0.7.0] — 2026-06-24
 
 ### Phase 7 — Release readiness

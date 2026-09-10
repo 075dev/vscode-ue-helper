@@ -4,11 +4,9 @@
 
 ## Governance
 
-Project governance, supported-platform scope, and architectural principles live in
-[`.planning/PROJECT.md`](.planning/PROJECT.md) (the constitution I–V 扩展原则章节 verbatim 迁自
-[`.specify/memory/constitution.md`](.specify/memory/constitution.md) v1.0.1 on 2026-08-18). All
-operational and runtime claims in this README are subordinate to `.planning/PROJECT.md`; any
-conflict MUST be resolved in favor of `.planning/PROJECT.md` or escalated as an amendment.
+This project is **Windows-only** (see `package.json#platforms`). Unreal Engine 5.2+, the
+MSVC toolchain, and the Windows SDK are hard requirements. All code comments are written
+in Chinese by convention.
 
 ## Status
 

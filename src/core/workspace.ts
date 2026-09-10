@@ -1,0 +1,489 @@
+/**
+ * workspace —— 项目/引擎/工作区状态单一真相源
+ *
+ * ## 设计原则（Phase 8 用户锁定）
+ *
+ * 1. **根源信息硬规则** —— 项目/引擎识别规则不允许自定义：
+ *    - `path === '.'`  → project folder
+ *    - `name === 'UE5'` → engine folder
+ *    - 这两条规则由 WorkspaceFolderInfo.role 在 detection 层标记，WorkspaceState 不再做识别。
+ *
+ * 2. **不允许调用方拼接路径** —— 任何路径获取必须通过本类 getter，不允许调用方自己
+ *    path.join / path.dirname / 硬编码字符串拼接。
+ *
+ * 3. **根源信息缺失 → 错误通知** —— get 函数内部检测，缺失时通过 `vscode.window.showWarningMessage`
+ *    弹错（**「从 .uproject 重新生成工作区」** 简单提示，无按钮），整 session 只弹一次（去重）。
+ *
+ * 4. **不允许扩展派生规则** —— WorkspaceState 字段集固定，不允许外部添加「自定义」字段
+ *    （如 buildVersionPath、engineSourcePath 等其他硬编码路径拼接都不允许）。
+ *
+ * ## 字段层级
+ *
+ * - **Level 0 根源**：workspaceFile / workspaceFolders / projectFolder / engineFolder
+ * - **Level 0 注入对象**：project / engine
+ * - **Level 1 派生路径**：projectDir / projectFile / projectName / engineRoot / engineVersion / workspaceRoot
+ * - **Level 2 .clangd 相关**：clangdConfigPath / clangdHelperDir / compileCommandsDir / compileCommandsPath
+ * - **Level 3 补全文件路径**：macroHelperPath / ueClangdCompatPath / addCompletionsPath / ...
+ */
+
+import * as path from 'node:path';
+import * as vscode from 'vscode';
+import { type Logger } from './logger';
+import type { WorkspaceContext } from '@detection/workspaceContext';
+import type { ProjectInfo, EngineInstall } from '@detection/types';
+import type { WorkspaceFolderInfo } from '@detection';
+export type { WorkspaceFolderInfo };
+
+/** get 函数访问的字段标识符（用于去重 notify） */
+export type WorkspaceField =
+  | 'workspaceFile'
+  | 'workspaceFolders'
+  | 'projectFolder'
+  | 'engineFolder'
+  | 'project'
+  | 'engine'
+  | 'projectDir'
+  | 'projectFile'
+  | 'projectName'
+  | 'engineRoot'
+  | 'engineVersion'
+  | 'workspaceRoot'
+  | 'clangdConfigPath'
+  | 'clangdHelperDir'
+  | 'clangdPerfCachePath'
+  | 'compileCommandsDir'
+  | 'compileCommandsPath'
+  | 'macroHelperPath'
+  | 'ueClangdCompatPath'
+  | 'addCompletionsPath'
+  | 'addMacroCompletionsPath'
+  | 'completionHelperPath'
+  | 'defaultCompletionsPath';
+
+/** WorkspaceState 配置选项 */
+export interface WorkspaceStateOptions {
+  /** detection 句柄，提供 detection.ready Promise + 项目/引擎/folder 解析结果 */
+  detection: {
+    ready: Promise<{
+      projects: ProjectInfo[];
+      engines: EngineInstall[];
+      workspaceFile?: string;
+      workspaceRoot?: string;
+      workspaceFolders: WorkspaceFolderInfo[];
+      projectFolder: WorkspaceFolderInfo | null;
+      engineFolder: WorkspaceFolderInfo | null;
+    }>;
+  };
+  /**
+   * [Phase 9 SSoT] 用户选择状态（持久化）。可选——不传则 selected* getter 返回 null，
+   * 但生产代码（extension.ts）必须传入以收敛全部 selection 访问到 WorkspaceState。
+   */
+  workspaceContext?: WorkspaceContext;
+  /** Logger 实例 */
+  logger: Logger;
+}
+
+/**
+ * WorkspaceState —— 项目/引擎/工作区状态
+ *
+ * 用法：
+ *   1. 创建 instance 后调用 await setResult(...)
+ *   2. 同步访问各 getter
+ *   3. 根源信息缺失时 get 自动弹错（去重）
+ */
+export class WorkspaceState implements vscode.Disposable {
+  // ===== 根源信息（来自 detection 注入） =====
+  private _workspaceFile: string | null = null;
+  private _workspaceFolders: WorkspaceFolderInfo[] = [];
+  private _projectFolder: WorkspaceFolderInfo | null = null;
+  private _engineFolder: WorkspaceFolderInfo | null = null;
+  private _project: ProjectInfo | null = null;
+  private _engine: EngineInstall | null = null;
+  /** [Phase 9 SSoT] 用户选择状态（持久化）—— 可选依赖 */
+  private _workspaceContext: WorkspaceContext | null = null;
+
+  /** 已弹过报错的字段（整 session 只弹一次） */
+  private readonly _notifiedFields = new Set<WorkspaceField>();
+
+  /**
+   * [F2-15/W17] 用户选择变更事件。
+   *
+   * setSelectedProject / setSelectedEngine 持久化成功后 fire,UI 层订阅它
+   * 重绘状态栏,避免 QuickPick 切换项目/引擎后状态栏不刷新。
+   */
+  private readonly _onDidChangeSelection = new vscode.EventEmitter<void>();
+
+  /** 用户选择变更事件(订阅方 push 到 context.subscriptions 回收) */
+  readonly onDidChangeSelection: vscode.Event<void> = this._onDidChangeSelection.event;
+
+  /** 是否已注入（用于测试） */
+  private _injected = false;
+
+  /** 是否已 dispose（防止 dispose 后被访问） */
+  private _disposed = false;
+
+  private readonly logger: Logger;
+
+  constructor(opts: WorkspaceStateOptions) {
+    this.logger = opts.logger;
+    // [Phase 9 SSoT] 可选依赖，未传时 selection getter 返回 null
+    this._workspaceContext = opts.workspaceContext ?? null;
+    // 立即订阅 detection.ready，注入完成后自动 setResult
+    void opts.detection.ready.then((result) => {
+      this.setResult(result);
+    });
+  }
+
+  /**
+   * 注入 detection 结果。
+   *
+   * 不验证（detection 已保证语义正确，缺失会返回 null/[]）。本类只做透传。
+   */
+  setResult(result: {
+    projects: ProjectInfo[];
+    engines: EngineInstall[];
+    workspaceFile?: string;
+    workspaceRoot?: string;
+    workspaceFolders: WorkspaceFolderInfo[];
+    projectFolder: WorkspaceFolderInfo | null;
+    engineFolder: WorkspaceFolderInfo | null;
+  }): void {
+    this._project = result.projects[0] ?? null;
+    this._engine = result.engines[0] ?? null;
+    this._workspaceFile = result.workspaceFile ?? null;
+    this._workspaceFolders = result.workspaceFolders;
+    this._projectFolder = result.projectFolder;
+    this._engineFolder = result.engineFolder;
+    this._injected = true;
+    this.logger.info(
+      `[workspace] injected: project=${this._project?.name ?? '(none)'} ` +
+        `engine=${this._engine?.version ?? '(none)'} ` +
+        `folders=${this._workspaceFolders.length}`,
+    );
+  }
+
+  /** 测试辅助：是否已注入 */
+  get isInjected(): boolean {
+    return this._injected;
+  }
+
+  // ===== Level 0 根源 =====
+  get workspaceFile(): string | null {
+    return this._resolve<string>('workspaceFile', () => this._workspaceFile);
+  }
+  get workspaceFolders(): WorkspaceFolderInfo[] {
+    return (
+      this._resolve<WorkspaceFolderInfo[]>('workspaceFolders', () => this._workspaceFolders) ?? []
+    );
+  }
+  get projectFolder(): WorkspaceFolderInfo | null {
+    return this._resolve<WorkspaceFolderInfo>('projectFolder', () => this._projectFolder);
+  }
+  get engineFolder(): WorkspaceFolderInfo | null {
+    return this._resolve<WorkspaceFolderInfo>('engineFolder', () => this._engineFolder);
+  }
+  get project(): ProjectInfo | null {
+    return this._resolve<ProjectInfo>('project', () => this._project);
+  }
+  get engine(): EngineInstall | null {
+    return this._resolve<EngineInstall>('engine', () => this._engine);
+  }
+
+  // ===== [Phase 9 SSoT] 用户选择（持久化于 WorkspaceContext） =====
+
+  /** 用户选定的项目路径（持久化）。未设置 = null。 */
+  get selectedProject(): string | null {
+    return this._workspaceContext?.getSelectedProject() ?? null;
+  }
+
+  /** 用户选定的引擎路径（持久化）。未设置 = null。 */
+  get selectedEngine(): string | null {
+    return this._workspaceContext?.getSelectedEngine() ?? null;
+  }
+
+  /**
+   * 写入用户选定的项目（持久化）。
+   *
+   * 语义：传 `undefined` 显式清除选择（与 WorkspaceContext.setProject 一致）。
+   * 未注入 workspaceContext 时为 no-op（warning 一条）。
+   */
+  async setSelectedProject(project: ProjectInfo | undefined): Promise<void> {
+    if (!this._workspaceContext) {
+      this.logger.warn('[workspace] setSelectedProject called without workspaceContext (no-op)');
+      return;
+    }
+    await this._workspaceContext.setProject(project);
+    // [F2-15/W17] 持久化成功后通知 UI 刷新
+    this._onDidChangeSelection.fire();
+  }
+
+  /**
+   * 写入用户选定的引擎（持久化）。未注入 workspaceContext 时为 no-op（warning 一条）。
+   */
+  async setSelectedEngine(engine: EngineInstall | undefined): Promise<void> {
+    if (!this._workspaceContext) {
+      this.logger.warn('[workspace] setSelectedEngine called without workspaceContext (no-op)');
+      return;
+    }
+    await this._workspaceContext.setEngine(engine);
+    // [F2-15/W17] 持久化成功后通知 UI 刷新
+    this._onDidChangeSelection.fire();
+  }
+
+  // ===== [Phase 9 SSoT 收尾] 用户选择解析（命令层 helper） =====
+
+  /**
+   * 从项目列表中找到持久化的选择；没有则返回 undefined（调用方自己处理 fallback）。
+   *
+   * 收口 10+ 处命令函数里的 `projects.find((p) => p.path === workspace.selectedProject)`
+   * 重复模式。
+   */
+  resolveSelectedProject(projects: readonly ProjectInfo[]): ProjectInfo | undefined {
+    const path = this.selectedProject;
+    if (!path) {
+      return undefined;
+    }
+    // [F2-18/W25] Windows 路径大小写不敏感:持久化的选择与检测到的路径可能大小写不同
+    // (如 D:/UE_5.5 vs D:/ue_5.5),统一小写比较避免误判为"未选择"。
+    const normalized = path.toLowerCase();
+    return projects.find((p) => p.path.toLowerCase() === normalized);
+  }
+
+  /** 同 resolveSelectedProject，引擎版。 */
+  resolveSelectedEngine(engines: readonly EngineInstall[]): EngineInstall | undefined {
+    const path = this.selectedEngine;
+    if (!path) {
+      return undefined;
+    }
+    // [F2-18/W25] 同 resolveSelectedProject:Windows 路径大小写不敏感比较
+    const normalized = path.toLowerCase();
+    return engines.find((e) => e.path.toLowerCase() === normalized);
+  }
+
+  // ===== Level 1 派生路径 =====
+  get workspaceRoot(): string | null {
+    return this._resolve<string>('workspaceRoot', () => {
+      const f = this._workspaceFile;
+      return f ? path.dirname(f) : null;
+    });
+  }
+  get projectDir(): string | null {
+    return this._resolve<string>('projectDir', () => {
+      // 优先用 projectFolder.absPath（detection 已解析），fallback 用 project.path 的 dirname
+      if (this._projectFolder) {
+        return this._projectFolder.absPath;
+      }
+      const p = this._project;
+      return p ? path.dirname(p.path) : null;
+    });
+  }
+  get projectFile(): string | null {
+    return this._resolve<string>('projectFile', () => {
+      if (this._project) {
+        return this._project.path;
+      }
+      const dir = this.projectDir;
+      const name = this._projectFolder?.name;
+      if (dir && name) {
+        return path.join(dir, `${name}.uproject`);
+      }
+      return null;
+    });
+  }
+  get projectName(): string | null {
+    return this._resolve<string>('projectName', () => {
+      if (this._projectFolder) {
+        return this._projectFolder.name;
+      }
+      const p = this._project;
+      if (!p) {
+        return null;
+      }
+      const base = path.basename(p.path);
+      return base.endsWith('.uproject') ? base.slice(0, -'.uproject'.length) : base;
+    });
+  }
+  get engineRoot(): string | null {
+    return this._resolve<string>('engineRoot', () => {
+      if (this._engineFolder) {
+        return this._engineFolder.absPath;
+      }
+      return this._engine?.path ?? null;
+    });
+  }
+  get engineVersion(): string | null {
+    return this._resolve<string>('engineVersion', () => this._engine?.version ?? null);
+  }
+
+  // ===== Level 2 .clangd 相关 =====
+  get clangdConfigPath(): string | null {
+    return this._resolve<string>('clangdConfigPath', () => {
+      const dir = this.projectDir;
+      return dir ? path.join(dir, '.clangd') : null;
+    });
+  }
+  get clangdHelperDir(): string | null {
+    return this._resolve<string>('clangdHelperDir', () => {
+      const dir = this.projectDir;
+      return dir ? path.join(dir, '.vscode', 'vscodeuehelper') : null;
+    });
+  }
+  /**
+   * [Phase 11] Performance 缓存目录（.vscode/clangd-perf-cache/）的绝对路径。
+   *
+   * 与 clangdHelperDir 同级（都在 .vscode/ 下但不同子目录）。
+   * .vscode/vscodeuehelper 是给 clangd 看的 completion helper + compile_commands.json；
+   * .vscode/clangd-perf-cache 是 perfLog / compileCommandsCache 的本地缓存区。
+   *
+   * projectDir 不可派生时返回 null 并弹一次"重新生成工作区"警告。
+   */
+  get clangdPerfCachePath(): string | null {
+    return this._resolve<string>('clangdPerfCachePath', () => {
+      const dir = this.projectDir;
+      return dir ? path.join(dir, '.vscode', 'clangd-perf-cache') : null;
+    });
+  }
+  get compileCommandsDir(): string | null {
+    return this.clangdHelperDir; // 同 clangdHelperDir（per .clangd CompilationDatabase）
+  }
+  get compileCommandsPath(): string | null {
+    return this._resolve<string>('compileCommandsPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'compile_commands.json') : null;
+    });
+  }
+
+  // ===== Level 3 补全文件路径 =====
+  get macroHelperPath(): string | null {
+    return this._resolve<string>('macroHelperPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'macroCompletionHelper.h') : null;
+    });
+  }
+  get ueClangdCompatPath(): string | null {
+    return this._resolve<string>('ueClangdCompatPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'ueClangdCompat.h') : null;
+    });
+  }
+  get addCompletionsPath(): string | null {
+    return this._resolve<string>('addCompletionsPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'addCompletions.h') : null;
+    });
+  }
+  get addMacroCompletionsPath(): string | null {
+    return this._resolve<string>('addMacroCompletionsPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'addMacroCompletions.h') : null;
+    });
+  }
+  get completionHelperPath(): string | null {
+    return this._resolve<string>('completionHelperPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'completionHelper.cpp') : null;
+    });
+  }
+  get defaultCompletionsPath(): string | null {
+    return this._resolve<string>('defaultCompletionsPath', () => {
+      const dir = this.clangdHelperDir;
+      return dir ? path.join(dir, 'defaultCompletions.h') : null;
+    });
+  }
+
+  // ===== 通用 resolve 逻辑 =====
+
+  /**
+   * 通用「存在 → 直接返回；不存在 → 弹错（去重）→ 返回 null」
+   *
+   * 不做 spin-wait——detection.ready 在构造时已订阅，setResult 会同步设置。
+   * 不做自我重试——根源信息缺失就是缺失，需要用户手动从 .uproject 重新生成工作区。
+   */
+  private _resolve<T>(field: WorkspaceField, resolver: () => T | null): T | null {
+    // detection.ready 完成前，根源字段尚未注入，不能把暂时为空误判为真实缺失。
+    if (!this._injected) {
+      return null;
+    }
+    const value = resolver();
+    if (value !== null && value !== undefined) {
+      // 字段可能在早期检测失败后恢复，成功解析时解除旧的通知锁。
+      this._notifiedFields.delete(field);
+      return value;
+    }
+    if (this._notifiedFields.has(field)) {
+      return null;
+    }
+    this._notifyMissing(field);
+    return null;
+  }
+
+  /**
+   * 字段缺失通知（弹错 + 去重）
+   *
+   * 文案：简短提示「从 .uproject 重新生成工作区」，无按钮。
+   * 这是用户拍板的方案——根源信息缺失时不要提供修复按钮（按按钮还是要 .code-workspace，会死循环）。
+   */
+  private _notifyMissing(field: WorkspaceField): void {
+    this._notifiedFields.add(field);
+    const message = this._missingMessage(field);
+    this.logger.warn(`[workspace] missing ${field}: ${message}`);
+    void vscode.window.showWarningMessage(message);
+  }
+
+  /** 字段缺失消息（统一指向「从 .uproject 重新生成工作区」） */
+  private _missingMessage(_field: WorkspaceField): string {
+    // 统一文案，避免泄露内部字段名（让用户困惑）
+    // 来源：用户拍板，简短一行，无按钮
+    return '从 .uproject 重新生成工作区';
+  }
+
+  // ===== 测试辅助 =====
+
+  /** 重置去重缓存（仅测试用） */
+  _resetForTest(): void {
+    this._notifiedFields.clear();
+    this._injected = false;
+    this._project = null;
+    this._engine = null;
+    this._workspaceFile = null;
+    this._workspaceFolders = [];
+    this._projectFolder = null;
+    this._engineFolder = null;
+    this._workspaceContext = null;
+  }
+
+  // ===== Disposable =====
+
+  /**
+   * 释放资源：
+   * - 清空去重通知 Set
+   * - 释放 selection 变更 EventEmitter（订阅方在 dispose 后不再收到事件）
+   * - 重置内部状态字段（与 _resetForTest 等价，避免外部继续访问到旧数据）
+   * - 设置 disposed 标志（幂等，重复调用安全）
+   *
+   * 调用方负责把本实例 push 到 context.subscriptions，让 deactivate 时自动释放。
+   */
+  dispose(): void {
+    if (this._disposed) {
+      return;
+    }
+    this._disposed = true;
+    this._notifiedFields.clear();
+    // [F2-15/W17] 释放 selection 事件 emitter
+    this._onDidChangeSelection.dispose();
+    this._injected = false;
+    this._project = null;
+    this._engine = null;
+    this._workspaceFile = null;
+    this._workspaceFolders = [];
+    this._projectFolder = null;
+    this._engineFolder = null;
+    this._workspaceContext = null;
+    this.logger.info('[workspace] disposed');
+  }
+
+  /** 测试辅助：是否已 dispose */
+  get isDisposed(): boolean {
+    return this._disposed;
+  }
+}

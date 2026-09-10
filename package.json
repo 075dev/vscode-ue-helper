@@ -37,9 +37,28 @@
   "activationEvents": [
     "workspaceContains:**/*.uproject",
     "onCommand:vscodeUEHelper.build",
+    "onCommand:vscodeUEHelper.rebuild",
+    "onCommand:vscodeUEHelper.clean",
+    "onCommand:vscodeUEHelper.launchEditor",
     "onCommand:vscodeUEHelper.liveCoding",
+    "onCommand:vscodeUEHelper.generateCompileCommands",
+    "onCommand:vscodeUEHelper.createProject",
+    "onCommand:vscodeUEHelper.diagnoseProject",
     "onCommand:vscodeUEHelper.showProjectInfo",
-    "onCommand:vscodeUEHelper.diagnoseProject"
+    "onCommand:vscodeUEHelper.setSystemIncludes",
+    "onCommand:vscodeUEHelper.installRules",
+    "onCommand:vscodeUEHelper.uninstall",
+    "onCommand:vscodeUEHelper.openWorkspaceFile",
+    "onCommand:vscodeUEHelper.openTerminalInNewWindow",
+    "onCommand:vscodeUEHelper.selectConfig",
+    "onCommand:vscodeUEHelper.selectTarget",
+    "onCommand:vscodeUEHelper.enableClangdProxy",
+    "onCommand:vscodeUEHelper.disableClangdProxy",
+    "onCommand:vscodeUEHelper.showClangdProxyStatus",
+    "onCommand:vscodeUEHelper.showControlPanel",
+    "onCommand:vscodeUEHelper.retryFirstTimeInit",
+    "onCommand:vscodeUEHelper.refreshProjectExplorer",
+    "onCommand:vscodeUEHelper.openProjectExplorerFile"
   ],
   "main": "out/extension.js",
   "contributes": {
@@ -178,6 +197,13 @@
         "title@zh": "显示控制面板",
         "category": "UE Helper",
         "icon": "$(dashboard)"
+      },
+      {
+        "command": "vscodeUEHelper.retryFirstTimeInit",
+        "title": "Retry Project Initialization",
+        "title@zh": "重试工程初始化",
+        "category": "UE Helper",
+        "icon": "$(refresh)"
       },
       {
         "command": "vscodeUEHelper.refreshProjectExplorer",

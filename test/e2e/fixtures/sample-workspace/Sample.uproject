@@ -1,0 +1,7 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.4",
+  "Category": "Sample",
+  "Description": "Minimal .uproject for e2e activation",
+  "Modules": []
+}
