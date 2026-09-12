@@ -252,3 +252,56 @@ describe('getControlPanelHtml — 模板完整性', () => {
     expect(html).toContain('vscode-evil-source');
   });
 });
+
+describe('getControlPanelHtml — 面板可用性(无项目空状态 + 按钮适用度)', () => {
+  beforeEach(() => {
+    initI18n();
+  });
+
+  it('[分页 bug 回归] script 块恰好一对开合标签(注释含 </script 字面量会提前终止脚本)', () => {
+    // 2026-09 回归:JS 注释里出现字面 "</script" → HTML 解析器提前终止 script 块,
+    // 整个 IIFE 未执行 → 分页/按钮/保存全部失灵。此断言防止该形态再次进入模板。
+    for (const html of [
+      getControlPanelHtml('vscode-webview://test', '', '', []),
+      getControlPanelHtml('vscode-webview://test', 'P', '5.4', []),
+    ]) {
+      expect((html.match(/<script>/g) ?? []).length).toBe(1);
+      expect((html.match(/<\/script>/g) ?? []).length).toBe(1);
+      // 真正的闭合标签应出现在文档末尾(其后只允许 </body></html>)
+      expect(html.trimEnd().endsWith('</html>')).toBe(true);
+    }
+  });
+
+  it('无项目时 body 预置 no-project class(初始即不可用,等 panelState 纠正)', () => {
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
+    expect(html).toContain('<body class="no-project">');
+  });
+
+  it('有项目时 body 无 no-project class', () => {
+    const html = getControlPanelHtml('vscode-webview://test', 'Demo', '5.4', []);
+    expect(html).toContain('<body class="">');
+    expect(html).not.toContain('no-project">');
+  });
+
+  it('空状态 overlay 存在:标题/描述/创建项目按钮', () => {
+    const html = getControlPanelHtml('vscode-webview://test', '', '', []);
+    expect(html).toContain('id="no-project-overlay"');
+    expect(html).toContain('id="no-project-create-btn"');
+  });
+
+  it('全部功能按钮带 data-requirement 档位', () => {
+    const html = getControlPanelHtml('vscode-webview://test', 'Demo', '5.4', []);
+    const count = (html.match(/data-requirement="/g) ?? []).length;
+    // 6 组共 14 个按钮
+    expect(count).toBe(14);
+    expect(html).toContain('data-requirement="always"');
+    expect(html).toContain('data-requirement="project"');
+    expect(html).toContain('data-requirement="engine"');
+  });
+
+  it('webview 内含 applyPanelState 与 panelState 消息分支', () => {
+    const html = getControlPanelHtml('vscode-webview://test', 'Demo', '5.4', []);
+    expect(html).toContain('function applyPanelState');
+    expect(html).toContain("case 'panelState'");
+  });
+});

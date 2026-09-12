@@ -11,8 +11,13 @@ import type { ClangdHandles } from '@clangd';
 import type { ClangdOps } from '@clangd/clangdOps';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
 import { resolveFlags, getGlossaryForWebview } from '@clangd/flagGlossary';
+import { t } from '@i18n';
 import { getControlPanelHtml } from './controlPanel.html';
-import { COMMAND_MAP, CONFIG_KEY_MAP } from './controlPanelMessages';
+import {
+  COMMAND_MAP,
+  COMMAND_REQUIREMENT,
+  CONFIG_KEY_MAP,
+} from './controlPanelMessages';
 import type { WebViewMessage, PanelMessage } from './controlPanelMessages';
 
 /**
@@ -117,6 +122,9 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   private disposables: vscode.Disposable[] = [];
   private projectName = '';
   private engineVersion = '';
+  /** [面板可用性] 工作区是否检测到 .uproject 项目 / UE 引擎（驱动按钮适用度与空状态） */
+  private hasProject = false;
+  private hasEngine = false;
 
   private constructor(deps: ControlPanelDeps) {
     this.deps = deps;
@@ -161,6 +169,15 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       provider.pushStatus();
     });
     deps.context.subscriptions.push(configListener);
+
+    // [面板可用性] 用户切换项目/引擎选择后重推面板状态，按钮适用度即时刷新。
+    // _view 不存在时 postMessage 静默跳过，无需等待 panelReady。
+    if (deps.workspace) {
+      const selectionListener = deps.workspace.onDidChangeSelection(() => {
+        provider.pushPanelState();
+      });
+      deps.context.subscriptions.push(selectionListener);
+    }
     return disposable;
   }
 
@@ -243,14 +260,33 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       this.projectName = project?.name ?? '';
       const engine = workspace?.resolveSelectedEngine(engines) ?? legacyFindEngine() ?? engines[0];
       this.engineVersion = engine?.version ?? '';
+      // [面板可用性] 项目/引擎存在性驱动按钮适用度与空状态（面板整体不可用）
+      this.hasProject = projects.length > 0;
+      this.hasEngine = engines.length > 0;
     } catch {
       this.projectName = '';
       this.engineVersion = '';
+      this.hasProject = false;
+      this.hasEngine = false;
     }
     this.postMessage({
       type: 'updateTitle',
       projectName: this.projectName,
       engineVersion: this.engineVersion,
+    });
+    this.pushPanelState();
+  }
+
+  /**
+   * [面板可用性] 把项目/引擎存在性推到 webview。
+   * webview 据此切换无项目空状态（面板整体不可用）并按适用度 disable 按钮。
+   * _view 不存在（panelReady 前）时 postMessage 静默跳过。
+   */
+  private pushPanelState(): void {
+    this.postMessage({
+      type: 'panelState',
+      hasProject: this.hasProject,
+      hasEngine: this.hasEngine,
     });
   }
 
@@ -284,6 +320,29 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
           return;
         }
         logger.info(`[controlPanel] executing command: ${cmdId}`);
+        // [面板可用性] 服务端兜底：webview 的 disabled 只是 UI 层防线，消息可被伪造，
+        // 这里按按钮适用档位再拦一道——无项目/无引擎时拒绝执行并回推原因。
+        const requirement = COMMAND_REQUIREMENT[msg.command] ?? 'project';
+        if (requirement !== 'always' && !this.hasProject) {
+          logger.warn(`[controlPanel] command blocked (no project): ${cmdId}`);
+          this.postMessage({
+            type: 'commandResult',
+            command: msg.command,
+            success: false,
+            message: t('panel.cmdBlocked.noProject'),
+          });
+          return;
+        }
+        if (requirement === 'engine' && !this.hasEngine) {
+          logger.warn(`[controlPanel] command blocked (no engine): ${cmdId}`);
+          this.postMessage({
+            type: 'commandResult',
+            command: msg.command,
+            success: false,
+            message: t('panel.cmdBlocked.noEngine'),
+          });
+          return;
+        }
         // 长任务（UBT build 等）不能 await 到进程结束：否则面板 toast「正在执行…」
         // 会一直挂着，看起来像卡在加载。启动后立刻回 started，结果由命令自身通知。
         if (LONG_RUNNING_COMMANDS.has(msg.command)) {

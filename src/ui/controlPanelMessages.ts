@@ -106,6 +106,12 @@ export type PanelMessage =
   | { type: 'commandResult'; command: string; success: boolean; message?: string }
   | { type: 'showError'; message: string }
   | { type: 'updateTitle'; projectName: string; engineVersion: string }
+  /**
+   * [面板可用性] 按项目/引擎检测状态推送按钮适用度。
+   * hasProject = 工作区检测到 .uproject；hasEngine = 检测到 UE 引擎安装。
+   * webview 据此切换空状态（无项目时面板整体不可用）并 disable 超出适用度的按钮。
+   */
+  | { type: 'panelState'; hasProject: boolean; hasEngine: boolean }
   | { type: 'configValues'; values: ConfigValues }
   | { type: 'proxyConfigValues'; values: ProxyConfigValues }
   | { type: 'statusValues'; values: StatusValues }
@@ -130,6 +136,14 @@ export const COMMAND_MAP: Record<string, string> = {
   uninstall: 'vscodeUEHelper.uninstall',
 } as const;
 
+/**
+ * 按钮适用档位 —— 按当前工作区状态决定面板按钮是否可用：
+ * - always  ：任意工作区可用（如创建项目——无项目时的唯一入口）
+ * - project ：需要检测到 .uproject 项目
+ * - engine  ：需要项目 + UE 引擎安装（跑 UBT / 启动编辑器等）
+ */
+export type ButtonRequirement = 'always' | 'project' | 'engine';
+
 export interface ButtonGroup {
   id: string;
   i18nKey: string;
@@ -140,6 +154,8 @@ export interface ButtonDef {
   id: string;
   i18nKey: string;
   icon: string;
+  /** 适用档位；webview 据此 disable，扩展侧据此做服务端兜底校验 */
+  requirement: ButtonRequirement;
 }
 
 export const BUTTON_GROUPS: ButtonGroup[] = [
@@ -147,53 +163,67 @@ export const BUTTON_GROUPS: ButtonGroup[] = [
     id: 'build',
     i18nKey: 'panel.group.build',
     buttons: [
-      { id: 'build', i18nKey: 'cmd.build', icon: '🔧' },
-      { id: 'rebuild', i18nKey: 'cmd.rebuild', icon: '🔄' },
-      { id: 'clean', i18nKey: 'cmd.clean', icon: '🗑️' },
+      { id: 'build', i18nKey: 'cmd.build', icon: '🔧', requirement: 'engine' },
+      { id: 'rebuild', i18nKey: 'cmd.rebuild', icon: '🔄', requirement: 'engine' },
+      { id: 'clean', i18nKey: 'cmd.clean', icon: '🗑️', requirement: 'engine' },
     ],
   },
   {
     id: 'launch',
     i18nKey: 'panel.group.launch',
     buttons: [
-      { id: 'launchEditor', i18nKey: 'cmd.launchEditor', icon: '▶️' },
-      { id: 'liveCoding', i18nKey: 'cmd.liveCoding', icon: '⚡' },
+      { id: 'launchEditor', i18nKey: 'cmd.launchEditor', icon: '▶️', requirement: 'engine' },
+      { id: 'liveCoding', i18nKey: 'cmd.liveCoding', icon: '⚡', requirement: 'engine' },
     ],
   },
   {
     id: 'project',
     i18nKey: 'panel.group.project',
     buttons: [
-      { id: 'createProject', i18nKey: 'cmd.createProject', icon: '📁' },
-      { id: 'generateCompileCommands', i18nKey: 'cmd.generateCompileCommands', icon: '📄' },
+      // createProject 是无项目工作区的入口，任何状态下都可用
+      { id: 'createProject', i18nKey: 'cmd.createProject', icon: '📁', requirement: 'always' },
+      {
+        id: 'generateCompileCommands',
+        i18nKey: 'cmd.generateCompileCommands',
+        icon: '📄',
+        requirement: 'engine',
+      },
     ],
   },
   {
     id: 'diagnostics',
     i18nKey: 'panel.group.diagnostics',
     buttons: [
-      { id: 'diagnoseProject', i18nKey: 'cmd.diagnoseProject', icon: '✅' },
-      { id: 'setSystemIncludes', i18nKey: 'cmd.setSystemIncludes', icon: '📚' },
+      { id: 'diagnoseProject', i18nKey: 'cmd.diagnoseProject', icon: '✅', requirement: 'project' },
+      { id: 'setSystemIncludes', i18nKey: 'cmd.setSystemIncludes', icon: '📚', requirement: 'project' },
     ],
   },
   {
     id: 'proxy',
     i18nKey: 'panel.group.proxy',
     buttons: [
-      { id: 'enableClangdProxy', i18nKey: 'proxy.enable', icon: '🔌' },
-      { id: 'disableClangdProxy', i18nKey: 'proxy.disable', icon: '🔗' },
+      { id: 'enableClangdProxy', i18nKey: 'proxy.enable', icon: '🔌', requirement: 'project' },
+      { id: 'disableClangdProxy', i18nKey: 'proxy.disable', icon: '🔗', requirement: 'project' },
     ],
   },
   {
     id: 'tools',
     i18nKey: 'panel.group.tools',
     buttons: [
-      { id: 'openWorkspaceFile', i18nKey: 'cmd.openWorkspaceFile', icon: '📋' },
-      { id: 'installRules', i18nKey: 'cmd.installRules', icon: '📜' },
-      { id: 'uninstall', i18nKey: 'cmd.uninstall', icon: '🗑️' },
+      { id: 'openWorkspaceFile', i18nKey: 'cmd.openWorkspaceFile', icon: '📋', requirement: 'project' },
+      { id: 'installRules', i18nKey: 'cmd.installRules', icon: '📜', requirement: 'project' },
+      { id: 'uninstall', i18nKey: 'cmd.uninstall', icon: '🗑️', requirement: 'project' },
     ],
   },
 ];
+
+/**
+ * 按钮适用档位查表（按钮 id → requirement）。
+ * 扩展侧 executeCommand 兜底校验与 webview 渲染共用同一份定义，避免两处漂移。
+ */
+export const COMMAND_REQUIREMENT: Record<string, ButtonRequirement> = Object.fromEntries(
+  BUTTON_GROUPS.flatMap((group) => group.buttons.map((btn) => [btn.id, btn.requirement])),
+);
 
 export interface SelectOption {
   value: string;

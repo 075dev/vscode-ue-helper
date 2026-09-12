@@ -35,8 +35,7 @@ export function getControlPanelHtml(
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'unsafe-inline'; font-src ${cspSource};">
   <title>${escapeHtml(title)}</title>
-  <style>
-    :root {
+  <style>    :root {
       --radius-sm: 4px;
       --radius-md: 6px;
       --radius-lg: 8px;
@@ -235,6 +234,28 @@ export function getControlPanelHtml(
       font-size: 16px; padding: 0 4px; opacity: 0.7; line-height: 1;
     }
     .warning-notice .notice-close:hover { opacity: 1; }
+    /* [面板可用性] 无 .uproject 时面板整体不可用：隐藏 tab 栏与全部内容页，显示空状态 */
+    body.no-project .tab-bar,
+    body.no-project .tab-content,
+    body.no-project #result-toast { display: none !important; }
+    .no-project-overlay {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 48px 20px; text-align: center; min-height: 60vh;
+    }
+    body.no-project .no-project-overlay { display: flex; }
+    .no-project-overlay .overlay-icon { font-size: 44px; opacity: 0.5; }
+    .no-project-overlay .overlay-title { font-size: 14px; font-weight: 600; opacity: 0.9; }
+    .no-project-overlay .overlay-desc {
+      font-size: 12px; opacity: 0.6; line-height: 1.6; max-width: 260px; white-space: pre-line;
+    }
+    .no-project-overlay .overlay-btn {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 7px 18px;
+      border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 12px;
+      font-family: inherit; font-weight: 500; background: var(--c-primary); color: var(--c-primary-fg);
+      transition: background var(--transition-fast), transform var(--transition-fast);
+      box-shadow: var(--shadow-sm);
+    }
+    .no-project-overlay .overlay-btn:hover { background: var(--c-primary-hover); transform: translateY(-1px); }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
@@ -242,7 +263,13 @@ export function getControlPanelHtml(
     @media (max-width: 320px) { .button-grid { grid-template-columns: 1fr; } .tab { font-size: 10px; padding: 6px 4px; } }
   </style>
 </head>
-<body>
+<body class="${projectName ? '' : 'no-project'}">
+  <div class="no-project-overlay" id="no-project-overlay">
+    <div class="overlay-icon">&#128478;&#65039;</div>
+    <div class="overlay-title">${escapeHtml(t('panel.noProject.title'))}</div>
+    <div class="overlay-desc">${escapeHtml(t('panel.noProject.desc'))}</div>
+    <button class="overlay-btn" id="no-project-create-btn">&#128193; ${escapeHtml(t('panel.noProject.createBtn'))}</button>
+  </div>
   <div class="panel-header">
     <span class="project-name" id="project-info">${escapeHtml(projectName || t('panel.noProject'))}</span>
     ${engineVersion ? `<span class="engine-badge" id="engine-info">UE ${escapeHtml(engineVersion)}</span>` : ''}
@@ -343,9 +370,11 @@ export function getControlPanelHtml(
       const toast = document.getElementById('result-toast');
       let toastTimer = null;
       // [Plan Add 收束] 注入 glossary 元数据 + 当前 selectedIds 由后续 addFlagValues 消息覆盖
-      // [Script-context XSS 防护] 在 </script 前插入反斜杠,防止 id/description 等字符串
-      // 被攻击者构造 "</script><script>..." 逃出当前 script 块。OWASP:JSON.stringify
-      // 默认不转义 < / >,需手工 escape。
+      // [Script-context XSS 防护] 在脚本闭合标签字面量前插入反斜杠,防止 id/description 等
+      // 字符串被攻击者构造 "闭合标签 + script 开标签" 逃出当前 script 块。
+      // OWASP:JSON.stringify 默认不转义 < / >,需手工 escape。
+      // [回归警告] 注释里绝不能出现字面的 "</" + "script" 序列——HTML 解析器会据此
+      // 提前终止本 script 块,整个 IIFE 不再执行(2026-09 面板分页/按钮全部失灵的根因)。
       const ADD_FLAG_ENTRIES = ${JSON.stringify(addFlagEntries).replace(/<\/script/gi, '<\\/script')};
       let addFlagSelectedIds = [];
       document.querySelectorAll('.tab').forEach(tab => {
@@ -363,6 +392,7 @@ export function getControlPanelHtml(
       });
       document.querySelectorAll('.panel-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+          if (this.disabled) return;
           const cmd = this.dataset.command;
           if (!cmd) return;
           this.disabled = true;
@@ -371,6 +401,35 @@ export function getControlPanelHtml(
           vscode.postMessage({ type: 'executeCommand', command: cmd });
         });
       });
+      // [面板可用性] 空状态「创建 UE 项目」按钮——无 .uproject 时面板唯一可用操作
+      document.getElementById('no-project-create-btn').addEventListener('click', function() {
+        this.disabled = true;
+        setTimeout(() => { this.disabled = false; }, 3000);
+        vscode.postMessage({ type: 'executeCommand', command: 'createProject' });
+      });
+      // [面板可用性] 按扩展推送的项目/引擎状态切换面板可用性：
+      //   无项目 → body.no-project（tab 与内容整体不可用，仅显示空状态）
+      //   按钮适用度 → always 恒可用；project 需要项目；engine 需要项目+引擎
+      function applyPanelState(state) {
+        document.body.classList.toggle('no-project', !state.hasProject);
+        const hintNoProject = '${escapeHtml(t('panel.disabled.noProject'))}';
+        const hintNoEngine = '${escapeHtml(t('panel.disabled.noEngine'))}';
+        document.querySelectorAll('.panel-btn[data-requirement]').forEach(btn => {
+          const req = btn.getAttribute('data-requirement');
+          let enabled = true;
+          let hint = '';
+          if (req === 'project') {
+            enabled = !!state.hasProject;
+            hint = hintNoProject;
+          } else if (req === 'engine') {
+            enabled = !!state.hasProject && !!state.hasEngine;
+            hint = state.hasProject ? hintNoEngine : hintNoProject;
+          }
+          if (!btn.dataset.label) btn.dataset.label = btn.title;
+          btn.disabled = !enabled;
+          btn.title = enabled ? (btn.dataset.label || '') : hint;
+        });
+      }
       document.addEventListener('change', function(e) {
         const tab = e.target.closest('.tab-content');
         if (!tab) return;
@@ -476,6 +535,7 @@ export function getControlPanelHtml(
             if (proj) proj.textContent = msg.projectName || '${escapeHtml(t('panel.noProject'))}';
             if (eng) { if (msg.engineVersion) { eng.textContent = 'UE ' + msg.engineVersion; eng.style.display = ''; } else { eng.style.display = 'none'; } }
             break;
+          case 'panelState': applyPanelState(msg); break;
           case 'configValues': applyConfigValues(msg.values); break;
           case 'proxyConfigValues': applyProxyValues(msg.values); break;
           case 'statusValues': applyStatusValues(msg.values); break;
@@ -596,7 +656,8 @@ function renderGroup(group: ButtonGroup): string {
         return '';
       }
       const isPrimary = ['build', 'liveCoding', 'launchEditor'].includes(btn.id);
-      return `<button class="panel-btn${isPrimary ? ' primary' : ''}" data-command="${btn.id}" title="${escapeHtml(t(btn.i18nKey))}"><span class="icon">${btn.icon}</span>${escapeHtml(t(btn.i18nKey))}</button>`;
+      // data-requirement 供 webview 按项目/引擎适用度切换 disabled（applyPanelState）
+      return `<button class="panel-btn${isPrimary ? ' primary' : ''}" data-command="${btn.id}" data-requirement="${btn.requirement}" title="${escapeHtml(t(btn.i18nKey))}"><span class="icon">${btn.icon}</span>${escapeHtml(t(btn.i18nKey))}</button>`;
     })
     .join('\n      ');
   return `    <div class="group"><div class="section-title">${escapeHtml(t(group.i18nKey))}</div><div class="button-grid">${buttonsHtml}</div></div>`;

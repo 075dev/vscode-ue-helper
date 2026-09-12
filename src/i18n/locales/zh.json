@@ -129,6 +129,13 @@
   "panel.executing": "正在执行",
   "panel.result.success": "命令执行成功",
   "panel.result.failure": "命令执行失败",
+  "panel.noProject.title": "未检测到 UE 项目",
+  "panel.noProject.desc": "当前工作区没有 .uproject 文件，控制面板功能不可用。\n请打开包含 .uproject 的工作区，或创建一个新项目。",
+  "panel.noProject.createBtn": "创建 UE 项目",
+  "panel.disabled.noProject": "需要先检测到 UE 项目（.uproject）",
+  "panel.disabled.noEngine": "需要检测到 UE 引擎安装",
+  "panel.cmdBlocked.noProject": "未检测到 UE 项目（.uproject），命令不可用",
+  "panel.cmdBlocked.noEngine": "未检测到 UE 引擎安装，命令不可用",
 
   "proxy.enable": "启用代理",
   "proxy.disable": "禁用代理",
@@ -228,6 +235,15 @@
   "cmd.noWorkspaceRoot": "未找到工作区根目录。 / No workspace root found.",
   "cmd.buildCancelled": "构建已取消。 / Build cancelled.",
   "cmd.buildInFlight": "已有构建在运行,请等待完成。 / A build is already running. Wait for it to finish.",
+
+  "cmd.editorRunning.suggest": "检测到 Unreal 编辑器正在运行,全量构建可能因 DLL 锁定失败。是否改用 Live Coding? / An Unreal Editor instance appears to be running. A full build may fail with DLL lock errors. Use Live Coding instead?",
+  "cmd.editorRunning.useLiveCoding": "使用 Live Coding / Use Live Coding",
+  "cmd.editorRunning.buildAnyway": "仍然构建 / Build Anyway",
+  "cmd.copyBuildCommand.success": "UBT {mode} 命令已复制到剪贴板。 / UBT {mode} command copied to clipboard.",
+  "cmd.noLint.noEditor": "请先打开 C++ 文件再插入 NOLINT 注释。 / Open a C++ file to insert a NOLINT comment.",
+
+  "clangd.newFilesHint": "检测到 {count} 个新增 C++ 文件。是否更新 compile_commands.json 以便 clangd 识别? / {count} new C++ file(s) detected. Update compile_commands.json so clangd can see them?",
+  "clangd.newFilesHint.update": "更新 compile_commands.json / Update compile_commands.json",
 
   "projectExplorer.name": "项目目录 / Project Explorer",
   "projectExplorer.openFailed": "无法打开项目文件：{error} / Failed to open project file: {error}",

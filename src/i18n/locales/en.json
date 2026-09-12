@@ -129,6 +129,13 @@
   "panel.executing": "Executing",
   "panel.result.success": "Command completed",
   "panel.result.failure": "Command failed",
+  "panel.noProject.title": "No Unreal Engine project detected",
+  "panel.noProject.desc": "No .uproject file found in this workspace. The control panel is unavailable.\nOpen a workspace containing a .uproject, or create a new project.",
+  "panel.noProject.createBtn": "Create UE Project",
+  "panel.disabled.noProject": "Requires a detected UE project (.uproject)",
+  "panel.disabled.noEngine": "Requires a detected Unreal Engine installation",
+  "panel.cmdBlocked.noProject": "No UE project (.uproject) detected, command unavailable",
+  "panel.cmdBlocked.noEngine": "No Unreal Engine installation detected, command unavailable",
 
   "proxy.enable": "Enable Proxy",
   "proxy.disable": "Disable Proxy",
@@ -228,6 +235,15 @@
   "cmd.noWorkspaceRoot": "No workspace root found.",
   "cmd.buildCancelled": "Build cancelled.",
   "cmd.buildInFlight": "A build is already running. Wait for it to finish.",
+
+  "cmd.editorRunning.suggest": "An Unreal Editor instance appears to be running. A full build may fail with DLL lock errors. Use Live Coding instead?",
+  "cmd.editorRunning.useLiveCoding": "Use Live Coding",
+  "cmd.editorRunning.buildAnyway": "Build Anyway",
+  "cmd.copyBuildCommand.success": "UBT {mode} command copied to clipboard.",
+  "cmd.noLint.noEditor": "Open a C++ file to insert a NOLINT comment.",
+
+  "clangd.newFilesHint": "{count} new C++ file(s) detected. Update compile_commands.json so clangd can see them?",
+  "clangd.newFilesHint.update": "Update compile_commands.json",
 
   "projectExplorer.name": "Project Explorer",
   "projectExplorer.openFailed": "Failed to open project file: {error}",

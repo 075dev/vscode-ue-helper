@@ -9,6 +9,7 @@ import { getControlPanelHtml } from '@ui/controlPanel.html';
 import {
   BUTTON_GROUPS,
   COMMAND_MAP,
+  COMMAND_REQUIREMENT,
   CONFIG_FIELDS,
   PROXY_FIELDS,
   getFieldType,
@@ -198,7 +199,15 @@ function createMockDetectionHandles() {
       setProject: vi.fn(),
       setEngine: vi.fn(),
     },
-    ready: Promise.resolve(),
+    // refreshTitleInfo 会解构 ready 的 resolve 值（projects/engines 驱动面板可用性），
+    // 必须返回正确形状，否则解构抛错走 catch → hasProject/hasEngine=false。
+    ready: Promise.resolve({
+      projects: [{ name: 'TestProject', path: '/test/TestProject.uproject' }],
+      engines: [{ version: '5.4', path: '/ue/5.4' }],
+      workspaceFolders: [],
+      projectFolder: null,
+      engineFolder: null,
+    }),
   };
 }
 
@@ -274,6 +283,48 @@ describe('BUTTON_GROUPS', () => {
     expect(tools?.buttons.find((b) => b.id === 'regenerateWorkspace')).toBeUndefined();
     const proxy = BUTTON_GROUPS.find((g) => g.id === 'proxy');
     expect(proxy?.buttons).toHaveLength(2);
+  });
+});
+
+describe('COMMAND_REQUIREMENT — 按钮适用档位', () => {
+  it('BUTTON_GROUPS 中每个按钮都在 COMMAND_REQUIREMENT 中有档位', () => {
+    for (const g of BUTTON_GROUPS) {
+      for (const b of g.buttons) {
+        expect(COMMAND_REQUIREMENT[b.id]).toBeDefined();
+      }
+    }
+  });
+  // 无 .uproject 时面板整体不可用，唯一出口是创建项目
+  it('createProject 是唯一 always 档（无项目时的入口）', () => {
+    const always = Object.entries(COMMAND_REQUIREMENT)
+      .filter(([, req]) => req === 'always')
+      .map(([id]) => id);
+    expect(always).toEqual(['createProject']);
+  });
+  it('UBT 类命令是 engine 档（需要项目 + 引擎）', () => {
+    for (const id of [
+      'build',
+      'rebuild',
+      'clean',
+      'launchEditor',
+      'liveCoding',
+      'generateCompileCommands',
+    ]) {
+      expect(COMMAND_REQUIREMENT[id]).toBe('engine');
+    }
+  });
+  it('诊断/工具/代理类命令是 project 档（需要项目）', () => {
+    for (const id of [
+      'diagnoseProject',
+      'setSystemIncludes',
+      'enableClangdProxy',
+      'disableClangdProxy',
+      'openWorkspaceFile',
+      'installRules',
+      'uninstall',
+    ]) {
+      expect(COMMAND_REQUIREMENT[id]).toBe('project');
+    }
   });
 });
 
@@ -455,6 +506,9 @@ describe('ControlPanelProvider', () => {
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
     );
+    // [面板可用性] 先等 refreshTitleInfo 完成（detection.ready 注入 hasProject/hasEngine），
+    // 模拟真实时序：用户点击按钮时检测早已完成，engine 档命令放行。
+    await drain();
     const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
       msg: unknown,
     ) => void;
@@ -471,6 +525,7 @@ describe('ControlPanelProvider', () => {
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
     );
+    await drain();
     const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
       msg: unknown,
     ) => void;
@@ -1086,5 +1141,119 @@ describe('ControlPanelProvider', () => {
     expect(call![0]).toMatchObject({
       result: { success: false, saved: 2, failed: 1, firstError: 'write target fail' },
     });
+  });
+
+  // ===== [面板可用性] 无 .uproject 面板不可用 + 按钮按项目/引擎适用度启用 =====
+
+  /** 以指定的 projects/engines 检测结果建立已 resolve 的 provider，返回 listener */
+  async function setupWithDetection(projects: unknown[], engines: unknown[]) {
+    const deps = createDeps();
+    (
+      deps.detection as unknown as { ready: Promise<unknown> }
+    ).ready = Promise.resolve({
+      projects,
+      engines,
+      workspaceFolders: [],
+      projectFolder: null,
+      engineFolder: null,
+    });
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    // 等待 refreshTitleInfo 完成（注入 hasProject/hasEngine + 推送 panelState）
+    await drain();
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    return { deps, listener };
+  }
+
+  it('refreshTitleInfo 后推送 panelState（hasProject/hasEngine 按检测结果显示）', async () => {
+    await setupWithDetection(
+      [{ name: 'P', path: '/p/P.uproject' }],
+      [{ version: '5.4', path: '/ue/5.4' }],
+    );
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'panelState',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({ type: 'panelState', hasProject: true, hasEngine: true });
+  });
+
+  it('refreshTitleInfo 推送 panelState：无项目时 hasProject=false', async () => {
+    await setupWithDetection([], []);
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'panelState',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({ type: 'panelState', hasProject: false, hasEngine: false });
+  });
+
+  it('无项目时 engine 档命令被服务端兜底拒绝（build 不执行）', async () => {
+    const { listener } = await setupWithDetection([], []);
+    listener({ type: 'executeCommand', command: 'build' });
+    await drain();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('vscodeUEHelper.build');
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'commandResult',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({ type: 'commandResult', success: false });
+  });
+
+  it('无项目时 project 档命令同样被拒绝（diagnoseProject）', async () => {
+    const { listener } = await setupWithDetection([], []);
+    listener({ type: 'executeCommand', command: 'diagnoseProject' });
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'commandResult',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({ type: 'commandResult', success: false });
+  });
+
+  it('无项目时 always 档命令放行（createProject 是空状态的出口）', async () => {
+    const { listener } = await setupWithDetection([], []);
+    listener({ type: 'executeCommand', command: 'createProject' });
+    await drain();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscodeUEHelper.createProject');
+  });
+
+  it('有项目但无引擎时 engine 档被拒、project 档放行', async () => {
+    const { listener } = await setupWithDetection([{ name: 'P', path: '/p/P.uproject' }], []);
+    listener({ type: 'executeCommand', command: 'liveCoding' });
+    await drain();
+    const blocked = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'commandResult',
+    );
+    expect(blocked).toBeDefined();
+    expect(blocked![0]).toMatchObject({ type: 'commandResult', success: false });
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('vscodeUEHelper.liveCoding');
+
+    listener({ type: 'executeCommand', command: 'installRules' });
+    await drain();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscodeUEHelper.installRules');
+  });
+
+  it('detection.ready 失败时走安全默认（hasProject=false，命令拒绝）', async () => {
+    const deps = createDeps();
+    (
+      deps.detection as unknown as { ready: Promise<unknown> }
+    ).ready = Promise.reject(new Error('scan failed'));
+    ControlPanelProvider.register(deps);
+    ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    await drain();
+    const call = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'panelState',
+    );
+    expect(call).toBeDefined();
+    expect(call![0]).toMatchObject({ type: 'panelState', hasProject: false });
   });
 });
