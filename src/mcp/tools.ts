@@ -35,6 +35,7 @@ import { executeLiveCoding } from '@commands/liveCoding';
 import { executeGenerateCompileCommands } from '@commands/generateCompileCommands';
 import { executeSetSystemIncludes } from '@commands/setSystemIncludes';
 import { showProjectInfo } from '@commands/showProjectInfo';
+import { getLastBuildSnapshot, summarizeBuildErrorsForAgent } from '@build/lastBuild';
 
 export interface MCPTool {
   name: string;
@@ -60,6 +61,27 @@ export const MCP_TOOLS: MCPTool[] = [
         },
       },
     },
+  },
+  {
+    // [借鉴 engine-link / UE Build Bridge] 独立的 rebuild / clean 工具名 ——
+    // AI 代理按意图命名工具发现时命中率更高；dispatch 到同一个 executeBuild。
+    name: 'ue_rebuild',
+    description: 'Rebuild the UE project (Clean + Build via UBT -Rebuild).',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'ue_clean',
+    description: 'Clean UE project intermediates via UBT -Clean.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    // [借鉴 engine-link / UE Build Bridge 的 get_build_errors] AI 闭环的读取端：
+    // 触发 ue_build 之后调本工具拿结构化诊断（文件/行/列/错误码/消息）再改代码。
+    name: 'ue_get_build_errors',
+    description:
+      'Get the last build result: structured MSVC/UBT diagnostics (file, line, code, message), ' +
+      'error/warning totals, and files with errors. Returns hasResult=false if no build has run yet.',
+    inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'ue_launch_editor',
@@ -149,6 +171,31 @@ export function callTool(name: string, args: Record<string, unknown>): string {
         dispatched: name,
         mode,
         note: 'fire-and-forget; see logger',
+      });
+    }
+    case 'ue_rebuild':
+      dispatch(executeBuild('rebuild', config, logger, detection, workspace, true), name);
+      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+    case 'ue_clean':
+      dispatch(executeBuild('clean', config, logger, detection, workspace, true), name);
+      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+    case 'ue_get_build_errors': {
+      // 同步读进程内快照（MCP server 与扩展宿主同进程，见 src/mcp/server.ts），
+      // 不需要 fire-and-forget —— AI 代理拿到的就是确定性的最近构建结果。
+      const snap = getLastBuildSnapshot();
+      if (!snap) {
+        return JSON.stringify({
+          ok: true,
+          hasResult: false,
+          note: 'no build has run in this session; call ue_build first',
+        });
+      }
+      // 注意：summary 里也有 build 级别的 ok（构建是否成功），所以嵌套在 build 字段下，
+      // 避免与工具调用级别的 ok 冲突。
+      return JSON.stringify({
+        ok: true,
+        hasResult: true,
+        build: summarizeBuildErrorsForAgent(snap),
       });
     }
     case 'ue_launch_editor':

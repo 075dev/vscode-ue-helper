@@ -9,8 +9,8 @@
  * 通知弹窗出现，但状态栏按钮更新滞后到下一个 microtask，看起来像"没反应"。
  *
  * 修复：在 StatusBarManager 上新增同步方法 updateConfig(settings)，只重绘
- * 仅依赖 settings 的按钮（configBtn / targetBtn / projectInfoBtn 的 platform 段）。
- * activateUI 把 config.onDidChange listener 改为同步调用 updateConfig。
+ * 仅依赖 settings 的按钮（configBtn / targetBtn,以及 projectInfoBtn 的 tooltip
+ * 平台段）。activateUI 把 config.onDidChange listener 改为同步调用 updateConfig。
  *
  * 关键不变量：listener 触发后，**不 await microtask**，configBtn / targetBtn 必须
  * 已经是新值。这是同步更新的核心证据。
@@ -140,6 +140,52 @@ describe('statusBar 配置变更同步回归', () => {
     return handles;
   }
 
+  it('未检测到项目时,8 个状态栏按钮全部隐藏(不显示"没项目"的噪音状态)', async () => {
+    // 覆盖 detection fixture:0 个项目
+    const emptyDetection = {
+      ready: Promise.resolve({
+        projects: [],
+        engines: [],
+        workspaceFile: null,
+        workspaceRoot: null,
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      }),
+      workspaceContext: {
+        getSelectedProject: () => undefined,
+        getSelectedEngine: () => undefined,
+        setProject: vi.fn(),
+        setEngine: vi.fn(),
+      },
+    } as unknown as DetectionHandles;
+
+    const handles = activateUI(context, config, logger, emptyDetection, workspace);
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    const statusBar = handles.statusBar;
+
+    const buttonNames = [
+      'projectInfoBtn',
+      'configBtn',
+      'targetBtn',
+      'buildBtn',
+      'rebuildBtn',
+      'cleanBtn',
+      'liveCodingBtn',
+      'launchBtn',
+    ] as const;
+    for (const name of buttonNames) {
+      const btn = statusBar[name as unknown as keyof typeof statusBar] as unknown as {
+        show: ReturnType<typeof vi.fn>;
+        hide: ReturnType<typeof vi.fn>;
+      };
+      expect(btn.hide, `${name} 应调用 hide`).toHaveBeenCalled();
+      expect(btn.show, `${name} 不应调用 show`).not.toHaveBeenCalled();
+    }
+  });
+
   it('selectConfig 改 configuration 后,同步触发 listener 应让 configBtn.text 立即反映新值（不 await microtask）', async () => {
     const handles = await activateAndWaitFirstRender();
     const statusBar = handles.statusBar;
@@ -173,24 +219,28 @@ describe('statusBar 配置变更同步回归', () => {
     expect(statusBar['targetBtn'].text).not.toContain('Editor');
   });
 
-  it('platform 变化后,projectInfoBtn.text 同步嵌入新 platform（项目/引擎段用 _cachedCtx 派生）', async () => {
+  it('platform 变化后,projectInfoBtn 文本保持仅项目名,新 platform 同步进 tooltip', async () => {
     const handles = await activateAndWaitFirstRender();
     const statusBar = handles.statusBar;
 
-    // 首次 renderFull 后 projectInfoBtn 应包含 Win64 + 项目名 + 引擎版本
-    expect(statusBar['projectInfoBtn'].text).toContain('Win64');
+    // 按钮文本精简为仅项目名;引擎版本/平台只出现在 tooltip
     expect(statusBar['projectInfoBtn'].text).toContain('TestProject');
-    expect(statusBar['projectInfoBtn'].text).toContain('UE 5.4');
+    expect(statusBar['projectInfoBtn'].text).not.toContain('Win64');
+    expect(statusBar['projectInfoBtn'].text).not.toContain('UE 5.4');
+    expect(statusBar['projectInfoBtn'].tooltip).toContain('Win64');
+    expect(statusBar['projectInfoBtn'].tooltip).toContain('UE 5.4');
 
-    // Mac 不在宪法 §I 支持范围但仍可设置,这里只是验证同步刷新 platform 段
+    // Mac 不在宪法 §I 支持范围但仍可设置,这里只是验证同步刷新 tooltip 的 platform 段
     await config.update('platform', 'Mac');
     fireConfigChange();
 
-    expect(statusBar['projectInfoBtn'].text).toContain('Mac');
-    expect(statusBar['projectInfoBtn'].text).not.toContain('Win64');
-    // 同步路径下项目/引擎段也应保留(_cachedCtx 在 update 时已经写入)
+    // 文本不受 platform 影响(仍只有项目名)
     expect(statusBar['projectInfoBtn'].text).toContain('TestProject');
-    expect(statusBar['projectInfoBtn'].text).toContain('UE 5.4');
+    expect(statusBar['projectInfoBtn'].text).not.toContain('Win64');
+    expect(statusBar['projectInfoBtn'].text).not.toContain('Mac');
+    // 新 platform 同步进 tooltip
+    expect(statusBar['projectInfoBtn'].tooltip).toContain('Mac');
+    expect(statusBar['projectInfoBtn'].tooltip).not.toContain('Win64');
   });
 
   it('_isBuilding === true 时 updateConfig 直接返回,不打断 build spinner / 错误结果状态', async () => {
@@ -258,13 +308,15 @@ describe('statusBar 配置变更同步回归', () => {
     const statusBar = handles.statusBar;
 
     // renderFull 完成:8 个按钮按 visibility 规则 show,Config/Target 是
-    // 初始值,projectInfo 合并三项显示。
+    // 初始值,projectInfo 按钮仅显示项目名(引擎/平台在 tooltip)。
     expect(statusBar['buildBtn'].text).toContain('Build');
     expect(statusBar['configBtn'].text).toContain('Development');
     expect(statusBar['targetBtn'].text).toContain('Editor');
     expect(statusBar['projectInfoBtn'].text).toContain('TestProject');
-    expect(statusBar['projectInfoBtn'].text).toContain('UE 5.4');
-    expect(statusBar['projectInfoBtn'].text).toContain('Win64');
+    expect(statusBar['projectInfoBtn'].text).not.toContain('UE 5.4');
+    expect(statusBar['projectInfoBtn'].text).not.toContain('Win64');
+    expect(statusBar['projectInfoBtn'].tooltip).toContain('UE 5.4');
+    expect(statusBar['projectInfoBtn'].tooltip).toContain('Win64');
   });
 
   it('config.onDidChange listener 已注册到 context.subscriptions(dispose 时回收)', () => {

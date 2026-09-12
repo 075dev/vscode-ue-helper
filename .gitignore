@@ -78,7 +78,7 @@ lpt[1-9].*
 .env.*
 !.env.example
 .next/
-build/
+/build/
 __pycache__/
 *.pyc
 .venv/
@@ -97,6 +97,8 @@ log.txt
 .claude-flow/
 # Added by code-review-graph
 .code-review-graph/
+# Serena MCP 本地项目缓存
+.serena/
 
 # AI 辅助工具产物（不提交）
 .omp/

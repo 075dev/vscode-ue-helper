@@ -19,18 +19,17 @@ import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
 import { t } from '@i18n';
 import { runBuild, buildUBTCommand, resolveUBTPath, resolveUBTTarget } from '@build';
+import { isUnrealEditorRunning, shouldSuggestLiveCoding } from '@build/editorDetect';
+import { rememberBuildSnapshot } from '@build/lastBuild';
 import { pushDiagnostics, clearDiagnostics } from '@ui/problemsPanel';
 import { withProgress } from '@ui/notifications';
 import { getOutputChannel } from '@ui/outputChannel';
-import {
-  settingsFromConfig,
-  type StatusBarManager,
-  type StatusBarContext,
-} from '@ui/statusBar';
+import { settingsFromConfig, type StatusBarManager, type StatusBarContext } from '@ui/statusBar';
 import { WorkspaceBackup } from '@clangd';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from '@commands/_resolve';
+import { executeLiveCoding } from './liveCoding';
 
 type Mode = 'build' | 'rebuild' | 'clean';
 
@@ -100,6 +99,35 @@ async function executeBuildInner(
   }
   await persistSelection(workspace, detection, undefined, engine);
 
+  // [编辑器感知构建 / 借鉴 engine-link "editor-aware build"]
+  // 编辑器运行中执行全量构建会撞 UnrealEditor-<Project>.dll 锁定 —— 此时提示
+  // 改走 Live Coding。规则：
+  //   - 只对增量 build 生效（rebuild/clean 本来就要求关编辑器）
+  //   - silent（MCP/AI 代理）跳过，避免交互弹窗阻塞 agent
+  //   - config.editorAwareBuild = false 时完全关闭
+  //   - Esc / 关闭弹窗 = 中止构建（宁可不建，不给用户一个必然失败的构建）
+  if (mode === 'build' && !silent && config.editorAwareBuild) {
+    const editorRunning = await isUnrealEditorRunning();
+    if (shouldSuggestLiveCoding(mode, editorRunning)) {
+      const useLiveCodingLabel = t('cmd.editorRunning.useLiveCoding');
+      const buildAnywayLabel = t('cmd.editorRunning.buildAnyway');
+      const choice = await vscode.window.showWarningMessage(
+        t('cmd.editorRunning.suggest'),
+        useLiveCodingLabel,
+        buildAnywayLabel,
+      );
+      if (choice === useLiveCodingLabel) {
+        logger.info('[build] editor running → rerouted to Live Coding');
+        await executeLiveCoding(config, logger, detection, workspace);
+        return;
+      }
+      if (choice !== buildAnywayLabel) {
+        logger.info('[build] editor running → build dismissed by user');
+        return;
+      }
+    }
+  }
+
   const ubtPath = resolveUBTPath(engine.path);
   const cmd = buildUBTCommand({
     project: project.path,
@@ -139,6 +167,17 @@ async function executeBuildInner(
     channel.appendLine(
       '[UE Helper] Check that the engine folder (name="UE5") points to a UE root containing Engine/Build/BatchFiles/Build.bat.',
     );
+    // 记录失败快照：MCP ue_get_build_errors 需要能看到"构建没跑起来"的原因
+    rememberBuildSnapshot({
+      mode,
+      ok: false,
+      cancelled: false,
+      exitCode: null,
+      durationMs: 0,
+      finishedAtIso: new Date().toISOString(),
+      diagnostics: [],
+      error: msg,
+    });
     void vscode.window.showErrorMessage(msg);
     logger.error(`[build.${mode}] ${msg}`);
     return;
@@ -224,6 +263,18 @@ async function executeBuildInner(
       return r.value;
     });
 
+    // [ue_get_build_errors 数据源] 成功/失败/取消一律记录最近构建快照,
+    // MCP 工具 ue_get_build_errors 从这里读（AI 闭环"构建 → 读错误 → 修复"）。
+    rememberBuildSnapshot({
+      mode,
+      ok: !!result && !result.cancelled && result.exitCode === 0,
+      cancelled: !!result?.cancelled,
+      exitCode: result?.exitCode ?? null,
+      durationMs: result?.durationMs ?? 0,
+      finishedAtIso: new Date().toISOString(),
+      diagnostics: result?.diagnostics ?? [],
+    });
+
     if (result?.cancelled) {
       // [F2-1] 用户取消构建:显示中性提示,不弹"构建失败"警告
       statusBar?.resetFromBuilding(statusCtx, statusSettings);
@@ -246,6 +297,17 @@ async function executeBuildInner(
     logger.info(`[build.${mode}] exit=${result?.exitCode ?? 'n/a'}`);
   } catch (err) {
     statusBar?.resetFromBuilding(statusCtx, statusSettings);
+    // 异常中断也记录快照（error 字段说明为什么没有 exitCode）
+    rememberBuildSnapshot({
+      mode,
+      ok: false,
+      cancelled: false,
+      exitCode: null,
+      durationMs: 0,
+      finishedAtIso: new Date().toISOString(),
+      diagnostics: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
     throw err;
   } finally {
     // UBT 无论成功/失败/取消都恢复 .code-workspace（幂等，无备份则 no-op）

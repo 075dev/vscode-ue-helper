@@ -45,6 +45,12 @@ export interface FileWatcherOptions {
 export interface IncrementalBatch {
   /** 本次批次的文件路径列表 */
   files: string[];
+  /**
+   * 本次批次中「新增」（chokidar add 事件）的文件子集。
+   * 模式借鉴 boocs/unreal-clangd：新增 .h/.cpp 说明 compile_commands.json
+   * 可能缺条目，调用方可据此提示用户刷新编译数据库（change/unlink 无需）。
+   */
+  addedFiles: string[];
   /** 从首个事件到 flush 的总延迟（毫秒） */
   totalLatencyMs: number;
   /** 头文件数量（.h / .hpp / .inl） */
@@ -61,6 +67,12 @@ const HEADER_EXT_RE = /\.(h|hpp|inl)$/i;
 
 /** 源文件扩展名正则（大小写不敏感） */
 const SOURCE_EXT_RE = /\.(cpp|cc|c)$/i;
+
+/** chokidar 事件类型（本模块只关心这三种） */
+interface WatchedEvent {
+  file: string;
+  event: 'add' | 'change' | 'unlink';
+}
 
 /** 默认 ignored 数组（per D-15/Pitfall 2 防御） */
 const DEFAULT_IGNORED = [
@@ -97,7 +109,8 @@ export class IncrementalFileWatcher {
   public onBatch?: (batch: IncrementalBatch) => void;
 
   private watcher: chokidar.FSWatcher | null = null;
-  private batchedChanges: string[] = [];
+  /** 待 flush 的事件缓冲（文件路径 + 事件类型，保插入序） */
+  private batchedEvents: WatchedEvent[] = [];
   private firstEventMs: number | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
   private debounceMs: number = DEFAULT_DEBOUNCE_MS;
@@ -128,22 +141,22 @@ export class IncrementalFileWatcher {
       },
     });
 
-    // 统一事件 handler：add / change / unlink
-    const onChange = (filePath: string): void => {
+    // 统一事件 handler：add / change / unlink（记录事件类型供 addedFiles 分级）
+    const onChange = (filePath: string, event: WatchedEvent['event']): void => {
       // 防御：dispose 后事件不应再入队（chokidar mock 的 listeners 可能未移除）
       if (this.watcher === null) {
         return;
       }
-      this.batchedChanges.push(filePath);
+      this.batchedEvents.push({ file: filePath, event });
       if (this.firstEventMs === null) {
         this.firstEventMs = performance.now();
       }
       this.scheduleFlush();
     };
 
-    this.watcher.on('add', onChange);
-    this.watcher.on('change', onChange);
-    this.watcher.on('unlink', onChange);
+    this.watcher.on('add', (filePath: string) => onChange(filePath, 'add'));
+    this.watcher.on('change', (filePath: string) => onChange(filePath, 'change'));
+    this.watcher.on('unlink', (filePath: string) => onChange(filePath, 'unlink'));
 
     return new vscode.Disposable(() => this.dispose());
   }
@@ -165,19 +178,22 @@ export class IncrementalFileWatcher {
    * 立即清空当前批次并触发 onBatch
    */
   private flush(): void {
-    if (this.batchedChanges.length === 0) {
+    if (this.batchedEvents.length === 0) {
       return;
     }
     const elapsed = this.firstEventMs !== null ? performance.now() - this.firstEventMs : 0;
-    const files = this.batchedChanges.slice();
+    const events = this.batchedEvents.slice();
+    const files = events.map((e) => e.file);
+    const addedFiles = events.filter((e) => e.event === 'add').map((e) => e.file);
     const headerCount = files.filter((f) => HEADER_EXT_RE.test(f)).length;
     const sourceCount = files.filter((f) => SOURCE_EXT_RE.test(f)).length;
 
-    this.batchedChanges = [];
+    this.batchedEvents = [];
     this.firstEventMs = null;
 
     const batch: IncrementalBatch = {
       files,
+      addedFiles,
       totalLatencyMs: elapsed,
       headerCount,
       sourceCount,
@@ -205,7 +221,7 @@ export class IncrementalFileWatcher {
       void this.watcher.close();
       this.watcher = null;
     }
-    this.batchedChanges = [];
+    this.batchedEvents = [];
     this.firstEventMs = null;
   }
 }

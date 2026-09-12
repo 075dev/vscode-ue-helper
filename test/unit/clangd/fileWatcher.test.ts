@@ -244,3 +244,49 @@ describe('IncrementalFileWatcher (Phase 7 PLAN B / per D-15/D-16/D-17)', () => {
     handle.dispose();
   });
 });
+
+// ============== addedFiles 分级（借鉴 boocs/unreal-clangd 新增文件检测） ==============
+
+describe('IncrementalFileWatcher addedFiles 分级', () => {
+  beforeEach(() => {
+    mockState.setMockWatcher(mockState.createMockWatcher());
+    mockState.watchMock.mockClear();
+  });
+
+  it('add 事件进入 addedFiles,change/unlink 不进入', async () => {
+    const watcher = new IncrementalFileWatcher();
+    const batches: import('@clangd/fileWatcher').IncrementalBatch[] = [];
+    watcher.onBatch = (b) => batches.push(b);
+
+    const handle = watcher.start({ patterns: ['/test/**/*.cpp'], debounceMs: 30 });
+
+    mockState.getMockWatcher().__emit('add', '/test/new.cpp');
+    mockState.getMockWatcher().__emit('change', '/test/edited.cpp');
+    mockState.getMockWatcher().__emit('unlink', '/test/gone.cpp');
+
+    await new Promise<void>((r) => setTimeout(r, 70));
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.files).toEqual(['/test/new.cpp', '/test/edited.cpp', '/test/gone.cpp']);
+    expect(batches[0]!.addedFiles).toEqual(['/test/new.cpp']);
+
+    handle.dispose();
+  });
+
+  it('纯 change 批次的 addedFiles 为空数组', async () => {
+    const watcher = new IncrementalFileWatcher();
+    const batches: import('@clangd/fileWatcher').IncrementalBatch[] = [];
+    watcher.onBatch = (b) => batches.push(b);
+
+    const handle = watcher.start({ patterns: ['/test/**/*.h'], debounceMs: 30 });
+
+    mockState.getMockWatcher().__emit('change', '/test/existing.h');
+
+    await new Promise<void>((r) => setTimeout(r, 70));
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.addedFiles).toEqual([]);
+
+    handle.dispose();
+  });
+});

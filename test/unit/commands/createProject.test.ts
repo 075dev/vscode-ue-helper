@@ -113,6 +113,7 @@ const {
   mockStartModifyRsp,
   mockStartCreateRspMatchers,
   mockRunUhtCodegen,
+  mockScaffoldFormatTidy,
 } = vi.hoisted(() => {
   return {
     mockGenerateCompileCommands: vi.fn<[], Promise<string>>(),
@@ -126,6 +127,7 @@ const {
       [],
       Promise<{ ran: boolean; exitCode: number | null; generatedHeaderCount: number }>
     >(),
+    mockScaffoldFormatTidy: vi.fn<[], Promise<unknown>>(),
   };
 });
 
@@ -138,6 +140,7 @@ vi.mock('@clangd', () => ({
   startModifyResponseFiles: () => mockStartModifyRsp(),
   startCreateRspMatchers: () => mockStartCreateRspMatchers(),
   runUhtCodegen: () => mockRunUhtCodegen(),
+  scaffoldClangFormatAndTidy: () => mockScaffoldFormatTidy(),
 }));
 
 const mockPickProject = vi.fn<[], Promise<{ path: string; name: string }>>();
@@ -152,6 +155,19 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
   beforeEach(() => {
     initI18n();
     vi.clearAllMocks();
+    // scaffold 步骤默认"未启用"返回,不干扰既有步骤断言
+    mockScaffoldFormatTidy.mockResolvedValue({
+      clangFormat: {
+        path: 'C:/fake/.clang-format',
+        created: false,
+        skippedReason: 'disabled by setting',
+      },
+      clangTidy: {
+        path: 'C:/fake/.clang-tidy',
+        created: false,
+        skippedReason: 'disabled by setting',
+      },
+    });
     // vscode.window.withProgress 立即执行 callback
     (vscode.window.withProgress as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (_opts: unknown, task: (progress: unknown) => Promise<unknown>) => {

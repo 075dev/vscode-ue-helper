@@ -2,7 +2,7 @@
  * statusBar —— 底部 Rider 风格工具栏(移植自 engine-link)
  *
  * 布局(从左到右,8 个按钮):
- *   [$(file-code) 项目名 | $(package) 引擎版本 | $(device-desktop) 平台]   ← 合并 3 项
+ *   [$(file-code) 项目名]                                  ← 仅项目名,引擎版本/平台在 tooltip
  *   [$(gear) Config] [$(symbol-class) Target]
  *   [$(play) Build] [$(refresh) Rebuild] [$(trash) Clean]
  *   [$(zap) Live Coding] [$(rocket) Launch]
@@ -10,7 +10,7 @@
  * 主要按钮特性:
  *   - Build / Live Coding / Launch 用 prominent 背景(高亮)
  *   - Build 按钮在 build 中显示 spinner,完成后显示绿勾或红错
- *   - 项目信息按钮缺失任一项时用 warning 背景(红黄)
+ *   - 项目信息按钮缺失项目或引擎时用 warning 背景(红黄)
  *   - 没有项目时,Build/Rebuild/Clean/LiveCoding/Launch 按钮隐藏
  *
  * 绑定的命令:
@@ -25,8 +25,8 @@
  *
  * API:
  *   - update(ctx, settings): 完整重绘(依赖 detection.ready 解析后的 ctx)
- *   - updateConfig(settings): **同步**重绘仅依赖 config 的按钮 (configBtn / targetBtn /
- *     projectInfoBtn 的 platform 段),不依赖 detection.ready。供 config.onDidChange
+ *   - updateConfig(settings): **同步**重绘仅依赖 config 的按钮 (configBtn / targetBtn),
+ *     不依赖 detection.ready。供 config.onDidChange
  *     listener 调用,避免 listener 走 async renderFull 时的 microtask 延迟导致用户
  *     看到「点了 Config 按钮但状态栏没立即刷新」。
  *   - showBuilding(): build 开始时调,显示 spinner + 禁用按钮
@@ -87,20 +87,20 @@ export class StatusBarManager {
   /**
    * 上次完整重绘 (update) 时的 ctx 快照,供 updateConfig 复用。
    *
-   * 仅依赖 config 的按钮（configBtn / targetBtn / projectInfoBtn 的 platform 段）
-   * 在 updateConfig 内需要 projectName/engineVersion 派生文本,但更新这些字段
+   * 仅依赖 config 的按钮（configBtn / targetBtn / projectInfoBtn 的 tooltip）
+   * 在 updateConfig 内需要 projectName/engineVersion 派生内容,但更新这些字段
    * 的触发源（config.onDidChange）通常发生在 renderFull 已经完成首次注入 ctx
    * 之后。这里缓存最近一次的 ctx,避免 updateConfig 退化为「No Project | No Engine」。
    *
    * 未经过 update 调用前为 null —— updateConfig 此时降级只更新 configBtn/targetBtn,
-   * projectInfoBtn 的项目/引擎段保持上次 update 的状态（首次未注入则无操作）。
+   * projectInfoBtn 的 tooltip 保持上次 update 的状态（首次未注入则无操作）。
    */
   private _cachedCtx: StatusBarContext | null = null;
 
   constructor() {
     // Higher priority = further left. Actions on left, info on right.
-    // 合并按钮：项目名|引擎版本|平台
-    this.projectInfoBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 300);
+    // 合并按钮：项目信息(priority 301,最左),右侧紧邻 UHT 状态(priority 300)
+    this.projectInfoBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 301);
     this.projectInfoBtn.command = 'vscodeUEHelper.showProjectInfo';
     this.projectInfoBtn.name = 'UE Helper: Project Info';
 
@@ -172,11 +172,9 @@ export class StatusBarManager {
     this.targetBtn.text = `$(symbol-class)  ${settings.buildTarget}`;
     this.targetBtn.tooltip = 'Build target — click for details';
 
-    // ── 项目名|引擎版本|平台（合并 3 个信息项）──
+    // ── 项目名(引擎版本/平台只在 tooltip,状态栏文本保持极简)──
     const projectName = ctx.project?.name ?? 'No Project';
-    const engineVersion = ctx.engine ? `UE ${ctx.engine.version}` : 'No Engine';
-    const platform = settings.platform;
-    this.projectInfoBtn.text = `$(file-code)  ${projectName} | $(package)  ${engineVersion} | $(device-desktop)  ${platform}`;
+    this.projectInfoBtn.text = `$(file-code)  ${projectName}`;
     const tooltipLines: string[] = [];
     if (ctx.project) {
       tooltipLines.push(`项目: ${ctx.project.path}`);
@@ -184,11 +182,11 @@ export class StatusBarManager {
       tooltipLines.push('未检测到 .uproject');
     }
     if (ctx.engine) {
-      tooltipLines.push(`引擎: ${ctx.engine.path}`);
+      tooltipLines.push(`引擎: UE ${ctx.engine.version} (${ctx.engine.path})`);
     } else {
       tooltipLines.push('未检测到引擎');
     }
-    tooltipLines.push(`平台: ${platform}`);
+    tooltipLines.push(`平台: ${settings.platform}`);
     this.projectInfoBtn.tooltip = tooltipLines.join('\n');
     if (!ctx.project || !ctx.engine) {
       this.projectInfoBtn.backgroundColor = new vscode.ThemeColor(
@@ -208,7 +206,7 @@ export class StatusBarManager {
     this.launchBtn.tooltip = 'Launch Unreal Editor';
     this.launchBtn.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
 
-    // Visibility — without a project, hide the build / launch actions.
+    // Visibility — 检测不到 UE 项目时插件状态项整体隐身,不给用户"配置了却没项目"的噪音。
     if (ctx.project) {
       this.buildBtn.show();
       this.rebuildBtn.show();
@@ -219,12 +217,13 @@ export class StatusBarManager {
       this.liveCodingBtn.show();
       this.launchBtn.show();
     } else {
+      // [用户决策] 无项目 → 全部隐藏(含 Config/Target/项目信息这些信息项)
       this.buildBtn.hide();
       this.rebuildBtn.hide();
       this.cleanBtn.hide();
-      this.configBtn.show();
-      this.targetBtn.show();
-      this.projectInfoBtn.show();
+      this.configBtn.hide();
+      this.targetBtn.hide();
+      this.projectInfoBtn.hide();
       this.liveCodingBtn.hide();
       this.launchBtn.hide();
     }
@@ -237,17 +236,17 @@ export class StatusBarManager {
    * microtask 延迟,确保用户在 selectConfig / selectTarget / 改 platform 后
    * 同一 tick 内看到状态栏按钮更新。
    *
-   * 影响范围（仅这三个按钮的文本段,不重绘 visibility / build spinner / warning bg）：
+   * 影响范围（不重绘 visibility / build spinner / warning bg）：
    *   - configBtn.text: $(gear) ${buildConfiguration}
    *   - targetBtn.text:  $(symbol-class) ${buildTarget}
-   *   - projectInfoBtn.text 的 platform 段:用 _cachedCtx 派生 projectName/engineVersion,
-   *     嵌入 ${platform}
+   *   - projectInfoBtn.tooltip:platform 设置变化后同步悬停提示
+   *     (按钮文本只依赖项目名,无需重绘)
    *
    * 守护行为：
    *   - _isBuilding === true 时直接返回 —— 不让 config 变化打断 build spinner / 结果状态,
    *     build 走完整 update() 路径或 setTimeout 回调刷新即可。
    *   - _cachedCtx === null（首次 update 还未跑过）时只更新 configBtn / targetBtn,
-   *     projectInfoBtn 不动 —— 避免在没有 detection 结果时显示「No Project | No Engine」。
+   *     projectInfoBtn 的 tooltip 不动 —— 避免在没有 detection 结果时重建空 tooltip。
    */
   updateConfig(settings: StatusBarSettings): void {
     if (this._isBuilding) {
@@ -262,15 +261,8 @@ export class StatusBarManager {
     this.targetBtn.text = `$(symbol-class)  ${settings.buildTarget}`;
     this.targetBtn.tooltip = 'Build target — click for details';
 
-    // ── Project info 的 platform 段(只在缓存过 ctx 后才更新,避免空窗期)──
+    // ── Project info 的 tooltip(按钮文本只依赖项目名,平台变化只需刷新悬停提示)──
     if (this._cachedCtx) {
-      const projectName = this._cachedCtx.project?.name ?? 'No Project';
-      const engineVersion = this._cachedCtx.engine
-        ? `UE ${this._cachedCtx.engine.version}`
-        : 'No Engine';
-      const platform = settings.platform;
-      this.projectInfoBtn.text = `$(file-code)  ${projectName} | $(package)  ${engineVersion} | $(device-desktop)  ${platform}`;
-      // tooltip 也需要同步刷新 platform 段
       const tooltipLines: string[] = [];
       if (this._cachedCtx.project) {
         tooltipLines.push(`项目: ${this._cachedCtx.project.path}`);
@@ -278,11 +270,11 @@ export class StatusBarManager {
         tooltipLines.push('未检测到 .uproject');
       }
       if (this._cachedCtx.engine) {
-        tooltipLines.push(`引擎: ${this._cachedCtx.engine.path}`);
+        tooltipLines.push(`引擎: UE ${this._cachedCtx.engine.version} (${this._cachedCtx.engine.path})`);
       } else {
         tooltipLines.push('未检测到引擎');
       }
-      tooltipLines.push(`平台: ${platform}`);
+      tooltipLines.push(`平台: ${settings.platform}`);
       this.projectInfoBtn.tooltip = tooltipLines.join('\n');
     }
   }

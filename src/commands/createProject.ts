@@ -33,11 +33,13 @@ import {
   startCreateRspMatchers,
   fillMissingCompileCommands,
   runUhtCodegen,
+  scaffoldClangFormatAndTidy,
   type UhtResult,
 } from '@clangd';
 import type { FillResult } from '@clangd/compileCommands';
 import type { ClangdOps } from '@clangd/clangdOps';
 import { t } from '@i18n';
+import { resolveProgressLocation } from '@ui/notifications';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from '@commands/_resolve';
@@ -99,7 +101,9 @@ export async function executeCreateProject(
 
   await vscode.window.withProgress(
     {
-      location: vscode.ProgressLocation.Notification,
+      // 进度位置走统一配置(progressLocation):默认状态栏 spinner 自动消失,
+      // 设为 notification 才回右下角弹窗(见 src/ui/notifications.ts)
+      location: resolveProgressLocation(),
       title: 'Create Unreal Clangd Project',
       cancellable: false,
     },
@@ -378,6 +382,36 @@ export async function executeCreateProject(
         logger.error('[createProject] completion files failed:', msg);
       }
       progress.report({ increment: 20 });
+
+      // Step 3.5（借鉴 boocs/unreal-clangd）:可选生成 .clang-format / .clang-tidy 基础文件。
+      // 只创建缺失项（已存在不覆盖）;两个开关由 scaffold.clangFormat / scaffold.clangTidy 控制。
+      // 非阻断 —— 失败仅记 result,不影响主流程。
+      try {
+        const scaffold = await scaffoldClangFormatAndTidy(projectDir, {
+          clangFormat: config.scaffoldClangFormat,
+          clangTidy: config.scaffoldClangTidy,
+        });
+        const fmt = scaffold.clangFormat.created
+          ? 'created'
+          : `skipped (${scaffold.clangFormat.skippedReason ?? 'exists'})`;
+        const tidy = scaffold.clangTidy.created
+          ? 'created'
+          : `skipped (${scaffold.clangTidy.skippedReason ?? 'exists'})`;
+        results.push({
+          step: 'Scaffold .clang-format / .clang-tidy',
+          ok: true,
+          detail: `format=${fmt}, tidy=${tidy}`,
+        });
+        logger.info(`[createProject] scaffold format=${fmt}, tidy=${tidy}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({
+          step: 'Scaffold .clang-format / .clang-tidy',
+          ok: false,
+          detail: msg,
+        });
+        logger.warn('[createProject] scaffold clang-format/tidy skipped:', msg);
+      }
 
       // Step 4: add completionHelper.cpp to compile_commands.json (80%)
       progress.report({

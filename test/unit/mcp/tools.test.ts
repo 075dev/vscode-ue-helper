@@ -52,6 +52,7 @@ vi.mock('@commands/showProjectInfo', () => ({
 // ============================================================
 
 import { MCP_TOOLS, callTool, setMCPContext, getMCPContext } from '@mcp/tools';
+import { rememberBuildSnapshot, resetLastBuildSnapshot } from '@build/lastBuild';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { DetectionHandles } from '@detection';
@@ -147,6 +148,7 @@ async function expectDispatched(
 describe('MCP tools', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetLastBuildSnapshot();
     const all: readonly MockedExecute[] = [
       mockExecuteBuild,
       mockExecuteLaunchEditor,
@@ -175,11 +177,14 @@ describe('MCP tools', () => {
   // 1. MCP_TOOLS schema
   // ============================================================
 
-  it('MCP_TOOLS 含 6 个工具且不含已废弃的 ue_toggle_completion_mode', () => {
-    expect(MCP_TOOLS).toHaveLength(6);
+  it('MCP_TOOLS 含 9 个工具且不含已废弃的 ue_toggle_completion_mode', () => {
+    expect(MCP_TOOLS).toHaveLength(9);
     const names = MCP_TOOLS.map((t) => t.name);
     expect(names).toEqual([
       'ue_build',
+      'ue_rebuild',
+      'ue_clean',
+      'ue_get_build_errors',
       'ue_launch_editor',
       'ue_live_coding',
       'ue_generate_compile_commands',
@@ -297,6 +302,101 @@ describe('MCP tools', () => {
       fakeClangdOps,
       true,
     ]);
+  });
+
+  // ============================================================
+  // 3.1 [借鉴 engine-link] ue_rebuild / ue_clean / ue_get_build_errors
+  // ============================================================
+
+  it('ue_rebuild dispatch 到 executeBuild(mode=rebuild, silent=true)', async () => {
+    await expectDispatched('ue_rebuild', mockExecuteBuild, {}, [
+      'rebuild',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
+  });
+
+  it('ue_clean dispatch 到 executeBuild(mode=clean, silent=true)', async () => {
+    await expectDispatched('ue_clean', mockExecuteBuild, {}, [
+      'clean',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+    ]);
+  });
+
+  it('ue_get_build_errors 无快照时返回 hasResult=false(不 fire-and-forget)', () => {
+    resetLastBuildSnapshot();
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      ok: boolean;
+      hasResult: boolean;
+    };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.hasResult).toBe(false);
+    expect(mockExecuteBuild).not.toHaveBeenCalled();
+  });
+
+  it('ue_get_build_errors 有快照时返回 build 摘要(计数/文件去重/诊断明细)', () => {
+    rememberBuildSnapshot({
+      mode: 'build',
+      ok: false,
+      cancelled: false,
+      exitCode: 2,
+      durationMs: 1234,
+      finishedAtIso: '2026-09-12T00:00:00.000Z',
+      diagnostics: [
+        {
+          file: 'C:/proj/Source/A.cpp',
+          line: 10,
+          severity: 'error',
+          code: 'C2065',
+          message: 'undeclared identifier',
+          raw: 'raw',
+        },
+        {
+          file: 'C:/proj/Source/A.cpp',
+          line: 20,
+          severity: 'warning',
+          code: 'C4100',
+          message: 'unreferenced',
+          raw: 'raw',
+        },
+        {
+          file: 'C:/proj/Source/B.cpp',
+          line: 5,
+          severity: 'error',
+          code: 'C2039',
+          message: 'not a member',
+          raw: 'raw',
+        },
+      ],
+    });
+
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      ok: boolean;
+      hasResult: boolean;
+      build: {
+        ok: boolean;
+        exitCode: number;
+        totals: { errors: number; warnings: number; notes: number };
+        filesWithErrors: string[];
+        diagnostics: unknown[];
+        diagnosticsTruncated: boolean;
+      };
+    };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.hasResult).toBe(true);
+    expect(parsed.build.exitCode).toBe(2);
+    expect(parsed.build.totals).toEqual({ errors: 2, warnings: 1, notes: 0 });
+    expect(parsed.build.filesWithErrors).toEqual(['C:/proj/Source/A.cpp', 'C:/proj/Source/B.cpp']);
+    expect(parsed.build.diagnostics).toHaveLength(3);
+    expect(parsed.build.diagnosticsTruncated).toBe(false);
   });
 
   // ============================================================

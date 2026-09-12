@@ -14,7 +14,7 @@
  *      （mtime 跳过层已删除（S3）：VS Code 每次保存都重写文件，mtime 恒变，
  *        原"Ctrl+S 无变化→0ms 跳过"承诺无法成立，反射宏预过滤覆盖大部分场景）
  *   2. 5s 全局节流：5s 内多次保存合并成 1 次 UHT（避免连续保存 fork 多个 dotnet）
- *   3. 状态栏反馈：UHT 跑时显 `$(sync~spin) UE Sync`，让用户知道在等而不是卡住
+ *   3. 状态栏反馈：UHT 跑时显 `$(sync~spin) UHT…`，让用户知道在等而不是卡住
  *
  * ## Rider 对比
  * Rider 通过 IPC 让 UE Editor 进程内嵌 UHT 跑——无 fork 开销。
@@ -59,8 +59,9 @@ const FILE_DEBOUNCE_MS = 200;
 /** UE 反射宏正则（预过滤 .h 是否需要 UHT codegen）。 */
 const REFLECTION_MACRO_RE = /\b(UCLASS|UPROPERTY|UFUNCTION|USTRUCT|UINTERFACE|UENUM)\s*\(/;
 
-/** 默认 status bar 优先级（放最右，避免影响现有 11 个 Left 按钮）。 */
-const STATUS_BAR_PRIORITY = -1000; // Right alignment, 越负越靠右
+/** 状态栏优先级：放左下角项目信息按钮(301)右侧紧邻位置。
+ *  priority 数值越大越靠左,projectInfo=301 > 本项 300 > config=299。 */
+const STATUS_BAR_PRIORITY = 300; // Left alignment, 项目信息右侧
 
 /* ------------------------------------------------------------------ */
 /*  类型                                                                */
@@ -140,16 +141,18 @@ export class UeLinkManager implements vscode.Disposable {
     this.logger = opts.logger;
     this.workspace = opts.workspace;
 
-    // Status bar item：放最右，不影响现有 11 个 Left 按钮
+    // Status bar item：左下角,项目信息按钮右侧(priority 300 < projectInfo 301)
     this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
+      vscode.StatusBarAlignment.Left,
       STATUS_BAR_PRIORITY,
     );
-    this.statusBarItem.name = 'UE Helper: Link Sync';
+    this.statusBarItem.name = 'UE Helper: UHT';
     this.statusBarItem.command = undefined; // 无命令，只显示状态；hover 看详情
-    this.statusBarItem.tooltip = 'UE Link: 保存 .h 后自动触发 UHT codegen（反射宏预过滤 + 5s 节流）';
-    this.statusBarItem.text = '$(check)  UE✓';
-    this.statusBarItem.show();
+    this.statusBarItem.tooltip =
+      'UHT：保存含反射宏的 .h 后自动运行 UnrealHeaderTool 生成 .generated.h（反射宏预过滤 + 5s 节流）';
+    this.statusBarItem.text = '$(check)  UHT';
+    // 不在构造时 show() —— 由 activateClangd 在 detection.ready 后按项目存在性
+    // 调 setVisible()（未检测到 UE 项目时插件状态项整体隐身）。
 
     // 订阅保存事件
     const saveSub = vscode.workspace.onDidSaveTextDocument((doc) => {
@@ -160,6 +163,21 @@ export class UeLinkManager implements vscode.Disposable {
   }
 
   /* ── 公开 API ── */
+
+  /**
+   * 按项目存在性显示/隐藏状态项（detection.ready 后由 activateClangd 调用）。
+   * 未检测到 UE 项目时状态项隐身，与其他插件状态项保持一致。
+   */
+  setVisible(visible: boolean): void {
+    if (this.disposed) {
+      return;
+    }
+    if (visible) {
+      this.statusBarItem.show();
+    } else {
+      this.statusBarItem.hide();
+    }
+  }
 
   /** 状态快照（供测试 + UI）。 */
   snapshot(): UeLinkSnapshot {
@@ -484,35 +502,35 @@ export class UeLinkManager implements vscode.Disposable {
     let tooltip: string;
     switch (s.kind) {
       case 'idle':
-        text = '$(check)  UE✓';
+        text = '$(check)  UHT';
         tooltip =
-          `UE Link: idle. ` +
-          `Last UHT: ${this.lastUhtDurationMs > 0 ? `${this.lastUhtDurationMs.toFixed(0)}ms ago, ${this.lastGeneratedCount} headers` : 'never'}. ` +
-          `Stats: throttled merge=${this.throttledMergedCount}.`;
+          `UHT：空闲。保存含反射宏的 .h 后自动运行 UnrealHeaderTool。\n` +
+          `上次：${this.lastUhtDurationMs > 0 ? `耗时 ${this.lastUhtDurationMs.toFixed(0)}ms，生成 ${this.lastGeneratedCount} 个头文件` : '尚未运行'}。\n` +
+          `节流合并：${this.throttledMergedCount} 次。`;
         break;
       case 'debouncing':
-        text = '$(edit)  UE…';
-        tooltip = `UE Link: debouncing ${path.basename(s.file)} (200ms)`;
+        text = '$(edit)  UHT…';
+        tooltip = `UHT：${path.basename(s.file)} 已排队，200ms 防抖后运行 UnrealHeaderTool`;
         break;
       case 'throttled': {
         const waitMs = Math.max(0, s.fireAt - Date.now());
-        text = `$(clock)  UE throttle ${(waitMs / 1000).toFixed(1)}s`;
-        tooltip = `UE Link: throttled, fire in ${waitMs.toFixed(0)}ms`;
+        text = `$(clock)  UHT in ${(waitMs / 1000).toFixed(1)}s`;
+        tooltip = `UHT：5s 节流窗口中，${waitMs.toFixed(0)}ms 后运行 UnrealHeaderTool`;
         break;
       }
       case 'running-uht':
-        text = '$(sync~spin)  UE Sync';
-        tooltip = `UE Link: running UHT for ${path.basename(s.file)}...`;
+        text = '$(sync~spin)  UHT…';
+        tooltip = `UHT：正在运行 UnrealHeaderTool（${path.basename(s.file)}）…`;
         break;
       case 'notify': {
         const dur = this.lastUhtDurationMs.toFixed(0);
-        text = `$(check)  UE Synced ${dur}ms`;
-        tooltip = `UE Link: UHT done in ${dur}ms, generated ${this.lastGeneratedCount} headers, reparse triggered`;
+        text = `$(check)  UHT ${dur}ms`;
+        tooltip = `UHT：UnrealHeaderTool 完成（${dur}ms），生成 ${this.lastGeneratedCount} 个 .generated.h，已触发 clangd 重新索引`;
         break;
       }
       case 'error':
-        text = '$(alert)  UE Sync Error';
-        tooltip = `UE Link error: ${s.message}. See Output panel for details.`;
+        text = '$(error)  UHT Failed';
+        tooltip = `UHT 失败：${s.message}。详见输出面板。`;
         break;
     }
     this.statusBarItem.text = text;

@@ -626,7 +626,7 @@ describe('runFirstTimeInit failure semantics', () => {
     const calls = (vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>).mock
       .calls;
     const matched = calls.find(
-      ([msg]: [string, ...unknown[]]) =>
+      ([msg]) =>
         typeof msg === 'string' &&
         msg.includes('mock createProject failure') &&
         msg.includes('/fake/proj/MyProject.code-workspace'),
@@ -653,7 +653,7 @@ describe('runFirstTimeInit failure semantics', () => {
     const calls = (vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>).mock
       .calls;
     const matched = calls.find(
-      ([msg]: [string, ...unknown[]]) =>
+      ([msg]) =>
         typeof msg === 'string' &&
         msg.includes('mock proxy failure') &&
         msg.includes('/fake/proj/MyProject.code-workspace'),
@@ -683,7 +683,7 @@ describe('runFirstTimeInit failure semantics', () => {
     const calls = (vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>).mock
       .calls;
     const matched = calls.find(
-      ([msg]: [string, ...unknown[]]) =>
+      ([msg]) =>
         typeof msg === 'string' &&
         msg.includes('EACCES') &&
         msg.includes('/fake/proj/MyProject.code-workspace'),
@@ -695,9 +695,7 @@ describe('runFirstTimeInit failure semantics', () => {
   // 且弹窗必须提供 View Log + Retry + Dismiss 三个动作。
   // 之前:一闪而过的 showErrorMessage → 用户没重试入口 → 永远卡在未初始化循环。
   it('createProject 失败时,错误信息附 workspaceFile 路径并暴露重试入口', async () => {
-    executeCreateProjectMock.mockRejectedValue(
-      new Error('mock createProject failure'),
-    );
+    executeCreateProjectMock.mockRejectedValue(new Error('mock createProject failure'));
     executeEnableClangdProxyMock.mockResolvedValue(undefined);
     // reportInitFailure 内部 await vscode.window.showErrorMessage 拿选择,默认未 mock
     // → 返回 undefined = Dismiss 分支,不影响主流程
@@ -712,8 +710,7 @@ describe('runFirstTimeInit failure semantics', () => {
       .calls;
     // 找出最后的错误弹窗调用(createProject 失败的)
     const errCall = calls.find(
-      ([msg]: [string, ...unknown[]]) =>
-        typeof msg === 'string' && msg.includes('mock createProject failure'),
+      ([msg]) => typeof msg === 'string' && msg.includes('mock createProject failure'),
     );
     expect(errCall).toBeDefined();
     const [msg, ...buttons] = errCall as [string, ...string[]];
@@ -730,8 +727,7 @@ describe('runFirstTimeInit failure semantics', () => {
     expect(errorFn).toBeDefined();
     const errorCalls = errorFn.mock.calls;
     const errMatch = errorCalls.find(
-      ([msg]: [string, ...unknown[]]) =>
-        typeof msg === 'string' && msg.includes('createProject failed'),
+      ([msg]) => typeof msg === 'string' && msg.includes('createProject failed'),
     );
     expect(errMatch).toBeDefined();
   });

@@ -28,6 +28,7 @@ import {
   fillMissingCompileCommands,
 } from '@clangd';
 import { pickProject, pickEngine } from '@ui/quickPicks';
+import { resolveProgressLocation } from '@ui/notifications';
 import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 import type { ProjectInfo } from '@detection';
@@ -96,7 +97,9 @@ export async function executeGenerateCompileCommands(
   try {
     await vscode.window.withProgress(
       {
-        location: vscode.ProgressLocation.Notification,
+        // 进度位置走统一配置(progressLocation):默认状态栏 spinner 自动消失,
+        // 设为 notification 才回右下角弹窗(见 src/ui/notifications.ts)
+        location: resolveProgressLocation(),
         title: t('generateCompileCommands.updating'),
         cancellable: false,
       },

@@ -143,6 +143,42 @@ export class Config {
     return this.root.get<boolean>('autoBackupWorkspace') ?? true;
   }
 
+  /**
+   * 编辑器感知构建（模式借鉴 engine-link / UE Build Bridge），默认 true。
+   * 构建（build 模式）前检测 Unreal Editor 是否运行：运行中全量构建会撞
+   * DLL 锁定，此时建议改走 Live Coding。MCP/silent 调用不受此开关影响
+   * （silent 路径在命令层直接跳过检测，避免阻塞 AI 代理）。
+   */
+  get editorAwareBuild(): boolean {
+    return this.root.get<boolean>('editorAwareBuild') ?? true;
+  }
+
+  /**
+   * 任务进度的显示位置，默认 'window'（状态栏 spinner，任务结束自动消失、不弹窗）。
+   * 'notification' = 右下角通知弹窗（旧行为）。
+   * VS Code 没有"通知进度自动折叠"的 API，想要不打扰就切状态栏位置。
+   */
+  get progressLocation(): 'window' | 'notification' {
+    const raw = this.root.get<string>('progressLocation');
+    return raw === 'notification' ? 'notification' : 'window';
+  }
+
+  /**
+   * createProject 时生成基础 .clang-format（已存在不覆盖），默认 true。
+   * 模式借鉴 boocs/unreal-clangd 的 scaffold 步骤。
+   */
+  get scaffoldClangFormat(): boolean {
+    return this.root.get<boolean>('scaffold.clangFormat') ?? true;
+  }
+
+  /**
+   * createProject 时生成基础 .clang-tidy（已存在不覆盖），默认 false。
+   * UE 项目默认不开 tidy —— Lyra 等大型项目在部分检查下会让 clang-tidy 崩溃。
+   */
+  get scaffoldClangTidy(): boolean {
+    return this.root.get<boolean>('scaffold.clangTidy') ?? false;
+  }
+
   /** MCP 服务器模式，默认 auto（仅 AI 工具中启用） */
   get useMCP(): MCPMode {
     return this.root.get<MCPMode>('useMCP') ?? 'auto';

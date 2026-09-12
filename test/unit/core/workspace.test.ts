@@ -218,7 +218,7 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
       }
     });
 
-    it('ready 后确实缺失时仍提示重新生成工作区', async () => {
+    it('ready 后无项目 → 字段缺失静音(只日志,不弹窗)', async () => {
       const warningSpy = vi.spyOn(vscode.window, 'showWarningMessage');
       warningSpy.mockClear();
       const workspace = new WorkspaceState({
@@ -240,6 +240,42 @@ describe('WorkspaceState.selected* (Phase 9 SSoT)', () => {
         await Promise.resolve();
         await Promise.resolve();
         expect(workspace.project).toBeNull();
+        // [用户决策] 未检测到 .uproject 是正常场景(非 UE 工作区),
+        // 派生字段缺失属预期 —— 只记日志,绝不弹"从 .uproject 重新生成工作区"
+        void workspace.projectDir;
+        void workspace.projectName;
+        expect(warningSpy).not.toHaveBeenCalled();
+      } finally {
+        warningSpy.mockRestore();
+      }
+    });
+
+    it('ready 后检测到了项目但派生字段仍缺失 → 弹窗提示重新生成工作区', async () => {
+      const warningSpy = vi.spyOn(vscode.window, 'showWarningMessage');
+      warningSpy.mockClear();
+      // 有项目(projectFolder 为 null,projectDir 只能从 project.path 派生 → 不缺失)
+      // 这里构造真实异常:projectFolder 与 project 都有,但 workspaceFile 缺失 →
+      // workspaceRoot 无法派生 → 应弹窗
+      const workspace = new WorkspaceState({
+        detection: {
+          ready: Promise.resolve({
+            projects: [fakeProject],
+            engines: [fakeEngine],
+            workspaceFile: undefined,
+            workspaceRoot: undefined,
+            workspaceFolders: [],
+            projectFolder: null,
+            engineFolder: null,
+          }),
+        },
+        logger: noopLogger,
+      });
+
+      try {
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(workspace.project).not.toBeNull();
+        void workspace.workspaceRoot;
         expect(warningSpy).toHaveBeenCalledWith('从 .uproject 重新生成工作区');
       } finally {
         warningSpy.mockRestore();

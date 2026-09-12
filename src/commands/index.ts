@@ -30,6 +30,8 @@ import { executeDiagnoseProject } from './diagnoseProject';
 import { executeShowControlPanel } from './showControlPanel';
 import { executeRefreshProjectExplorer } from './refreshProjectExplorer';
 import { executeOpenProjectExplorerFile } from './openProjectExplorerFile';
+import { executeNoLint } from './noLint';
+import { executeCopyBuildCommand } from './copyBuildCommand';
 import type { ProjectExplorerProvider } from '@ui/projectExplorer';
 import type { StatusBarManager } from '@ui/statusBar';
 import { runFirstTimeInit, type FirstRunInitDeps } from './firstRunInit';
@@ -97,6 +99,18 @@ export function activateCommands(
     executeShowClangdProxyStatus(config, logger, clangd),
   );
   track('vscodeUEHelper.showControlPanel', () => executeShowControlPanel());
+  // [借鉴 vscode-boreal] 复制当前选中项目/引擎/配置对应的 UBT 命令行,排查构建问题时
+  // 可在任意终端手动复现
+  track('vscodeUEHelper.copyBuildCommand', () =>
+    executeCopyBuildCommand(config, logger, detection, workspace),
+  );
+  // [借鉴 boocs/unreal-clangd] clang-tidy 行级屏蔽(vscode.TextEditor 作为首参透传)
+  track('vscodeUEHelper.noLintCurrentLine', (editor) =>
+    executeNoLint('current', editor as vscode.TextEditor | undefined, logger),
+  );
+  track('vscodeUEHelper.noLintNextLine', (editor) =>
+    executeNoLint('next', editor as vscode.TextEditor | undefined, logger),
+  );
   // [bug-fix] 重试首次初始化:失败弹窗的 "重试" 按钮 + 用户手动命令面板触发。
   // 复用同一套 deps(全 ready),无需再走 activation 起点。
   if (workspace) {

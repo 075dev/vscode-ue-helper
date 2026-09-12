@@ -33,6 +33,8 @@ import { registerUeReflectionLinter } from './ueReflectionLinter';
 import { perfLog } from './perfLog';
 import { PerfStatusBar } from '@ui/perfStatusBar';
 import { IncrementalFileWatcher } from './fileWatcher';
+// [借鉴 boocs/unreal-clangd] 新增源文件时提示刷新 compile_commands.json
+import { CompileCommandsRefreshHint } from './compileCommandsHint';
 
 // [Phase 9 SSoT] clangd 模块内部允许 import 自己的 clangdConfig（仅产出 config 对象 + YAML 字符串，无 fs 副作用）
 // eslint-disable-next-line no-restricted-imports
@@ -122,6 +124,14 @@ export { startModifyResponseFiles } from './modifyRspFiles';
 export { startCreateRspMatchers, type RspMatcher } from './createRspMatchers';
 export { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 export { registerUeReflectionLinter } from './ueReflectionLinter';
+// [借鉴 boocs/unreal-clangd] createProject 可选脚手架:.clang-format / .clang-tidy
+export {
+  scaffoldClangFormatAndTidy,
+  CLANG_FORMAT_TEMPLATE,
+  CLANG_TIDY_TEMPLATE,
+  type ScaffoldFormatTidyResult,
+  type FileScaffoldResult,
+} from './formatTidyFiles';
 // [H1] 保存 .h 后自动触发 UHT codegen：mtime 跳过 + 5s 节流 + 状态栏反馈
 export {
   UeLinkManager,
@@ -165,16 +175,20 @@ export function activateClangd(
   //   - mtime 跳过：保存但内容/时间未变 → 0ms
   //   - 内容预过滤：.h 不含反射宏 → 0ms
   //   - 5s 节流：连续保存合并成 1 次
-  //   - 状态栏 `$(sync~spin) UE Sync` 让用户知道在等而不是卡住
+  //   - 状态栏 `$(sync~spin) UHT…` 让用户知道在等而不是卡住
   // [H1] ueLink 仅在 workspace 注入时启用 —— 无 workspace 是单元测试场景,
   // 不应依赖 detection.ready 状态。生产路径（src/extension.ts）必传 workspace。
   let ueLink: UeLinkManager | undefined;
   if (workspace) {
     ueLink = new UeLinkManager({ config, logger, workspace });
     context.subscriptions.push(ueLink);
-    // 跟随 detection.ready 状态:project/engine 准备好后才接受保存事件
-    void detection.ready.then(() => {
-      logger.info('[H1] ueLinkManager armed, listening for onDidSaveTextDocument');
+    // 跟随 detection.ready 状态:project/engine 准备好后才接受保存事件;
+    // 未检测到 UE 项目时状态项隐身(与其他插件状态项一致)
+    void detection.ready.then((result) => {
+      ueLink?.setVisible(result.projects.length > 0);
+      logger.info(
+        `[H1] ueLinkManager armed, listening for onDidSaveTextDocument (projects=${result.projects.length})`,
+      );
     });
   }
 
@@ -224,10 +238,15 @@ export function activateClangd(
   // [Phase 7 PLAN A / per D-06] 性能状态栏（尊重 showPerfInStatusBar setting）
   // - 设置为 false 时完全跳过创建（尊重用户选择）
   // - perfLog 始终在内存中记录；状态栏关闭只关 UI 不关数据通路
+  // - 未检测到 UE 项目时不显示（与其他插件状态项一致），detection.ready 后按需出现
   if (config.showPerfInStatusBar) {
     const perfBar = new PerfStatusBar();
     context.subscriptions.push(perfBar);
-    perfBar.show();
+    void detection.ready.then((result) => {
+      if (result.projects.length > 0) {
+        perfBar.show();
+      }
+    });
     context.subscriptions.push(
       perfLog.onMetricUpdate((m) => {
         perfBar.update({
@@ -257,6 +276,9 @@ export function activateClangd(
     }
     const projectDir = path.dirname(project.path);
     const watcher = new IncrementalFileWatcher();
+    // [借鉴 boocs/unreal-clangd] 新增 .h/.cpp → 节流提示刷新 compile_commands.json。
+    // hint 内部用 vscode.commands.executeCommand 间接触发，避免 clangd → commands 循环依赖。
+    const compileCommandsHint = new CompileCommandsRefreshHint({ logger });
     watcher.onBatch = (batch) => {
       // 通知 perfLog（per D-15/D-17）—— 状态栏可订阅 onMetricUpdate 实时刷新
       perfLog.recordIncrementalScan(batch.totalLatencyMs, batch.files.length);
@@ -277,6 +299,8 @@ export function activateClangd(
           `[perf] incremental scan record failed: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
+      // 新增源文件提示（自带节流 + 异常吞噬，不阻塞 perfLog 链路）
+      void compileCommandsHint.onBatch(batch);
     };
     const handle = watcher.start({
       patterns: [

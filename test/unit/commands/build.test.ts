@@ -17,6 +17,7 @@ import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import { executeBuild } from '@commands/build';
+import { getLastBuildSnapshot, resetLastBuildSnapshot } from '@build/lastBuild';
 import { initI18n, t } from '@i18n';
 
 // executeBuild 会校验 Build.bat 是否存在;测试用假路径,mock 为存在
@@ -65,6 +66,21 @@ vi.mock('@ui/outputChannel', () => ({
 
 vi.mock('@ui/notifications', () => ({
   withProgress: (...args: unknown[]) => mockWithProgress(...args),
+}));
+
+// ============ 编辑器感知构建 + Live Coding 转发的 mock ============
+// build.ts 新 import '@build/editorDetect'(避免测试环境真跑 tasklist)
+// 与 './liveCoding'(避免加载真实 liveCoding.ts → 其 '@build' 具名导入触发 mock 缺导出错误)。
+const mockIsUnrealEditorRunning = vi.fn<unknown[], Promise<boolean>>();
+const mockExecuteLiveCoding = vi.fn<unknown[], Promise<void>>();
+
+vi.mock('@build/editorDetect', () => ({
+  isUnrealEditorRunning: (...args: unknown[]) => mockIsUnrealEditorRunning(...args),
+  shouldSuggestLiveCoding: (mode: string, running: boolean) => mode === 'build' && running,
+}));
+
+vi.mock('@commands/liveCoding', () => ({
+  executeLiveCoding: (...args: unknown[]) => mockExecuteLiveCoding(...args),
 }));
 
 // ============ 类型 / 辅助 ============
@@ -133,7 +149,11 @@ describe('executeBuild', () => {
   beforeEach(() => {
     initI18n();
     vi.clearAllMocks();
+    resetLastBuildSnapshot();
     vi.mocked(fs.existsSync).mockReturnValue(true);
+    // 默认:编辑器未运行(编辑器感知分支不触发);编辑器相关测试内自行覆盖
+    mockIsUnrealEditorRunning.mockResolvedValue(false);
+    mockExecuteLiveCoding.mockResolvedValue(undefined);
 
     // 默认:withProgress 立即执行 task 并返回其结果
     (mockWithProgress as unknown as ReturnType<typeof vi.fn>).mockImplementation(
@@ -244,4 +264,115 @@ describe('executeBuild', () => {
       expect.stringContaining('succeeded'),
     );
   });
+
+  // ============ 编辑器感知构建(借鉴 engine-link "editor-aware build") ============
+
+  /** editorAwareBuild 开启时的 config */
+  const editorAwareConfig = {
+    target: 'Editor',
+    platform: 'Win64',
+    configuration: 'Development',
+    editorAwareBuild: true,
+  } as unknown as Config;
+
+  it('编辑器运行中 + 选 Live Coding → 转发 Live Coding,不跑构建', async () => {
+    mockIsUnrealEditorRunning.mockResolvedValue(true);
+    (vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      t('cmd.editorRunning.useLiveCoding'),
+    );
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
+
+    expect(mockIsUnrealEditorRunning).toHaveBeenCalledTimes(1);
+    expect(mockExecuteLiveCoding).toHaveBeenCalledTimes(1);
+    expect(mockRunBuild).not.toHaveBeenCalled();
+  });
+
+  it('编辑器运行中 + Esc 关闭弹窗 → 中止构建', async () => {
+    mockIsUnrealEditorRunning.mockResolvedValue(true);
+    (vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      undefined,
+    );
+
+    await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
+
+    expect(mockExecuteLiveCoding).not.toHaveBeenCalled();
+    expect(mockRunBuild).not.toHaveBeenCalled();
+  });
+
+  it('editorAwareBuild=false 或 silent(MCP)时跳过检测,直接构建', async () => {
+    mockIsUnrealEditorRunning.mockResolvedValue(true);
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    // 关闭开关
+    await executeBuild('build', config, logger, detection, undefined, false);
+    // silent 路径(MCP 调用)
+    await executeBuild('build', editorAwareConfig, logger, detection, undefined, true);
+
+    expect(mockIsUnrealEditorRunning).not.toHaveBeenCalled();
+    expect(mockRunBuild).toHaveBeenCalledTimes(2);
+  });
+
+  it('rebuild/clean 模式不做编辑器检测', async () => {
+    mockIsUnrealEditorRunning.mockResolvedValue(true);
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    await executeBuild('rebuild', editorAwareConfig, logger, detection, undefined, false);
+    await executeBuild('clean', editorAwareConfig, logger, detection, undefined, false);
+
+    expect(mockIsUnrealEditorRunning).not.toHaveBeenCalled();
+    expect(mockRunBuild).toHaveBeenCalledTimes(2);
+  });
+
+  // ============ 最近构建快照(MCP ue_get_build_errors 数据源) ============
+
+  it('构建结束后记录 LastBuildSnapshot 供 MCP 读取', async () => {
+    mockRunBuild.mockResolvedValue(
+      buildResultWithDiagnostics(2, false, [
+        {
+          file: 'a.cpp',
+          line: 1,
+          severity: 'error',
+          code: 'C2065',
+          message: 'undeclared',
+          raw: '',
+        },
+      ]),
+    );
+
+    await executeBuild('build', config, logger, detection);
+
+    const snap = getLastBuildSnapshot();
+    expect(snap).not.toBeNull();
+    expect(snap!.mode).toBe('build');
+    expect(snap!.ok).toBe(false);
+    expect(snap!.exitCode).toBe(2);
+    expect(snap!.diagnostics).toHaveLength(1);
+    expect(snap!.finishedAtIso).toBeTruthy();
+  });
+
+  it('UBT 脚本缺失时记录带 error 的失败快照', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    await executeBuild('build', config, logger, detection);
+
+    const snap = getLastBuildSnapshot();
+    expect(snap).not.toBeNull();
+    expect(snap!.ok).toBe(false);
+    expect(snap!.exitCode).toBeNull();
+    expect(snap!.error).toContain('UBT script not found');
+  });
 });
+
+/** runBuild 成功返回体(可带诊断列表) */
+function buildResultWithDiagnostics(
+  exitCode: number,
+  cancelled: boolean,
+  diagnostics: unknown[],
+): unknown {
+  return {
+    ok: true,
+    value: { exitCode, cancelled, durationMs: 100, output: [], diagnostics },
+  };
+}

@@ -33,6 +33,7 @@ vi.mock('vscode', () => {
         command: undefined,
         name: '',
         show: vi.fn(),
+        hide: vi.fn(),
         dispose: vi.fn(),
       })),
       showInformationMessage: vi.fn(),
@@ -208,6 +209,31 @@ afterEach(() => {
 /* ─── 测试 ─── */
 
 describe('UeLinkManager', () => {
+  it('构造后状态项不自动显示;setVisible 按项目存在性控制显隐', () => {
+    const mgr = makeManager();
+    const item = (
+      vscode.window.createStatusBarItem as unknown as ReturnType<typeof vi.fn>
+    ).mock.results[0]!.value as unknown as {
+      show: ReturnType<typeof vi.fn>;
+      hide: ReturnType<typeof vi.fn>;
+    };
+
+    // 构造时不 show —— 由 activateClangd 在 detection.ready 后按项目存在性驱动
+    expect(item.show).not.toHaveBeenCalled();
+    expect(item.hide).not.toHaveBeenCalled();
+
+    // 有项目 → 显示
+    mgr.setVisible(true);
+    expect(item.show).toHaveBeenCalledTimes(1);
+    expect(item.hide).not.toHaveBeenCalled();
+
+    // 无项目 → 隐藏
+    mgr.setVisible(false);
+    expect(item.hide).toHaveBeenCalledTimes(1);
+
+    mgr.dispose();
+  });
+
   it('(a) 同一文件再次保存（mtime 相同）→ 不走 mtime 跳过,节流后重跑 UHT', async () => {
     // S3：mtime 层已删除——VS Code 每次保存都重写文件,mtime 恒变,
     // 原"Ctrl+S 无变化→0ms 跳过"承诺不成立。相同 mtime 也走内容预过滤 + 节流。

@@ -11,8 +11,10 @@
  * 2. **不允许调用方拼接路径** —— 任何路径获取必须通过本类 getter，不允许调用方自己
  *    path.join / path.dirname / 硬编码字符串拼接。
  *
- * 3. **根源信息缺失 → 错误通知** —— get 函数内部检测，缺失时通过 `vscode.window.showWarningMessage`
- *    弹错（**「从 .uproject 重新生成工作区」** 简单提示，无按钮），整 session 只弹一次（去重）。
+ * 3. **根源信息缺失 → 错误通知（仅当检测到了项目）** —— get 函数内部检测，检测到项目
+ *    但字段仍缺失时通过 `vscode.window.showWarningMessage` 弹错（**「从 .uproject 重新生成
+ *    工作区」** 简单提示，无按钮），整 session 只弹一次（去重）。未检测到项目时只记日志
+ *    不弹窗（非 UE 工作区是正常场景，与状态栏整体隐身策略一致）。
  *
  * 4. **不允许扩展派生规则** —— WorkspaceState 字段集固定，不允许外部添加「自定义」字段
  *    （如 buildVersionPath、engineSourcePath 等其他硬编码路径拼接都不允许）。
@@ -420,6 +422,11 @@ export class WorkspaceState implements vscode.Disposable {
   /**
    * 字段缺失通知（弹错 + 去重）
    *
+   * **无项目时静音**：detection 没发现任何 .uproject 时，派生字段缺失是预期行为
+   * （用户本来就开着一个非 UE 工作区），只写日志、不弹窗 —— 与"未检测到项目时
+   * 状态栏整体隐身"的策略一致，不给用户噪音。
+   *
+   * 只有「检测到了项目但派生字段仍缺失」这种真实异常才弹窗提示。
    * 文案：简短提示「从 .uproject 重新生成工作区」，无按钮。
    * 这是用户拍板的方案——根源信息缺失时不要提供修复按钮（按按钮还是要 .code-workspace，会死循环）。
    */
@@ -427,6 +434,10 @@ export class WorkspaceState implements vscode.Disposable {
     this._notifiedFields.add(field);
     const message = this._missingMessage(field);
     this.logger.warn(`[workspace] missing ${field}: ${message}`);
+    if (!this._project) {
+      // 无项目 → 静音（detection 未发现 .uproject，字段缺失属预期）
+      return;
+    }
     void vscode.window.showWarningMessage(message);
   }
 

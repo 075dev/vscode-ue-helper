@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 const SRC_ROOT = path.resolve(__dirname, '../../../src');
@@ -130,7 +130,13 @@ describe('SSoT surface regression', () => {
     });
 
     it('根 AGENTS.md 必须把 TRAP #12 标为已解决', () => {
-      const agents = readFileSync(path.resolve(__dirname, '../../..', 'AGENTS.md'), 'utf-8');
+      // 发布分支(release)有意只保留必要文件,根 AGENTS.md 可能不存在;
+      // 文件缺失时跳过守护,避免 CI 误报(文档守护只在文档存在的分支生效)。
+      const agentsPath = path.resolve(__dirname, '../../..', 'AGENTS.md');
+      if (!existsSync(agentsPath)) {
+        return;
+      }
+      const agents = readFileSync(agentsPath, 'utf-8');
       expect(agents).toMatch(/TRAP #12.*已解决|populateAddCompletions.*已解决/);
     });
 
@@ -166,7 +172,12 @@ describe('SSoT surface regression', () => {
     );
 
     it('根 AGENTS.md 仓库陷阱 #14 必须列出豁免清单', () => {
-      const agents = readFileSync(path.resolve(__dirname, '../../..', 'AGENTS.md'), 'utf-8');
+      // 同上:发布分支可能没有根 AGENTS.md,缺失时跳过(见 TRAP #12 守卫的说明)。
+      const agentsPath = path.resolve(__dirname, '../../..', 'AGENTS.md');
+      if (!existsSync(agentsPath)) {
+        return;
+      }
+      const agents = readFileSync(agentsPath, 'utf-8');
       // 必须有 SubprocessRegistry 豁免清单 (windowsSdk.ts / task.ts)
       expect(agents).toMatch(/compileCommands\/task\.ts.*豁免|豁免.*compileCommands\/task\.ts/s);
       expect(agents).toMatch(/windowsSdk\.ts.*豁免|豁免.*windowsSdk\.ts/s);
