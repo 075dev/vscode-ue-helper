@@ -1,10 +1,13 @@
 /**
- * build 命令测试 —— executeBuild 的取消 / 并发守卫分支
+ * build 命令测试 —— executeBuild 的取消 / 并发守卫分支 + Wave2 envelope 对齐
  *
  * [F2-1] 用户取消构建:runBuild 返回 cancelled=true 时,命令层只弹中性提示
  *         ("构建已取消"),不弹 "failed with exit code" 失败警告
  * [F2-2] 构建并发守卫:buildInFlight 非空时再次触发,提示"已有构建在运行"
  *         并直接返回(不排队),runBuild 只被调一次
+ * [Wave2] envelope 对齐(决策 D5/C8):成功 → okEnvelope(data: BuildResult);
+ *         取消 → OPERATION_CANCELLED;UBT 缺失 → UBT_NOT_FOUND;
+ *         spawn 失败 → BUILD_FAILED;exitCode≠0 仍 ok:true 如实上报
  *
  * 依赖全部打桩:@build / @commands/_resolve / @ui/notifications 等,
  * 只验证 executeBuild 自身的编排分支。
@@ -72,7 +75,7 @@ vi.mock('@ui/notifications', () => ({
 // build.ts 新 import '@build/editorDetect'(避免测试环境真跑 tasklist)
 // 与 './liveCoding'(避免加载真实 liveCoding.ts → 其 '@build' 具名导入触发 mock 缺导出错误)。
 const mockIsUnrealEditorRunning = vi.fn<unknown[], Promise<boolean>>();
-const mockExecuteLiveCoding = vi.fn<unknown[], Promise<void>>();
+const mockExecuteLiveCoding = vi.fn<unknown[], Promise<unknown>>();
 
 vi.mock('@build/editorDetect', () => ({
   isUnrealEditorRunning: (...args: unknown[]) => mockIsUnrealEditorRunning(...args),
@@ -182,12 +185,18 @@ describe('executeBuild', () => {
   it('成功构建弹成功提示 (exitCode 0)', async () => {
     mockRunBuild.mockResolvedValue(buildResult(0, false));
 
-    await executeBuild('build', config, logger, detection);
+    const env = await executeBuild('build', config, logger, detection);
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining('succeeded'),
     );
     expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    // [Wave2] envelope 对齐:data 对齐契约 BuildResult
+    expect(env).toMatchObject({
+      ok: true,
+      data: { mode: 'build', exitCode: 0, durationMs: 100 },
+    });
+    expect(env.error).toBeUndefined();
   });
 
   it('真实失败(非取消)仍弹失败警告 (F2-1 回归)', async () => {
@@ -201,23 +210,57 @@ describe('executeBuild', () => {
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
+  it('UBT 退出码非 0 仍返回 ok:true + data.exitCode 如实上报 (契约 BuildDone 语义)', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(2, false));
+
+    const env = await executeBuild('build', config, logger, detection);
+
+    expect(env).toMatchObject({ ok: true, data: { mode: 'build', exitCode: 2 } });
+    expect(env.error).toBeUndefined();
+  });
+
   it('取消构建时只弹中性提示,不弹失败警告 (F2-1)', async () => {
     mockRunBuild.mockResolvedValue(buildResult(1, true));
 
-    await executeBuild('build', config, logger, detection);
+    const env = await executeBuild('build', config, logger, detection);
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(t('cmd.buildCancelled'));
     expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    // [Wave2] 用户取消 → OPERATION_CANCELLED
+    expect(env).toMatchObject({
+      ok: false,
+      error: { code: 'OPERATION_CANCELLED' },
+    });
   });
 
   it('runBuild 返回错误时弹错误提示 (ok=false)', async () => {
     mockRunBuild.mockResolvedValue({ ok: false, error: new Error('spawn EINVAL') });
 
-    await executeBuild('build', config, logger, detection);
+    const env = await executeBuild('build', config, logger, detection);
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('spawn EINVAL'),
     );
+    // [Wave2] 进程级启动失败/无法执行 → BUILD_FAILED
+    expect(env).toMatchObject({ ok: false, error: { code: 'BUILD_FAILED' } });
+  });
+
+  it('[Wave2] 未选项目 → ok:false + PROJECT_NOT_DETECTED', async () => {
+    mockResolveProjectOrPick.mockResolvedValue(undefined);
+
+    const env = await executeBuild('build', config, logger, detection);
+
+    expect(env).toMatchObject({ ok: false, error: { code: 'PROJECT_NOT_DETECTED' } });
+    expect(mockRunBuild).not.toHaveBeenCalled();
+  });
+
+  it('[Wave2] 未选引擎 → ok:false + UBT_NOT_FOUND', async () => {
+    mockResolveEngineOrPick.mockResolvedValue(undefined);
+
+    const env = await executeBuild('build', config, logger, detection);
+
+    expect(env).toMatchObject({ ok: false, error: { code: 'UBT_NOT_FOUND' } });
+    expect(mockRunBuild).not.toHaveBeenCalled();
   });
 
   it('构建进行中再次触发只启动一次 (F2-2 并发守卫)', async () => {
@@ -237,12 +280,14 @@ describe('executeBuild', () => {
     const p1 = executeBuild('build', config, logger, detection);
     try {
       // 第二次触发:应被守卫拦截,提示后直接返回
-      await executeBuild('build', config, logger, detection);
+      const env2 = await executeBuild('build', config, logger, detection);
       await flushMicrotasks();
 
       // [F2-2] 核心断言:runBuild 只被调一次,且提示"已有构建在运行"
       expect(mockRunBuild).toHaveBeenCalledTimes(1);
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(t('cmd.buildInFlight'));
+      // [Wave2] 守卫拦截 → ok:false + OPERATION_CANCELLED
+      expect(env2).toMatchObject({ ok: false, error: { code: 'OPERATION_CANCELLED' } });
     } finally {
       // 无论断言是否通过都释放 in-flight,避免模块级守卫污染后续测试
       releaseProgress?.();
@@ -281,12 +326,15 @@ describe('executeBuild', () => {
       t('cmd.editorRunning.useLiveCoding'),
     );
     mockRunBuild.mockResolvedValue(buildResult(0, false));
+    // [Wave2] Live Coding 的 envelope 原样透传
+    mockExecuteLiveCoding.mockResolvedValue({ ok: true, marker: 'liveCoding' });
 
-    await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
+    const env = await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
 
     expect(mockIsUnrealEditorRunning).toHaveBeenCalledTimes(1);
     expect(mockExecuteLiveCoding).toHaveBeenCalledTimes(1);
     expect(mockRunBuild).not.toHaveBeenCalled();
+    expect(env).toEqual({ ok: true, marker: 'liveCoding' });
   });
 
   it('编辑器运行中 + Esc 关闭弹窗 → 中止构建', async () => {
@@ -295,10 +343,12 @@ describe('executeBuild', () => {
       undefined,
     );
 
-    await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
+    const env = await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
 
     expect(mockExecuteLiveCoding).not.toHaveBeenCalled();
     expect(mockRunBuild).not.toHaveBeenCalled();
+    // [Wave2] 用户关闭弹窗放弃构建 → OPERATION_CANCELLED
+    expect(env).toMatchObject({ ok: false, error: { code: 'OPERATION_CANCELLED' } });
   });
 
   it('editorAwareBuild=false 或 silent(MCP)时跳过检测,直接构建', async () => {
@@ -355,13 +405,16 @@ describe('executeBuild', () => {
   it('UBT 脚本缺失时记录带 error 的失败快照', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
 
-    await executeBuild('build', config, logger, detection);
+    const env = await executeBuild('build', config, logger, detection);
 
     const snap = getLastBuildSnapshot();
     expect(snap).not.toBeNull();
     expect(snap!.ok).toBe(false);
     expect(snap!.exitCode).toBeNull();
     expect(snap!.error).toContain('UBT script not found');
+    // [Wave2] UBT/引擎路径不可用 → UBT_NOT_FOUND
+    expect(env).toMatchObject({ ok: false, error: { code: 'UBT_NOT_FOUND' } });
+    expect((env.error as { message?: string }).message).toContain('UBT script not found');
   });
 });
 

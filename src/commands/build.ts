@@ -30,12 +30,22 @@ import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from '@commands/_resolve';
 import { executeLiveCoding } from './liveCoding';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_BUILD_FAILED,
+  EC_INTERNAL_ERROR,
+  EC_OPERATION_CANCELLED,
+  EC_PROJECT_NOT_DETECTED,
+  EC_UBT_NOT_FOUND,
+  type Envelope,
+} from '@core/envelope';
 
 type Mode = 'build' | 'rebuild' | 'clean';
 
 // [F2-2 并发守卫] 模块级 in-flight 标记:构建进行中再次触发时直接拒绝,不排队。
 // 完成后(无论成功/失败/取消)在 finally 清空,避免永久卡死后续构建。
-let buildInFlight: Promise<void> | null = null;
+let buildInFlight: Promise<Envelope> | null = null;
 
 export async function executeBuild(
   mode: Mode,
@@ -48,17 +58,25 @@ export async function executeBuild(
   silent: boolean = false,
   // [F2-14/W16] 状态栏构建反馈；未注入时仅走 withProgress / 通知
   statusBar?: StatusBarManager,
-): Promise<void> {
+  // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5,见 @core/envelope):
+  // 成功 okEnvelope(data: BuildResult, summary) / 失败 errEnvelope(契约全局错误码)。
+  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
+  // 本任务边界外)将参数锁定为 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
+  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
+): Promise<any> {
   // [F2-2] 已有构建在运行时,提示并直接返回(不排队,避免并行 spawn 两个 UBT,
   // 以及第二次 clearDiagnostics() 清掉第一次的诊断)
   if (buildInFlight) {
     void vscode.window.showInformationMessage(t('cmd.buildInFlight'));
-    return;
+    return errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildInFlight'));
   }
   const task = executeBuildInner(mode, config, logger, detection, workspace, silent, statusBar);
   buildInFlight = task;
   try {
-    await task;
+    return await task;
+  } catch (err) {
+    // [C8/D5] 未知异常在命令出口统一包装,不向注册层抛裸异常
+    return errEnvelope(EC_INTERNAL_ERROR, err instanceof Error ? err.message : String(err));
   } finally {
     buildInFlight = null;
   }
@@ -75,7 +93,7 @@ async function executeBuildInner(
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
   statusBar?: StatusBarManager,
-): Promise<void> {
+): Promise<Envelope> {
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({
     detection,
@@ -84,7 +102,7 @@ async function executeBuildInner(
     warningKey: 'cmd.noUprojectSelected',
   });
   if (!project) {
-    return;
+    return errEnvelope(EC_PROJECT_NOT_DETECTED, t('cmd.noUprojectSelected'));
   }
   await persistSelection(workspace, detection, project, undefined);
 
@@ -95,7 +113,7 @@ async function executeBuildInner(
     warningKey: 'cmd.noUnrealEngineSelected',
   });
   if (!engine) {
-    return;
+    return errEnvelope(EC_UBT_NOT_FOUND, t('cmd.noUnrealEngineSelected'));
   }
   await persistSelection(workspace, detection, undefined, engine);
 
@@ -118,12 +136,12 @@ async function executeBuildInner(
       );
       if (choice === useLiveCodingLabel) {
         logger.info('[build] editor running → rerouted to Live Coding');
-        await executeLiveCoding(config, logger, detection, workspace);
-        return;
+        // 转发 Live Coding,原样透传其 envelope
+        return await executeLiveCoding(config, logger, detection, workspace);
       }
       if (choice !== buildAnywayLabel) {
         logger.info('[build] editor running → build dismissed by user');
-        return;
+        return errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildCancelled'));
       }
     }
   }
@@ -180,7 +198,7 @@ async function executeBuildInner(
     });
     void vscode.window.showErrorMessage(msg);
     logger.error(`[build.${mode}] ${msg}`);
-    return;
+    return errEnvelope(EC_UBT_NOT_FOUND, msg);
   }
 
   clearDiagnostics();
@@ -200,6 +218,9 @@ async function executeBuildInner(
   statusBar?.showBuilding();
 
   let buildStarted = false;
+  // [Wave2 envelope 对齐] 捕获 spawn 级失败原因(进程没跑起来),供 errEnvelope 使用;
+  // UI 行为保持原样(通知文案不变)
+  let spawnFailure: string | undefined;
   try {
     const result = await withProgress(titleMap[mode], async (report, token) => {
       // 备份放进 progress,避免 snapshot 期间界面无任何反馈
@@ -235,6 +256,7 @@ async function executeBuildInner(
         },
       );
       if (!r.ok) {
+        spawnFailure = r.error.message;
         channel.appendLine(`[UE Helper] build failed: ${r.error.message}`);
         void vscode.window.showErrorMessage(`Build failed: ${r.error.message}`);
         return null;
@@ -275,26 +297,36 @@ async function executeBuildInner(
       diagnostics: result?.diagnostics ?? [],
     });
 
+    // [Wave2 envelope 对齐] 结果分支同时产出契约 envelope;UI 弹窗/状态栏行为保持原样
+    let env: Envelope;
     if (result?.cancelled) {
       // [F2-1] 用户取消构建:显示中性提示,不弹"构建失败"警告
       statusBar?.resetFromBuilding(statusCtx, statusSettings);
       void vscode.window.showInformationMessage(t('cmd.buildCancelled'));
+      env = errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildCancelled'));
     } else if (result && result.exitCode === 0) {
       statusBar?.showBuildResult(true, result.diagnostics.length, statusCtx, statusSettings);
-      void vscode.window.showInformationMessage(
+      const summary =
         `${titleMap[mode]} succeeded (${(result.durationMs / 1000).toFixed(1)}s, ` +
-          `${result.diagnostics.length} diagnostics)`,
-      );
+        `${result.diagnostics.length} diagnostics)`;
+      void vscode.window.showInformationMessage(summary);
+      // data 对齐契约 BuildResult { mode, exitCode, durationMs? }(openapi.yaml
+      // components.schemas.BuildResult);summary 复用现有成功文案语义
+      env = okEnvelope({ mode, exitCode: result.exitCode, durationMs: result.durationMs }, summary);
     } else if (result) {
       statusBar?.showBuildResult(false, result.diagnostics.length, statusCtx, statusSettings);
-      void vscode.window.showWarningMessage(
-        `${titleMap[mode]} failed with exit code ${result.exitCode}. See output for details.`,
-      );
+      const summary = `${titleMap[mode]} failed with exit code ${result.exitCode}. See output for details.`;
+      void vscode.window.showWarningMessage(summary);
+      // 契约 BuildDone 语义:进程跑完但 exitCode≠0 仍 ok:true,成败以 data.exitCode 判定
+      env = okEnvelope({ mode, exitCode: result.exitCode, durationMs: result.durationMs }, summary);
     } else {
       // spawn 失败 / 前期异常：恢复按钮，不显示错误角标（错误通知已单独弹）
       statusBar?.resetFromBuilding(statusCtx, statusSettings);
+      // 进程级启动失败/无法执行 → 契约全局错误码 BUILD_FAILED
+      env = errEnvelope(EC_BUILD_FAILED, spawnFailure ?? `Build failed: ${mode}`);
     }
     logger.info(`[build.${mode}] exit=${result?.exitCode ?? 'n/a'}`);
+    return env;
   } catch (err) {
     statusBar?.resetFromBuilding(statusCtx, statusSettings);
     // 异常中断也记录快照（error 字段说明为什么没有 exitCode）

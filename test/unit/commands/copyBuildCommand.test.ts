@@ -4,7 +4,7 @@
  * 覆盖:
  *   - formatUBTCommandLine 纯函数(空格路径加引号 / 纯路径不加)
  *   - executeCopyBuildCommand:命令行组装、rebuild/clean 参数后缀、剪贴板写入、
- *     未选项目/引擎时返回 undefined
+ *     未选项目/引擎时的错误 envelope(Wave2 envelope 对齐,决策 D5/C8)
  *
  * _resolve / @build 全部打桩;clipboard 注入,不碰真实 vscode.env。
  */
@@ -89,13 +89,14 @@ describe('executeCopyBuildCommand', () => {
       notify: () => {},
     });
 
-    // mock 路径无空格 → 不加引号,原样拼接
-    expect(result).toBe(
+    const commandLine =
       'D:/UE_5.4/Engine/Build/BatchFiles/RunUBT.bat ' +
-        '-Target=MyGameEditor Win64 Development -Project=D:/My Game/MyGame.uproject',
-    );
+      '-Target=MyGameEditor Win64 Development -Project=D:/My Game/MyGame.uproject';
+    // mock 路径无空格 → 不加引号,原样拼接
+    expect(result).toMatchObject({ ok: true, data: commandLine });
+    expect(result.summary).toBeTruthy();
     expect(writeText).toHaveBeenCalledTimes(1);
-    expect(writeText).toHaveBeenCalledWith(result);
+    expect(writeText).toHaveBeenCalledWith(commandLine);
   });
 
   it('rebuild / clean 模式追加 -Rebuild / -Clean', async () => {
@@ -103,16 +104,16 @@ describe('executeCopyBuildCommand', () => {
       clipboard: { writeText },
       notify: () => {},
     });
-    expect(rebuild).toContain('-Rebuild');
+    expect(rebuild.data as string).toContain('-Rebuild');
 
     const clean = await executeCopyBuildCommand(config, logger, detection, undefined, 'clean', {
       clipboard: { writeText },
       notify: () => {},
     });
-    expect(clean).toContain('-Clean');
+    expect(clean.data as string).toContain('-Clean');
   });
 
-  it('未选项目 → 返回 undefined 且不写剪贴板', async () => {
+  it('未选项目 → ok:false + PROJECT_NOT_DETECTED,不写剪贴板', async () => {
     mockResolveProjectOrPick.mockResolvedValue(undefined);
 
     const result = await executeCopyBuildCommand(config, logger, detection, undefined, 'build', {
@@ -120,11 +121,11 @@ describe('executeCopyBuildCommand', () => {
       notify: () => {},
     });
 
-    expect(result).toBeUndefined();
+    expect(result).toMatchObject({ ok: false, error: { code: 'PROJECT_NOT_DETECTED' } });
     expect(writeText).not.toHaveBeenCalled();
   });
 
-  it('未选引擎 → 返回 undefined 且不写剪贴板', async () => {
+  it('未选引擎 → ok:false + UBT_NOT_FOUND,不写剪贴板', async () => {
     mockResolveEngineOrPick.mockResolvedValue(undefined);
 
     const result = await executeCopyBuildCommand(config, logger, detection, undefined, 'build', {
@@ -132,7 +133,7 @@ describe('executeCopyBuildCommand', () => {
       notify: () => {},
     });
 
-    expect(result).toBeUndefined();
+    expect(result).toMatchObject({ ok: false, error: { code: 'UBT_NOT_FOUND' } });
     expect(writeText).not.toHaveBeenCalled();
   });
 });

@@ -295,7 +295,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   it('helper 写入失败时显示错误而不报告 compile_commands 更新成功', async () => {
     mockAddCompletionHelper.mockResolvedValue(false);
 
-    await executeGenerateCompileCommands(config, logger, detection);
+    const env = await executeGenerateCompileCommands(config, logger, detection);
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       `Failed to generate compile_commands.json: Unable to add completion helper entry to ${LINK_PATH}`,
@@ -303,6 +303,16 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalledWith(
       `compile_commands.json updated at ${LINK_PATH}`,
     );
+    // [Wave2] 管线失败 → ok:false + BUILD_FAILED
+    expect(env).toMatchObject({ ok: false, error: { code: 'BUILD_FAILED' } });
+  });
+
+  // [Wave2 envelope 对齐] 成功路径 → ok:true + data.linkPath
+  it('成功完成 → ok:true + data.linkPath(envelope 对齐)', async () => {
+    const env = await executeGenerateCompileCommands(config, logger, detection);
+
+    expect(env).toMatchObject({ ok: true, data: { linkPath: LINK_PATH } });
+    expect(env.error).toBeUndefined();
   });
 
   /* ================================================================ */
@@ -335,11 +345,13 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       }),
     } as unknown as DetectionHandles;
 
-    await executeGenerateCompileCommands(config, logger, detection);
+    const env = await executeGenerateCompileCommands(config, logger, detection);
 
     expect(mockGenerateCompileCommands).not.toHaveBeenCalled();
     expect(mockLinkToWorkspaceRoot).not.toHaveBeenCalled();
     expect(mockAddCompletionHelper).not.toHaveBeenCalled();
+    // [Wave2] 多项目 + 用户取消 QuickPick → OPERATION_CANCELLED
+    expect(env).toMatchObject({ ok: false, error: { code: 'OPERATION_CANCELLED' } });
   });
 
   // [F2-18/E5] 单项目时取消 QuickPick 自动选中唯一项目继续执行
@@ -350,5 +362,50 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
 
     expect(mockGenerateCompileCommands).toHaveBeenCalled();
     expect(mockAddCompletionHelper).toHaveBeenCalled();
+  });
+
+  // [Wave2 envelope 对齐] 检测不到任何项目 → PROJECT_NOT_DETECTED
+  it('无项目可检 → ok:false + PROJECT_NOT_DETECTED(Wave2)', async () => {
+    mockPickProject.mockResolvedValue(undefined as never);
+    detection = {
+      ...detection,
+      ready: Promise.resolve({
+        projects: [],
+        engines: [{ path: ENGINE_PATH, version: '5.4' }],
+        workspaceFile: undefined,
+        workspaceRoot: 'C:\\UEProjects',
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      }),
+    } as unknown as DetectionHandles;
+
+    const env = await executeGenerateCompileCommands(config, logger, detection);
+
+    expect(env).toMatchObject({ ok: false, error: { code: 'PROJECT_NOT_DETECTED' } });
+    expect(mockGenerateCompileCommands).not.toHaveBeenCalled();
+  });
+
+  // [Wave2 envelope 对齐] 无引擎可用 → UBT_NOT_FOUND
+  it('无引擎可检 → ok:false + UBT_NOT_FOUND(Wave2)', async () => {
+    // 引擎列表为空时,pickEngine 取消/无选项 → undefined
+    mockPickEngine.mockResolvedValue(undefined as never);
+    detection = {
+      ...detection,
+      ready: Promise.resolve({
+        projects: [{ path: PROJECT_PATH, name: 'MyGame' }],
+        engines: [],
+        workspaceFile: undefined,
+        workspaceRoot: 'C:\\UEProjects\\MyGame',
+        workspaceFolders: [],
+        projectFolder: null,
+        engineFolder: null,
+      }),
+    } as unknown as DetectionHandles;
+
+    const env = await executeGenerateCompileCommands(config, logger, detection);
+
+    expect(env).toMatchObject({ ok: false, error: { code: 'UBT_NOT_FOUND' } });
+    expect(mockGenerateCompileCommands).not.toHaveBeenCalled();
   });
 });
