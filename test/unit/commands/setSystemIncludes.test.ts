@@ -1,9 +1,8 @@
 /**
  * setSystemIncludes.test.ts —— executeSetSystemIncludes 命令单元测试(envelope 对齐)
  *
- * 说明:函数运行时返回 Envelope(成功 okEnvelope / 失败 errEnvelope);静态签名保持
- * Promise<void>(src/mcp/tools.ts 的 dispatch 形参约束,该文件在任务边界外),测试统一经
- * cast 断言 envelope。
+ * 说明:函数返回 Promise<Envelope<undefined>>(Wave3 类型收口后,骨架阶段的
+ * Promise<void> 静态签名与 cast 桥接已删除),测试直接断言 envelope。
  *
  * 覆盖:
  *   - 成功:渲染 flags → applyAddFlags 写入 → ok envelope + userAddFlags 同步回设置
@@ -130,7 +129,7 @@ function createClangdOpsMock(applyResult?: { ok: boolean; reason?: string }): Cl
   } as unknown as ClangdOps;
 }
 
-/** executeSetSystemIncludes 静态返回 Promise<void>,运行时是 Envelope —— 统一经 cast 断言 */
+/** executeSetSystemIncludes 已返回 Promise<Envelope<undefined>>(Wave3 类型收口),直接断言 */
 async function invoke(opts: {
   config: Config;
   logger: Logger;
@@ -147,7 +146,7 @@ async function invoke(opts: {
     opts.clangdOps,
     opts.silent,
   );
-  return result as unknown as Envelope;
+  return result;
 }
 
 describe('executeSetSystemIncludes(envelope 对齐)', () => {

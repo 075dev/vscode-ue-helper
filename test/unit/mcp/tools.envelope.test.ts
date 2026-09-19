@@ -217,9 +217,12 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
     expect(parsed.build['exitCode']).toBe(0);
     expect(Array.isArray(parsed.build['diagnostics'])).toBe(true);
     expect(Array.isArray(parsed.build['filesWithErrors'])).toBe(true);
-    // 契约 BuildSummary.errorCount/warningCount 现嵌于 totals 下 —— 缺口登记完成报告,填充阶段补齐
-    expect(parsed.build['errorCount']).toBeUndefined();
-    expect(parsed.build['warningCount']).toBeUndefined();
+    // [Wave3 契约适配] 顶层 errorCount/warningCount 由适配层从 totals 映射
+    // (src/mcp/tools.ts ue_get_build_errors case),对齐契约 BuildSummary
+    expect(parsed.build['errorCount']).toBe(1);
+    expect(parsed.build['warningCount']).toBe(0);
+    // 其余字段原样保留(totals 超集继续透出,契约未禁止)
+    expect(parsed.build['totals']).toEqual({ errors: 1, warnings: 0, notes: 0 });
   });
 
   // ============================================================

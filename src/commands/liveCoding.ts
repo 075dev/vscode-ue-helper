@@ -35,18 +35,17 @@ export async function executeLiveCoding(
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
   // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5)——不可用/失败 →
-  // errEnvelope(契约全局错误码),成功 → okEnvelope(summary 复用现有文案)。
-  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
-  // 本任务边界外)参数锁定 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
-  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
-): Promise<any> {
+  // errEnvelope(契约全局错误码),成功 → okEnvelope(summary 复用现有文案,data 恒为空)。
+  // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
+  // 声明收紧为精确的 Promise<Envelope<undefined>>(成功路径无 data)。
+): Promise<Envelope<undefined>> {
   if (!isLiveCodingSupported(config.platform)) {
     void vscode.window.showWarningMessage(t('liveCoding.windowsOnly'));
     return errEnvelope(EC_LIVE_CODING_UNAVAILABLE, t('liveCoding.windowsOnly'));
   }
 
   // 选目标 + 触发放在同一 progress 内，避免解析阶段无反馈像"卡住"
-  return await withProgress(t('liveCoding.running'), async (report, token): Promise<Envelope> => {
+  return await withProgress(t('liveCoding.running'), async (report, token): Promise<Envelope<undefined>> => {
     // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
     report('Resolving project / engine...');
     const project = await resolveProjectOrPick({

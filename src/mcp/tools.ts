@@ -196,12 +196,24 @@ export function callTool(name: string, args: Record<string, unknown>): string {
           note: 'no build has run in this session; call ue_build first',
         });
       }
+      // [Wave3 契约适配] summarizeBuildErrorsForAgent 把计数嵌在 totals 下
+      // (src/build/lastBuild.ts,本任务边界外禁改),契约 BuildSummary(openapi.yaml
+      // components.schemas.BuildSummary)要求顶层 errorCount/warningCount ——
+      // 在此出口做薄适配:从 totals 映射出顶层计数,其余字段原样保留
+      // (契约未禁止超集,totals/cancelled/durationMs 等继续随响应透出)。
+      // ParsedDiagnostic 已含契约可选 column 字段(src/core/types/diagnostic.ts),
+      // 诊断原样透传,无需在适配层补齐。
+      const summary = summarizeBuildErrorsForAgent(snap);
       // 注意：summary 里也有 build 级别的 ok（构建是否成功），所以嵌套在 build 字段下，
       // 避免与工具调用级别的 ok 冲突。
       return JSON.stringify({
         ok: true,
         hasResult: true,
-        build: summarizeBuildErrorsForAgent(snap),
+        build: {
+          ...summary,
+          errorCount: summary.totals.errors,
+          warningCount: summary.totals.warnings,
+        },
       });
     }
     case 'ue_launch_editor':

@@ -43,9 +43,22 @@ import {
 
 type Mode = 'build' | 'rebuild' | 'clean';
 
+/** okEnvelope 的 data 形状(契约 openapi.yaml components.schemas.BuildResult,不含 summary 位) */
+type BuildResultData = {
+  mode: Mode;
+  exitCode: number;
+  durationMs: number;
+};
+
+/**
+ * executeBuild 的 envelope 类型:data 为 BuildResultData,或无 data(编辑器运行中
+ * 转发 Live Coding 时原样透传 executeLiveCoding 的 envelope,成功路径无 data)。
+ */
+type BuildEnvelope = Envelope<BuildResultData | undefined>;
+
 // [F2-2 并发守卫] 模块级 in-flight 标记:构建进行中再次触发时直接拒绝,不排队。
 // 完成后(无论成功/失败/取消)在 finally 清空,避免永久卡死后续构建。
-let buildInFlight: Promise<Envelope> | null = null;
+let buildInFlight: Promise<BuildEnvelope> | null = null;
 
 export async function executeBuild(
   mode: Mode,
@@ -60,10 +73,9 @@ export async function executeBuild(
   statusBar?: StatusBarManager,
   // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5,见 @core/envelope):
   // 成功 okEnvelope(data: BuildResult, summary) / 失败 errEnvelope(契约全局错误码)。
-  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
-  // 本任务边界外)将参数锁定为 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
-  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
-): Promise<any> {
+  // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
+  // 声明收紧为精确的 Promise<Envelope<...>>(泛型以实际 data 形状为准,见 BuildEnvelope)。
+): Promise<BuildEnvelope> {
   // [F2-2] 已有构建在运行时,提示并直接返回(不排队,避免并行 spawn 两个 UBT,
   // 以及第二次 clearDiagnostics() 清掉第一次的诊断)
   if (buildInFlight) {
@@ -93,7 +105,7 @@ async function executeBuildInner(
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
   statusBar?: StatusBarManager,
-): Promise<Envelope> {
+): Promise<BuildEnvelope> {
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({
     detection,
@@ -298,7 +310,7 @@ async function executeBuildInner(
     });
 
     // [Wave2 envelope 对齐] 结果分支同时产出契约 envelope;UI 弹窗/状态栏行为保持原样
-    let env: Envelope;
+    let env: BuildEnvelope;
     if (result?.cancelled) {
       // [F2-1] 用户取消构建:显示中性提示,不弹"构建失败"警告
       statusBar?.resetFromBuilding(statusCtx, statusSettings);

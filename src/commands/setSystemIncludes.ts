@@ -49,27 +49,26 @@ export async function executeSetSystemIncludes(
   clangdOps?: ClangdOps,
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
-): Promise<void> {
-  // [envelope 对齐] 本函数运行时返回 Envelope(成功 okEnvelope / 失败 errEnvelope,
-  // C8 目标口径 + 决策 D5)。静态签名保持 Promise<void>:src/mcp/tools.ts 的 dispatch
-  // 形参为 Promise<void> 且该文件不在本任务 Files 边界内 —— 类型签名翻转为
-  // Promise<Envelope> 登记为填充阶段工作(见完成报告 Completion Notes)。
+  // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
+  // 声明由 Promise<void> 翻转为精确的 Promise<Envelope<undefined>>(成功路径无 data),
+  // 骨架阶段的 void 桥接转换已删除。
+): Promise<Envelope<undefined>> {
   try {
-    return (await runSetSystemIncludes(
+    return await runSetSystemIncludes(
       config,
       logger,
       detection,
       workspace,
       clangdOps,
       silent,
-    )) as unknown as void;
+    );
   } catch (err) {
     // 函数出口 catch:未预期异常统一收口为 EC_INTERNAL_ERROR(任务卡口径 1)
     logger.error('[setSystemIncludes] unexpected error:', err);
     return errEnvelope(
       EC_INTERNAL_ERROR,
       err instanceof Error ? err.message : String(err),
-    ) as unknown as void;
+    );
   }
 }
 
@@ -80,10 +79,10 @@ async function runSetSystemIncludes(
   workspace?: WorkspaceState,
   clangdOps?: ClangdOps,
   silent: boolean = false,
-): Promise<Envelope> {
+): Promise<Envelope<undefined>> {
   // applyAddFlags 失败时不提前返回(保持现有控制流:成功提示仍会弹出),
   // 失败信息暂存,最终随 envelope 返回。
-  let failure: Envelope | undefined;
+  let failure: Envelope<undefined> | undefined;
 
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅 project,engine 路径直接读缓存）
   const project = await resolveProjectOrPick({ detection, workspace, silent });
