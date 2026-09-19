@@ -159,7 +159,8 @@ export function callTool(name: string, args: Record<string, unknown>): string {
 
   // fire-and-forget:真实进度通过 logger 流到 OutputChannel + Problems 面板。
   // 这里仅记录 dispatch + 捕获未处理的 rejection。
-  const dispatch = (p: Promise<void>, label: string): void => {
+  // 形参放宽为 Promise<unknown>:命令层已按契约返回 Envelope(骨架阶段),dispatch 只关心 rejection。
+  const dispatch = (p: Promise<unknown>, label: string): void => {
     p.catch((err) => {
       logger.error(`[mcp] tool ${label} failed:`, err);
     });
