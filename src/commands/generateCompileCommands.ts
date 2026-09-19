@@ -33,6 +33,14 @@ import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 import type { ProjectInfo } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_BUILD_FAILED,
+  EC_OPERATION_CANCELLED,
+  EC_PROJECT_NOT_DETECTED,
+  EC_UBT_NOT_FOUND,
+} from '@core/envelope';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
 export async function executeGenerateCompileCommands(
@@ -43,7 +51,13 @@ export async function executeGenerateCompileCommands(
   workspace?: WorkspaceState,
   // [Phase 11 SSoT] silent = true 时跳过 picker，从 workspace selection 读取，供 MCP tools 调用
   silent: boolean = false,
-): Promise<void> {
+  // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5)——无项目 →
+  // PROJECT_NOT_DETECTED,无引擎 → UBT_NOT_FOUND,取消 QuickPick → OPERATION_CANCELLED,
+  // UBT 管线失败 → BUILD_FAILED,成功 → okEnvelope(data.linkPath)。
+  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
+  // 本任务边界外)参数锁定 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
+  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
+): Promise<any> {
   // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
   // [Phase 11 SSoT] generateCompileCommands 是「显式重生成」语义，picker 优先于 selection，
@@ -62,7 +76,12 @@ export async function executeGenerateCompileCommands(
     } else if (projects.length === 1) {
       project = projects[0];
     } else {
-      return;
+      // 行为保持:静默返回,不弹警告。envelope 按可判定场景区分:
+      // 无项目可检 → PROJECT_NOT_DETECTED;多项目但用户取消 QuickPick → OPERATION_CANCELLED
+      if (projects.length === 0) {
+        return errEnvelope(EC_PROJECT_NOT_DETECTED, t('generateCompileCommands.noProject'));
+      }
+      return errEnvelope(EC_OPERATION_CANCELLED, '已取消选择项目');
     }
   } else {
     project =
@@ -74,7 +93,7 @@ export async function executeGenerateCompileCommands(
   }
   if (!project) {
     void vscode.window.showWarningMessage(t('generateCompileCommands.noProject'));
-    return;
+    return errEnvelope(EC_PROJECT_NOT_DETECTED, t('generateCompileCommands.noProject'));
   }
 
   const se = detection.workspaceContext.getSelectedEngine();
@@ -91,11 +110,12 @@ export async function executeGenerateCompileCommands(
   }
   if (!engine) {
     void vscode.window.showWarningMessage(t('cmd.noEngineSelected'));
-    return;
+    return errEnvelope(EC_UBT_NOT_FOUND, t('cmd.noEngineSelected'));
   }
 
   try {
-    await vscode.window.withProgress(
+    // [Wave2 envelope 对齐] progress task 返回 linkPath,供命令出口组装 envelope
+    const linkPath = await vscode.window.withProgress(
       {
         // 进度位置走统一配置(progressLocation):默认状态栏 spinner 自动消失,
         // 设为 notification 才回右下角弹窗(见 src/ui/notifications.ts)
@@ -147,6 +167,9 @@ export async function executeGenerateCompileCommands(
         startModifyResponseFiles(project.path, logger).catch((err) =>
           logger.warn('[generateCompileCommands] modifyRspFiles failed:', err),
         );
+
+        // [Wave2 envelope 对齐] 产出 linkPath 供命令出口组装 envelope
+        return linkPath;
       },
     );
 
@@ -161,8 +184,12 @@ export async function executeGenerateCompileCommands(
     if (choice === restartBtn) {
       await vscode.commands.executeCommand('clangd.restart');
     }
+
+    return okEnvelope({ linkPath }, t('generateCompileCommands.updated', { 0: linkPath }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     void vscode.window.showErrorMessage(t('generateCompileCommands.failed', { 0: msg }));
+    // 管线主体是 UBT 生成(Step 1),失败最常见为 UBT 进程失败 → BUILD_FAILED
+    return errEnvelope(EC_BUILD_FAILED, t('generateCompileCommands.failed', { 0: msg }));
   }
 }

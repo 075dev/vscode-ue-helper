@@ -17,6 +17,7 @@ import { t } from '@i18n';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from './_resolve';
+import { okEnvelope, errEnvelope, EC_PROJECT_NOT_DETECTED, EC_UBT_NOT_FOUND, type Envelope } from '@core/envelope';
 
 export type CopyBuildCommandMode = 'build' | 'rebuild' | 'clean';
 
@@ -35,7 +36,8 @@ export function formatUBTCommandLine(file: string, args: readonly string[]): str
 /**
  * 执行复制 UBT 构建命令。
  *
- * @returns 组装出的完整命令行(未选项目/引擎时返回 undefined)
+ * @returns 契约 envelope:成功 ok 时 data 为组装出的完整命令行;
+ *          未选项目 → PROJECT_NOT_DETECTED,未选引擎 → UBT_NOT_FOUND
  */
 export async function executeCopyBuildCommand(
   config: Config,
@@ -44,16 +46,16 @@ export async function executeCopyBuildCommand(
   workspace?: WorkspaceState,
   mode: CopyBuildCommandMode = 'build',
   deps: CopyBuildCommandDeps = {},
-): Promise<string | undefined> {
+): Promise<Envelope> {
   const project = await resolveProjectOrPick({ detection, workspace });
   if (!project) {
-    return undefined;
+    return errEnvelope(EC_PROJECT_NOT_DETECTED, t('cmd.noUprojectSelected'));
   }
   await persistSelection(workspace, detection, project, undefined);
 
   const engine = await resolveEngineOrPick({ detection, workspace });
   if (!engine) {
-    return undefined;
+    return errEnvelope(EC_UBT_NOT_FOUND, t('cmd.noUnrealEngineSelected'));
   }
   await persistSelection(workspace, detection, undefined, engine);
 
@@ -84,5 +86,5 @@ export async function executeCopyBuildCommand(
     void vscode.window.showInformationMessage(message);
   }
   logger.info(`[copyBuildCommand] ${mode}: ${commandLine}`);
-  return commandLine;
+  return okEnvelope(commandLine, message);
 }
