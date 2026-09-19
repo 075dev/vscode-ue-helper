@@ -24,6 +24,13 @@ import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
 import type { ClangdHandles } from '@clangd';
 import { t } from '@i18n';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_CLANGD_NOT_AVAILABLE,
+  EC_INTERNAL_ERROR,
+  type Envelope,
+} from '@core/envelope';
 
 const CLANGD_EXTENSION_ID = 'llvm-vs-code-extensions.vscode-clangd';
 
@@ -65,46 +72,59 @@ export async function executeEnableClangdProxy(
   logger: Logger,
   clangd: ClangdHandles,
   opts?: { suppressReloadPrompt?: boolean },
-): Promise<void> {
+): Promise<Envelope> {
   // config 当前未使用（F-fix 后解耦）—— 保留签名是因为它是 commands/index.ts
   // 公开注册表的契约；enable 命令未来可能需要它读 enable 后的状态 / 推送给 MCP 工具。
   void config;
   logger.info('[enableClangdProxy] invoked');
 
+  // [envelope 对齐] 失败路径返回 errEnvelope(C8 目标口径 + 决策 D5);showMessage/控制流
+  // 保持原样——envelope 是新增返回值,不是 UI 的替代。函数出口 catch:未预期异常统一收口
+  // 为 EC_INTERNAL_ERROR(任务卡口径 1),不再向上抛。
   const { proxyManager } = clangd;
 
-  // 已激活（clangd.path 已指向 launcher）：重新应用最新参数（localization 等配置可能已变更）
-  if (proxyManager.isActive) {
-    logger.info('[enableClangdProxy] already active, reapplying args with latest config');
-    try {
-      await proxyManager.reapply();
-    } catch (err) {
-      logger.error('[enableClangdProxy] reapply failed:', err);
-      void vscode.window.showErrorMessage(t('proxy.enable.failed'));
-      return;
+  try {
+    // 已激活（clangd.path 已指向 launcher）：重新应用最新参数（localization 等配置可能已变更）
+    if (proxyManager.isActive) {
+      logger.info('[enableClangdProxy] already active, reapplying args with latest config');
+      try {
+        await proxyManager.reapply();
+      } catch (err) {
+        logger.error('[enableClangdProxy] reapply failed:', err);
+        void vscode.window.showErrorMessage(t('proxy.enable.failed'));
+        return errEnvelope(EC_CLANGD_NOT_AVAILABLE, t('proxy.enable.failed'), {
+          phase: 'reapply',
+        });
+      }
+      if (!opts?.suppressReloadPrompt) {
+        await promptReload(logger);
+      }
+      return okEnvelope(undefined, t('proxy.enable.success'));
     }
+
+    // 首次启用：直接走 enable，不依赖 clangdProxy.enabled 设置。
+    // 设计：用户点 "启用 proxy" 按钮 → 立即生效；enable 内部抛错则 catch 走错误路径。
+    // 取消原 "config.update('clangdProxy.enabled', true) 先于 enable" 的耦合——
+    // 该耦合在 B+C 修复后仍受 VS Code ConfigurationTarget.Workspace scope 解析影响
+    // （多 folder / 无 focus 文件夹时静默不写盘），导致 enable 看到 enabled=false 跳过。
+    try {
+      await proxyManager.enable();
+      logger.info('[enableClangdProxy] proxy enabled successfully');
+    } catch (err) {
+      logger.error('[enableClangdProxy] failed:', err);
+      void vscode.window.showErrorMessage(t('proxy.enable.failed'));
+      return errEnvelope(EC_CLANGD_NOT_AVAILABLE, t('proxy.enable.failed'), { phase: 'enable' });
+    }
+
+    // enable 已成功，reload/restart 失败不影响 enable 状态
     if (!opts?.suppressReloadPrompt) {
       await promptReload(logger);
     }
-    return;
-  }
-
-  // 首次启用：直接走 enable，不依赖 clangdProxy.enabled 设置。
-  // 设计：用户点 "启用 proxy" 按钮 → 立即生效；enable 内部抛错则 catch 走错误路径。
-  // 取消原 "config.update('clangdProxy.enabled', true) 先于 enable" 的耦合——
-  // 该耦合在 B+C 修复后仍受 VS Code ConfigurationTarget.Workspace scope 解析影响
-  // （多 folder / 无 focus 文件夹时静默不写盘），导致 enable 看到 enabled=false 跳过。
-  try {
-    await proxyManager.enable();
-    logger.info('[enableClangdProxy] proxy enabled successfully');
+    return okEnvelope(undefined, t('proxy.enable.success'));
   } catch (err) {
-    logger.error('[enableClangdProxy] failed:', err);
-    void vscode.window.showErrorMessage(t('proxy.enable.failed'));
-    return;
-  }
-
-  // enable 已成功，reload/restart 失败不影响 enable 状态
-  if (!opts?.suppressReloadPrompt) {
-    await promptReload(logger);
+    logger.error('[enableClangdProxy] unexpected error:', err);
+    return errEnvelope(EC_INTERNAL_ERROR, t('proxy.enable.failed'), {
+      cause: err instanceof Error ? err.message : String(err),
+    });
   }
 }
