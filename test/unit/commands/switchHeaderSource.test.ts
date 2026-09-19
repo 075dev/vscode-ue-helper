@@ -20,8 +20,8 @@ import {
   type SwitchDeps,
 } from '@commands/switchHeaderSource';
 
-// 路径断言统一用 path.join 适配当前平台分隔符
-const j = path.join;
+// 路径断言统一用 path.join 适配当前平台分隔符(arrow 包装以满足 unbound-method)
+const j = (...segments: string[]): string => path.join(...segments);
 
 describe('classifyCppFile', () => {
   it('头文件扩展 → header', () => {
@@ -159,17 +159,18 @@ describe('executeSwitchHeaderSource', () => {
     const opened: string[] = [];
     const notified: string[] = [];
     const deps: SwitchDeps = {
-      async fileExists(p) {
-        return exists.has(path.resolve(p));
+      fileExists(p) {
+        return Promise.resolve(exists.has(path.resolve(p)));
       },
-      async searchCounterparts() {
-        return opts.search ?? [];
+      searchCounterparts() {
+        return Promise.resolve(opts.search ?? []);
       },
-      async openFile(p) {
+      openFile(p) {
         opened.push(p);
+        return Promise.resolve(undefined);
       },
-      async pick() {
-        return opts.pick;
+      pick() {
+        return Promise.resolve(opts.pick);
       },
       notify(msg) {
         notified.push(msg);
@@ -282,18 +283,19 @@ describe('executeSwitchHeaderSource', () => {
     const header = j('D:', 'Proj', 'Source', 'MyGame', 'Public', 'MyActor.h');
     let searchedTargets: string[] | undefined;
     const deps: SwitchDeps = {
-      async fileExists() {
-        return false;
+      fileExists() {
+        return Promise.resolve(false);
       },
-      async searchCounterparts(_stem, targets) {
+      searchCounterparts(_stem, targets) {
         searchedTargets = targets;
-        return [header];
+        return Promise.resolve([header]);
       },
-      async openFile(p) {
+      openFile(p) {
         expect(p).toBe(header);
+        return Promise.resolve(undefined);
       },
-      async pick() {
-        return undefined;
+      pick() {
+        return Promise.resolve(undefined);
       },
       notify() {
         /* noop */

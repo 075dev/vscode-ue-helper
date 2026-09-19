@@ -25,7 +25,7 @@ import { initI18n, t } from '@i18n';
 
 // executeBuild 会校验 Build.bat 是否存在;测试用假路径,mock 为存在
 vi.mock('node:fs', async () => {
-  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  const actual = await vi.importActual<typeof fs>('node:fs');
   return {
     ...actual,
     existsSync: vi.fn().mockReturnValue(true),

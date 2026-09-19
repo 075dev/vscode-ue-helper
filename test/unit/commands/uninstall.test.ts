@@ -15,6 +15,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { executeUninstall } from '@commands/uninstall';
+import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { initI18n } from '@i18n';
 
@@ -27,7 +28,7 @@ function createLoggerMock() {
     show: vi.fn(),
     setLevel: vi.fn(),
     dispose: vi.fn(),
-  } as unknown as import('@core/logger').Logger;
+  } as unknown as Logger;
 }
 
 /** 构造最小 workspace mock:只需 projectDir 与 clangdConfigPath 两个 getter */

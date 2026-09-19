@@ -264,7 +264,7 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
       ok: true,
       dispatched: 'ue_build',
       mode: 'build',
-      note: expect.any(String),
+      note: expect.any(String) as unknown,
     });
   });
 });
