@@ -14,6 +14,17 @@ import { withProgress } from '@ui/notifications';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from '@commands/_resolve';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_BUILD_FAILED,
+  EC_INTERNAL_ERROR,
+  EC_LIVE_CODING_UNAVAILABLE,
+  EC_OPERATION_CANCELLED,
+  EC_PROJECT_NOT_DETECTED,
+  EC_UBT_NOT_FOUND,
+  type Envelope,
+} from '@core/envelope';
 
 export async function executeLiveCoding(
   config: Config,
@@ -23,14 +34,19 @@ export async function executeLiveCoding(
   workspace?: WorkspaceState,
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
-): Promise<void> {
+  // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5)——不可用/失败 →
+  // errEnvelope(契约全局错误码),成功 → okEnvelope(summary 复用现有文案)。
+  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
+  // 本任务边界外)参数锁定 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
+  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
+): Promise<any> {
   if (!isLiveCodingSupported(config.platform)) {
     void vscode.window.showWarningMessage(t('liveCoding.windowsOnly'));
-    return;
+    return errEnvelope(EC_LIVE_CODING_UNAVAILABLE, t('liveCoding.windowsOnly'));
   }
 
   // 选目标 + 触发放在同一 progress 内，避免解析阶段无反馈像"卡住"
-  await withProgress(t('liveCoding.running'), async (report, token) => {
+  return await withProgress(t('liveCoding.running'), async (report, token): Promise<Envelope> => {
     // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
     report('Resolving project / engine...');
     const project = await resolveProjectOrPick({
@@ -40,7 +56,7 @@ export async function executeLiveCoding(
       warningKey: 'liveCoding.noProject',
     });
     if (!project) {
-      return;
+      return errEnvelope(EC_PROJECT_NOT_DETECTED, t('liveCoding.noProject'));
     }
     await persistSelection(workspace, detection, project, undefined);
 
@@ -51,7 +67,7 @@ export async function executeLiveCoding(
       warningKey: 'cmd.noEngineSelected',
     });
     if (!engine) {
-      return;
+      return errEnvelope(EC_UBT_NOT_FOUND, t('cmd.noEngineSelected'));
     }
     await persistSelection(workspace, detection, undefined, engine);
 
@@ -80,21 +96,29 @@ export async function executeLiveCoding(
       );
       if (!outcome.ok) {
         void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: outcome.error.message }));
+        // 触发失败(Editor 未运行/控制台未连接等)→ 契约 409 语义
+        return errEnvelope(
+          EC_LIVE_CODING_UNAVAILABLE,
+          t('liveCoding.failed', { 0: outcome.error.message }),
+        );
       } else if (outcome.value.cancelled) {
         // [F2-1] 用户取消:中性提示,不弹失败警告
         void vscode.window.showInformationMessage(t('cmd.buildCancelled'));
+        return errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildCancelled'));
       } else if (outcome.value.exitCode === 0) {
         void vscode.window.showInformationMessage(t('liveCoding.triggered', { 0: project.name }));
+        return okEnvelope(undefined, t('liveCoding.triggered', { 0: project.name }));
       } else {
-        // 编译失败:附 UBT 输出尾部几行帮助定位
+        // 编译失败:附 UBT 输出尾部几行帮助定位;UBT 退出码非 0 → BUILD_FAILED
         const tail = outcome.value.output.slice(-5).join('\n');
-        void vscode.window.showErrorMessage(
-          t('liveCoding.failed', { 0: `UBT exit ${outcome.value.exitCode}\n${tail}` }),
-        );
+        const detail = `UBT exit ${outcome.value.exitCode}\n${tail}`;
+        void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: detail }));
+        return errEnvelope(EC_BUILD_FAILED, t('liveCoding.failed', { 0: detail }));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: msg }));
+      return errEnvelope(EC_INTERNAL_ERROR, msg);
     }
   });
 }
