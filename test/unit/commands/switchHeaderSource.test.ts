@@ -86,8 +86,12 @@ describe('buildCounterpartCandidates', () => {
     // 同目录优先（.cpp 最常见）
     expect(got[0]).toBe(j('D:', 'Proj', 'Source', 'MyGame', 'Public', 'Widgets', 'MyWidget.cpp'));
     // 其次 Private/Widgets、Classes/Widgets
-    expect(got).toContain(j('D:', 'Proj', 'Source', 'MyGame', 'Private', 'Widgets', 'MyWidget.cpp'));
-    expect(got).toContain(j('D:', 'Proj', 'Source', 'MyGame', 'Classes', 'Widgets', 'MyWidget.cpp'));
+    expect(got).toContain(
+      j('D:', 'Proj', 'Source', 'MyGame', 'Private', 'Widgets', 'MyWidget.cpp'),
+    );
+    expect(got).toContain(
+      j('D:', 'Proj', 'Source', 'MyGame', 'Classes', 'Widgets', 'MyWidget.cpp'),
+    );
   });
 
   it('Classes 中的 .h → Private 优先于 Public', () => {
@@ -135,7 +139,12 @@ describe('buildCounterpartCandidates', () => {
   it('无可互换目录段 → 仅同目录候选', () => {
     const h = j('D:', 'Anywhere', 'Foo.h');
     const got = buildCounterpartCandidates(h);
-    expect(got).toEqual([j('D:', 'Anywhere', 'Foo.cpp'), j('D:', 'Anywhere', 'Foo.cc'), j('D:', 'Anywhere', 'Foo.cxx'), j('D:', 'Anywhere', 'Foo.c')]);
+    expect(got).toEqual([
+      j('D:', 'Anywhere', 'Foo.cpp'),
+      j('D:', 'Anywhere', 'Foo.cc'),
+      j('D:', 'Anywhere', 'Foo.cxx'),
+      j('D:', 'Anywhere', 'Foo.c'),
+    ]);
   });
 
   it('非 C++ 文件 → 空数组', () => {
@@ -145,11 +154,7 @@ describe('buildCounterpartCandidates', () => {
 
 describe('executeSwitchHeaderSource', () => {
   /** 组装注入依赖:exists 集合 / search 结果 / pick 返回值全程可编程 */
-  function makeDeps(opts: {
-    exists?: string[];
-    search?: string[];
-    pick?: string;
-  }) {
+  function makeDeps(opts: { exists?: string[]; search?: string[]; pick?: string }) {
     const exists = new Set((opts.exists ?? []).map((p) => path.resolve(p)));
     const opened: string[] = [];
     const notified: string[] = [];
@@ -181,10 +186,12 @@ describe('executeSwitchHeaderSource', () => {
     vi.mocked(vscode.window.showInformationMessage).mockClear();
   });
 
-  it('无活动编辑器 → 提示并返回 false', async () => {
+  it('无活动编辑器 → 提示并返回 INTERNAL_ERROR envelope', async () => {
     (vscode.window.activeTextEditor as unknown) = undefined;
     const { deps, notified } = makeDeps({});
-    await expect(executeSwitchHeaderSource(undefined, undefined, deps)).resolves.toBe(false);
+    const res = await executeSwitchHeaderSource(undefined, undefined, deps);
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('INTERNAL_ERROR');
     expect(notified.length).toBe(1);
   });
 
@@ -195,7 +202,9 @@ describe('executeSwitchHeaderSource', () => {
       undefined,
       deps,
     );
-    expect(res).toBe(false);
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('INTERNAL_ERROR');
+    expect(res.error?.message).toContain('Build.cs');
     expect(notified[0]).toContain('Build.cs');
   });
 
@@ -207,7 +216,9 @@ describe('executeSwitchHeaderSource', () => {
       undefined,
       deps,
     );
-    expect(res).toBe(true);
+    expect(res.ok).toBe(true);
+    expect(res.error).toBeUndefined();
+    expect(res.data).toEqual({ opened: cpp });
     expect(opened).toEqual([cpp]);
   });
 
@@ -219,7 +230,8 @@ describe('executeSwitchHeaderSource', () => {
       undefined,
       deps,
     );
-    expect(res).toBe(true);
+    expect(res.ok).toBe(true);
+    expect(res.data).toEqual({ opened: cpp });
     expect(opened).toEqual([cpp]);
   });
 
@@ -232,30 +244,37 @@ describe('executeSwitchHeaderSource', () => {
       undefined,
       deps,
     );
-    expect(res).toBe(true);
+    expect(res.ok).toBe(true);
+    expect(res.data).toEqual({ opened: b });
     expect(opened).toEqual([b]);
   });
 
-  it('多候选但用户取消 → 不打开', async () => {
+  it('多候选但用户取消 → OPERATION_CANCELLED envelope', async () => {
     const a = j('D:', 'Proj', 'Source', 'A', 'Foo.cpp');
-    const { deps, opened } = makeDeps({ search: [a, j('D:', 'Proj', 'Source', 'B', 'Foo.cpp')], pick: undefined });
+    const { deps, opened } = makeDeps({
+      search: [a, j('D:', 'Proj', 'Source', 'B', 'Foo.cpp')],
+      pick: undefined,
+    });
     const res = await executeSwitchHeaderSource(
       editorWith(j('D:', 'Proj', 'Source', 'MyGame', 'Public', 'Foo.h')),
       undefined,
       deps,
     );
-    expect(res).toBe(false);
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('OPERATION_CANCELLED');
     expect(opened).toEqual([]);
   });
 
-  it('候选与搜索均无 → 提示 notFound', async () => {
+  it('候选与搜索均无 → 提示 notFound + PROJECT_NOT_DETECTED envelope(404 语义)', async () => {
     const { deps, notified } = makeDeps({});
     const res = await executeSwitchHeaderSource(
       editorWith(j('D:', 'Proj', 'Source', 'MyGame', 'Public', 'Lonely.h')),
       undefined,
       deps,
     );
-    expect(res).toBe(false);
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('PROJECT_NOT_DETECTED');
+    expect(res.error?.message).toContain('Lonely.h');
     expect(notified[0]).toContain('Lonely.h');
   });
 
@@ -285,7 +304,7 @@ describe('executeSwitchHeaderSource', () => {
       undefined,
       deps,
     );
-    expect(res).toBe(true);
+    expect(res.ok).toBe(true);
     expect(searchedTargets).toEqual(['header', 'source']);
   });
 });

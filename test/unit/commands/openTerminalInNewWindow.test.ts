@@ -38,11 +38,14 @@ describe('executeOpenTerminalInNewWindow', () => {
     const uri = vscode.Uri.file('D:/Project/Source');
     vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as never);
 
-    await executeOpenTerminalInNewWindow(uri);
+    const envelope = await executeOpenTerminalInNewWindow(uri);
 
     expect(createTerminalMock).toHaveBeenCalledWith({ name: 'Source', cwd: 'D:/Project/Source' });
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(MOVE_INTO_NEW_WINDOW_COMMAND);
+    // [契约对齐] 纯 UI 命令成功 → ok envelope
+    expect(envelope.ok).toBe(true);
+    expect(envelope.error).toBeUndefined();
   });
 
   it('给定 { uri } 包装形态（Project Explorer view/item/context 传 tree item）时兼容解包', async () => {
@@ -68,19 +71,38 @@ describe('executeOpenTerminalInNewWindow', () => {
     const showWarning = vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>;
     showWarning.mockReset();
 
-    await executeOpenTerminalInNewWindow({ uri: undefined }, createLogger());
+    const envelope = await executeOpenTerminalInNewWindow({ uri: undefined }, createLogger());
 
     expect(showWarning).toHaveBeenCalled();
     expect(createTerminalMock).not.toHaveBeenCalled();
+    // [契约对齐] 无效入参 → 兜底 INTERNAL_ERROR envelope
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error?.code).toBe('INTERNAL_ERROR');
   });
 
   it('无参数时提示无效路径并跳过', async () => {
     const showWarning = vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>;
     showWarning.mockReset();
 
-    await executeOpenTerminalInNewWindow(undefined, createLogger());
+    const envelope = await executeOpenTerminalInNewWindow(undefined, createLogger());
 
     expect(showWarning).toHaveBeenCalled();
     expect(createTerminalMock).not.toHaveBeenCalled();
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error?.code).toBe('INTERNAL_ERROR');
+  });
+
+  it('moveIntoNewWindow 失败(旧版 VS Code)→ warning + INTERNAL_ERROR envelope', async () => {
+    const uri = vscode.Uri.file('D:/Project/Source');
+    vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as never);
+    (vscode.commands.executeCommand as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('command not found'),
+    );
+
+    const envelope = await executeOpenTerminalInNewWindow(uri, createLogger());
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalled();
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error?.code).toBe('INTERNAL_ERROR');
   });
 });

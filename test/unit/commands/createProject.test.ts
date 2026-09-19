@@ -143,8 +143,8 @@ vi.mock('@clangd', () => ({
   scaffoldClangFormatAndTidy: () => mockScaffoldFormatTidy(),
 }));
 
-const mockPickProject = vi.fn<[], Promise<{ path: string; name: string }>>();
-const mockPickEngine = vi.fn<[], Promise<{ path: string; version: string }>>();
+const mockPickProject = vi.fn<[], Promise<{ path: string; name: string } | undefined>>();
+const mockPickEngine = vi.fn<[], Promise<{ path: string; version: string } | undefined>>();
 
 vi.mock('@ui/quickPicks', () => ({
   pickProject: () => mockPickProject(),
@@ -260,10 +260,10 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
       writeFull: vi.fn(() => Promise.resolve({ path: path.join(projectDir, '.clangd') })),
     } as unknown as Parameters<typeof executeCreateProject>[3];
 
-    // ---- 跑 executeCreateProject,期望不抛错 ----
-    await expect(
-      executeCreateProject(config, logger, detection, clangdOps),
-    ).resolves.toBeUndefined();
+    // ---- 跑 executeCreateProject,期望返回 ok envelope ----
+    await expect(executeCreateProject(config, logger, detection, clangdOps)).resolves.toMatchObject(
+      { ok: true },
+    );
 
     // ---- 断言 1: generateCompileCommands 被调 ----
     expect(mockGenerateCompileCommands).toHaveBeenCalledOnce();
@@ -355,11 +355,159 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
       writeFull: vi.fn(() => Promise.resolve({ path: path.join(projectDir, '.clangd') })),
     } as unknown as Parameters<typeof executeCreateProject>[3];
 
-    await expect(
-      executeCreateProject(config, logger, detection, clangdOps),
-    ).resolves.toBeUndefined();
+    await expect(executeCreateProject(config, logger, detection, clangdOps)).resolves.toMatchObject(
+      { ok: true },
+    );
 
     // linkToWorkspaceRoot 在 UBT 主路径必须被调(对照 case 1 验证 fallback 短路语义)
     expect(mockLinkToWorkspaceRoot).toHaveBeenCalledOnce();
+  });
+});
+
+/* ================================================================ */
+/*  [契约对齐 C8/D5] envelope 错误码出口                              */
+/*  - 无项目检出 → PROJECT_NOT_DETECTED                              */
+/*  - 用户取消项目/引擎选择 → OPERATION_CANCELLED                     */
+/*  - 引擎未检出 → UBT_NOT_FOUND(映射表最接近项)                     */
+/*  - 成功 → okEnvelope(summary 复用 createProject.success)          */
+/* ================================================================ */
+
+function makeDetectionForEnvelope(overrides: {
+  projects?: unknown[];
+  engines?: unknown[];
+  selectedProject?: string | undefined;
+  selectedEngine?: string | undefined;
+}): Parameters<typeof executeCreateProject>[2] {
+  return {
+    workspaceContext: {
+      getSelectedProject: vi.fn(() => overrides.selectedProject),
+      getSelectedEngine: vi.fn(() => overrides.selectedEngine),
+      setProject: vi.fn(() => Promise.resolve(undefined)),
+      setEngine: vi.fn(() => Promise.resolve(undefined)),
+    },
+    ready: Promise.resolve({
+      projects: overrides.projects ?? [],
+      engines: overrides.engines ?? [],
+      workspaceFile: null,
+      workspaceRoot: 'C:\\fake\\MyProj',
+      workspaceFolders: [],
+      projectFolder: null,
+      engineFolder: null,
+    }),
+  } as unknown as Parameters<typeof executeCreateProject>[2];
+}
+
+function makeConfigForEnvelope(): Parameters<typeof executeCreateProject>[0] {
+  return { configuration: 'Development' } as unknown as Parameters<typeof executeCreateProject>[0];
+}
+
+describe('executeCreateProject envelope 错误码出口', () => {
+  beforeEach(() => {
+    initI18n();
+    vi.clearAllMocks();
+  });
+
+  it('无项目检出(取消 picker)→ PROJECT_NOT_DETECTED', async () => {
+    mockPickProject.mockResolvedValue(undefined);
+    const logger = new Logger('test');
+    const detection = makeDetectionForEnvelope({ projects: [] });
+
+    const res = await executeCreateProject(makeConfigForEnvelope(), logger, detection);
+
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('PROJECT_NOT_DETECTED');
+    expect(mockPickProject).toHaveBeenCalledOnce();
+  });
+
+  it('有候选项目但用户取消选择 → OPERATION_CANCELLED', async () => {
+    mockPickProject.mockResolvedValue(undefined);
+    const logger = new Logger('test');
+    const detection = makeDetectionForEnvelope({
+      projects: [
+        { path: 'C:\\fake\\A\\A.uproject', name: 'A' },
+        { path: 'C:\\fake\\B\\B.uproject', name: 'B' },
+      ],
+    });
+
+    const res = await executeCreateProject(makeConfigForEnvelope(), logger, detection);
+
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('OPERATION_CANCELLED');
+  });
+
+  it('引擎未检出 → UBT_NOT_FOUND', async () => {
+    const projectPath = 'C:\\fake\\MyProj\\MyProj.uproject';
+    mockPickEngine.mockResolvedValue(undefined);
+    const logger = new Logger('test');
+    const detection = makeDetectionForEnvelope({
+      projects: [{ path: projectPath, name: 'MyProj' }],
+      selectedProject: projectPath,
+      engines: [],
+    });
+
+    const res = await executeCreateProject(makeConfigForEnvelope(), logger, detection);
+
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('UBT_NOT_FOUND');
+  });
+
+  it('有候选引擎但用户取消选择 → OPERATION_CANCELLED', async () => {
+    const projectPath = 'C:\\fake\\MyProj\\MyProj.uproject';
+    mockPickEngine.mockResolvedValue(undefined);
+    const logger = new Logger('test');
+    const detection = makeDetectionForEnvelope({
+      projects: [{ path: projectPath, name: 'MyProj' }],
+      selectedProject: projectPath,
+      engines: [
+        { path: 'C:\\UE_5.4', version: '5.4.0', isLauncherInstall: false },
+        { path: 'C:\\UE_5.5', version: '5.5.0', isLauncherInstall: false },
+      ],
+    });
+
+    const res = await executeCreateProject(makeConfigForEnvelope(), logger, detection);
+
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('OPERATION_CANCELLED');
+  });
+
+  it('成功路径 → ok envelope + steps 明细 data', async () => {
+    const projectPath = path.join('C:\\fake', 'MyProj', 'MyProj.uproject');
+    const projectDir = path.dirname(projectPath);
+    mockGenerateCompileCommands.mockResolvedValue(
+      path.join(projectDir, '.vscode', 'vscodeuehelper', 'compile_commands.json'),
+    );
+    mockFillMissing.mockResolvedValue(undefined);
+    mockCreateCompletionFiles.mockResolvedValue([]);
+    mockAddCompletionHelper.mockResolvedValue(false);
+    mockStartModifyRsp.mockResolvedValue({ replaced: 0, unchanged: 0 });
+    mockStartCreateRspMatchers.mockResolvedValue([]);
+    mockRunUhtCodegen.mockResolvedValue({
+      ran: false,
+      exitCode: null,
+      generatedHeaderCount: 0,
+    });
+    (vscode.window.withProgress as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_opts: unknown, task: (progress: unknown) => Promise<unknown>) =>
+        await task({ report: vi.fn() }),
+    );
+
+    const logger = new Logger('test');
+    const detection = makeDetectionForEnvelope({
+      projects: [{ path: projectPath, name: 'MyProj' }],
+      selectedProject: projectPath,
+      engines: [{ path: 'C:\\UE_5.4', version: '5.4.0', isLauncherInstall: false }],
+      selectedEngine: 'C:\\UE_5.4',
+    });
+    const clangdOps = {
+      writeFull: vi.fn(() => Promise.resolve({ path: path.join(projectDir, '.clangd') })),
+    } as unknown as Parameters<typeof executeCreateProject>[3];
+
+    const res = await executeCreateProject(makeConfigForEnvelope(), logger, detection, clangdOps);
+
+    expect(res.ok).toBe(true);
+    expect(res.error).toBeUndefined();
+    const data = res.data as { okSteps: number; totalSteps: number; steps: unknown[] };
+    expect(data.okSteps).toBeGreaterThan(0);
+    expect(data.totalSteps).toBe(data.steps.length);
   });
 });

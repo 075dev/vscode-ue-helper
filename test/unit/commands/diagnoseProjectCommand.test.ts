@@ -32,7 +32,10 @@ function createLoggerMock(): Logger {
   } as unknown as Logger;
 }
 
-function createDetectionMock(projectPath: string): DetectionHandles {
+function createDetectionMock(
+  projectPath: string,
+  overrides: { projects?: { path: string; name: string }[] } = {},
+): DetectionHandles {
   return {
     scanner: {
       scan: vi
@@ -44,7 +47,7 @@ function createDetectionMock(projectPath: string): DetectionHandles {
     },
     // [P0 fix] executeDiagnoseProject 现在消费 detection.ready,扫描器 + workspaceContext 不够。
     ready: Promise.resolve({
-      projects: [{ path: projectPath, name: 'MyGame' }],
+      projects: overrides.projects ?? [{ path: projectPath, name: 'MyGame' }],
       engines: [],
       workspaceFile: projectPath.replace(/\.uproject$/i, '.code-workspace'),
       workspaceRoot: projectPath.replace(/[\\/][^\\/]+\.uproject$/i, ''),
@@ -65,7 +68,7 @@ describe('executeDiagnoseProject', () => {
     const projectPath = 'D:/Temp/Missing/MyGame.uproject';
     const detection = createDetectionMock(projectPath);
 
-    await executeDiagnoseProject(logger, detection);
+    const envelope = await executeDiagnoseProject(logger, detection);
 
     const loggerMock = logger as unknown as {
       readonly info: ReturnType<typeof vi.fn>;
@@ -79,6 +82,24 @@ describe('executeDiagnoseProject', () => {
       expect.stringContaining('failed'),
       'Open Output',
     );
+    // [契约对齐] 诊断执行成功即 ok;检查结果(overallStatus)属于 data
+    expect(envelope.ok).toBe(true);
+    expect(envelope.error).toBeUndefined();
+    const data = envelope.data as { overallStatus: string };
+    expect(['warning', 'error']).toContain(data.overallStatus);
+  });
+
+  it('Given 无项目可选 When 执行诊断命令 Then 返回 PROJECT_NOT_DETECTED envelope', async () => {
+    mockPickProject.mockResolvedValue(undefined);
+    const logger = createLoggerMock();
+    const detection = createDetectionMock('D:/Temp/Empty/None.uproject', { projects: [] });
+
+    const envelope = await executeDiagnoseProject(logger, detection);
+
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error?.code).toBe('PROJECT_NOT_DETECTED');
+    // warning 弹窗语义保持原样(_resolve 内部触发)
+    expect(vscode.window.showWarningMessage).toHaveBeenCalled();
   });
 });
 

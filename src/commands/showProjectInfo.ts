@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { type Config } from '@core/config';
 import { type Logger } from '@core/logger';
 import { detectHost } from '@core/runtime-detect';
+import { okEnvelope, errEnvelope, EC_PROJECT_NOT_DETECTED, type Envelope } from '@core/envelope';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { t } from '@i18n';
@@ -26,7 +27,7 @@ export async function showProjectInfo(
   workspace?: WorkspaceState,
   // [Phase 11 SSoT] silent = true 时跳过 information/warning 弹窗（MCP 工具调用场景）
   silent: boolean = false,
-): Promise<void> {
+): Promise<Envelope> {
   logger.info('showProjectInfo invoked');
   logger.show();
 
@@ -39,7 +40,8 @@ export async function showProjectInfo(
 
   if (!detection) {
     logger.warn('showProjectInfo: detection handles unavailable');
-    return;
+    // [契约对齐] 无法检测 → PROJECT_NOT_DETECTED(映射表"项目未检测到"最接近项)
+    return errEnvelope(EC_PROJECT_NOT_DETECTED, '未检测到 UE 项目(检测服务不可用)');
   }
 
   const { projects, engines, workspaceFile } = await detection.ready;
@@ -62,6 +64,22 @@ export async function showProjectInfo(
         })())
       : undefined;
   const mcpHost = detectHost();
+
+  // [契约对齐] envelope data 按函数内实际已收集的信息字段对齐契约 ProjectInfo
+  // { name, uprojectPath, enginePath, engineVersion? }(configs/targets 未收集,不为凑 schema 虚构)
+  const infoProject = selectedProject ?? projects[0];
+  const infoEngine = selectedEngine ?? engines[0];
+  const data: Record<string, unknown> = {};
+  if (infoProject) {
+    data['name'] = infoProject.name;
+    data['uprojectPath'] = infoProject.path;
+  }
+  if (infoEngine) {
+    data['enginePath'] = infoEngine.path;
+    data['engineVersion'] = infoEngine.version;
+  }
+  // [C6 从宽] summary 复用现有用户文案语义(项目数)
+  const summary = t('showInfo.projectsFound', { count: String(projects.length) });
 
   const lines = [
     t('showInfo.title'),
@@ -122,7 +140,7 @@ export async function showProjectInfo(
         await vscode.commands.executeCommand('vscodeUEHelper.openWorkspaceFile');
       }
       logger.show();
-      return;
+      return okEnvelope(data, summary);
     }
 
     // 未打开 .code-workspace：准则要求不调 OS 扫描，统一提示用户从 .uproject
@@ -132,15 +150,16 @@ export async function showProjectInfo(
       void vscode.window.showWarningMessage(t('showInfo.noEnginesNoWsWithUE'));
     }
     logger.show();
-    return;
+    return okEnvelope(data, summary);
   }
 
-  const summary = lines.slice(0, 8).join('\n');
+  const modalSummary = lines.slice(0, 8).join('\n');
   // [Phase 11 SSoT] silent = true 时 (MCP 工具调用) 不弹 information modal。
   const choice = silent
     ? undefined
-    : await vscode.window.showInformationMessage(summary, t('showInfo.openOutput'));
+    : await vscode.window.showInformationMessage(modalSummary, t('showInfo.openOutput'));
   if (choice === t('showInfo.openOutput')) {
     logger.show();
   }
+  return okEnvelope(data, summary);
 }
