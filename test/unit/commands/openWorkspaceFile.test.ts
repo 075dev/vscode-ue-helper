@@ -53,7 +53,9 @@ describe('executeOpenWorkspaceFile', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'vscode.open',
-      expect.objectContaining({ fsPath: expect.stringContaining('MyGame.code-workspace') }),
+      expect.objectContaining<Record<string, unknown>>({
+        fsPath: expect.stringContaining('MyGame.code-workspace'),
+      }),
     );
     expect(envelope.ok).toBe(true);
     expect(envelope.error).toBeUndefined();

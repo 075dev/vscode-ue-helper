@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { ContractErrorCode } from '../../../src/core/envelope';
 import {
   EC_PROJECT_NOT_DETECTED,
   EC_UBT_NOT_FOUND,
@@ -11,7 +12,6 @@ import {
   EC_INTERNAL_ERROR,
   okEnvelope,
   errEnvelope,
-  ContractErrorCode,
 } from '../../../src/core/envelope';
 
 describe('ContractErrorCode 常量值', () => {

@@ -17,8 +17,8 @@ import type { Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 
 vi.mock('node:fs/promises', () => ({
-  mkdir: vi.fn(async () => undefined),
-  writeFile: vi.fn(async () => undefined),
+  mkdir: vi.fn(() => Promise.resolve(undefined)),
+  writeFile: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 import { executeInstallRules } from '@commands/installRules';

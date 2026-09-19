@@ -58,8 +58,12 @@ export interface Envelope<T = unknown> {
  */
 export function okEnvelope<T>(data?: T, summary?: string): Envelope<T> {
   const env: Envelope<T> = { ok: true };
-  if (summary !== undefined) env.summary = summary;
-  if (data !== undefined) env.data = data;
+  if (summary !== undefined) {
+    env.summary = summary;
+  }
+  if (data !== undefined) {
+    env.data = data;
+  }
   return env;
 }
 

@@ -7,7 +7,7 @@
  *   3. QuickPick 异常 → 函数出口兜底 errEnvelope(INTERNAL_ERROR)
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
 import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
@@ -22,28 +22,31 @@ vi.mock('@ui/quickPicks', () => ({
   pickTarget: pickTargetMock,
 }));
 
-function createLoggerMock(): Logger {
+function createLoggerMock(): { logger: Logger; errorMock: Mock<unknown[], void> } {
+  const errorMock: Mock<unknown[], void> = vi.fn();
   return {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    show: vi.fn(),
-    channel: {} as never,
-    prefix: 'test',
-    currentLevel: 'info' as const,
-    setLevel: vi.fn(),
-    log: vi.fn(),
-    getLevel: vi.fn(),
-    getOutputChannel: vi.fn(),
-    dispose: vi.fn(),
-  } as unknown as Logger;
+    logger: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: errorMock,
+      debug: vi.fn(),
+      show: vi.fn(),
+      channel: {} as never,
+      prefix: 'test',
+      currentLevel: 'info' as const,
+      setLevel: vi.fn(),
+      log: vi.fn(),
+      getLevel: vi.fn(),
+      getOutputChannel: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as Logger,
+    errorMock,
+  };
 }
 
-function createConfigMock(): Config {
-  return {
-    update: vi.fn(() => Promise.resolve()),
-  } as unknown as Config;
+function createConfigMock(): { config: Config; updateMock: Mock<[], Promise<void>> } {
+  const updateMock = vi.fn(() => Promise.resolve());
+  return { config: { update: updateMock } as unknown as Config, updateMock };
 }
 
 describe('executeSelectTarget', () => {
@@ -54,39 +57,39 @@ describe('executeSelectTarget', () => {
 
   it('选中目标 → okEnvelope(data=选中值),持久化并弹信息提示', async () => {
     pickTargetMock.mockResolvedValue('Editor');
-    const config = createConfigMock();
+    const { config, updateMock } = createConfigMock();
 
-    const result = await executeSelectTarget(config, createLoggerMock());
+    const result = await executeSelectTarget(config, createLoggerMock().logger);
 
     expect(result.ok).toBe(true);
     expect(result.data).toBe('Editor');
     expect(result.summary).toContain('Editor');
-    expect(config.update).toHaveBeenCalledWith('target', 'Editor');
+    expect(updateMock).toHaveBeenCalledWith('target', 'Editor');
     expect(vscode.window.showInformationMessage).toHaveBeenCalled();
   });
 
   it('取消 QuickPick → OPERATION_CANCELLED,不持久化不提示', async () => {
     pickTargetMock.mockResolvedValue(undefined);
-    const config = createConfigMock();
+    const { config, updateMock } = createConfigMock();
 
-    const result = await executeSelectTarget(config, createLoggerMock());
+    const result = await executeSelectTarget(config, createLoggerMock().logger);
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('OPERATION_CANCELLED');
     expect(result.error?.message).toBeTruthy();
-    expect(config.update).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
   it('QuickPick 抛异常 → 出口兜底 INTERNAL_ERROR', async () => {
     pickTargetMock.mockRejectedValue(new Error('boom'));
-    const logger = createLoggerMock();
+    const { logger, errorMock } = createLoggerMock();
 
-    const result = await executeSelectTarget(createConfigMock(), logger);
+    const result = await executeSelectTarget(createConfigMock().config, logger);
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('INTERNAL_ERROR');
     expect(result.error?.message).toContain('boom');
-    expect(logger.error).toHaveBeenCalled();
+    expect(errorMock).toHaveBeenCalled();
   });
 });

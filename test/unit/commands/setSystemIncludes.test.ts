@@ -14,45 +14,48 @@
  *   - clangdOps 未注入 → INTERNAL_ERROR(原 throw 收口为 envelope)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import * as vscode from 'vscode';
 import type { Logger } from '@core/logger';
 import type { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
+import type { SystemIncludeInfo } from '@clangd/windowsSdk';
 import type { Envelope } from '@core/envelope';
 
 // ---- Mock @clangd/windowsSdk(全量替换,不依赖真实 MSVC/SDK 探测) ----
 
-const mockDiscover = vi.fn();
-const mockListMsvc = vi.fn();
-const mockListSdk = vi.fn();
-const mockRenderFlags = vi.fn();
-const mockReadRecommended = vi.fn();
-const mockSelectSdk = vi.fn();
+const mockDiscover = vi.fn<unknown[], Promise<SystemIncludeInfo | null>>();
+const mockListMsvc = vi.fn<unknown[], Promise<string[]>>();
+const mockListSdk = vi.fn<unknown[], Promise<string[]>>();
+const mockRenderFlags = vi.fn<unknown[], Promise<string[]>>();
+const mockReadRecommended = vi.fn<unknown[], Promise<string | null>>();
+const mockSelectSdk = vi.fn<unknown[], string>();
 
 vi.mock('@clangd/windowsSdk', () => ({
-  discoverSystemIncludes: (...args: unknown[]) => mockDiscover(...args),
-  listMsvcVersions: (...args: unknown[]) => mockListMsvc(...args),
-  listSdkVersions: (...args: unknown[]) => mockListSdk(...args),
-  renderClangdFlags: (...args: unknown[]) => mockRenderFlags(...args),
-  readRecommendedSdkVersion: (...args: unknown[]) => mockReadRecommended(...args),
-  selectSdkVersion: (...args: unknown[]) => mockSelectSdk(...args),
+  discoverSystemIncludes:
+    (...args: unknown[]): Promise<SystemIncludeInfo | null> => mockDiscover(...args),
+  listMsvcVersions: (...args: unknown[]): Promise<string[]> => mockListMsvc(...args),
+  listSdkVersions: (...args: unknown[]): Promise<string[]> => mockListSdk(...args),
+  renderClangdFlags: (...args: unknown[]): Promise<string[]> => mockRenderFlags(...args),
+  readRecommendedSdkVersion:
+    (...args: unknown[]): Promise<string | null> => mockReadRecommended(...args),
+  selectSdkVersion: (...args: unknown[]): string => mockSelectSdk(...args),
 }));
 
 // ---- Mock @clangd/flagGlossary ----
 
-const mockResolveFlags = vi.fn();
+const mockResolveFlags = vi.fn<unknown[], string[]>();
 vi.mock('@clangd/flagGlossary', () => ({
-  resolveFlags: (...args: unknown[]) => mockResolveFlags(...args),
+  resolveFlags: (...args: unknown[]): string[] => mockResolveFlags(...args),
 }));
 
 // ---- Mock @ui/quickPicks(_resolve 的 picker fallback,本测试不应触达) ----
 
 vi.mock('@ui/quickPicks', () => ({
-  pickProject: vi.fn(async () => undefined),
-  pickEngine: vi.fn(async () => undefined),
+  pickProject: vi.fn(() => Promise.resolve(undefined)),
+  pickEngine: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 // ---- 导入被测函数 ----
@@ -91,12 +94,16 @@ function createLoggerMock(): Logger {
   } as unknown as Logger;
 }
 
-function createConfigMock(): Config {
+function createConfigMock(): { config: Config; updateMock: Mock<[], Promise<void>> } {
+  const updateMock = vi.fn(() => Promise.resolve());
   return {
-    clangdPath: 'C:\\LLVM\\bin\\clangd.exe',
-    userAddFlags: undefined,
-    update: vi.fn(async () => undefined),
-  } as unknown as Config;
+    config: {
+      clangdPath: 'C:\\LLVM\\bin\\clangd.exe',
+      userAddFlags: undefined,
+      update: updateMock,
+    } as unknown as Config,
+    updateMock,
+  };
 }
 
 function createDetectionMock(projects: unknown[]): DetectionHandles {
@@ -105,8 +112,8 @@ function createDetectionMock(projects: unknown[]): DetectionHandles {
     workspaceContext: {
       getSelectedProject: vi.fn(() => undefined),
       getSelectedEngine: vi.fn(() => undefined),
-      setProject: vi.fn(async () => undefined),
-      setEngine: vi.fn(async () => undefined),
+      setProject: vi.fn(() => Promise.resolve(undefined)),
+      setEngine: vi.fn(() => Promise.resolve(undefined)),
     },
   } as unknown as DetectionHandles;
 }
@@ -114,19 +121,28 @@ function createDetectionMock(projects: unknown[]): DetectionHandles {
 function createWorkspaceMock(resolved: unknown = PROJECT): WorkspaceState {
   return {
     resolveSelectedProject: vi.fn(() => resolved),
-    setSelectedProject: vi.fn(async () => undefined),
+    setSelectedProject: vi.fn(() => Promise.resolve(undefined)),
     selectedEngine: null,
     resolveSelectedEngine: vi.fn(() => undefined),
-    setSelectedEngine: vi.fn(async () => undefined),
+    setSelectedEngine: vi.fn(() => Promise.resolve(undefined)),
   } as unknown as WorkspaceState;
 }
 
-function createClangdOpsMock(applyResult?: { ok: boolean; reason?: string }): ClangdOps {
+function createClangdOpsMock(applyResult?: {
+  ok: boolean;
+  reason?: string;
+}): { ops: ClangdOps; applyAddFlagsMock: Mock<[], Promise<{ ok: boolean; reason?: string }>> } {
+  const applyAddFlagsMock: Mock<[], Promise<{ ok: boolean; reason?: string }>> = vi.fn(() =>
+    Promise.resolve(applyResult ?? { ok: true }),
+  );
   return {
-    exists: vi.fn(async () => true),
-    writeFull: vi.fn(async () => undefined),
-    applyAddFlags: vi.fn(async () => applyResult ?? { ok: true }),
-  } as unknown as ClangdOps;
+    ops: {
+      exists: vi.fn(() => Promise.resolve(true)),
+      writeFull: vi.fn(() => Promise.resolve(undefined)),
+      applyAddFlags: applyAddFlagsMock,
+    } as unknown as ClangdOps,
+    applyAddFlagsMock,
+  };
 }
 
 /** executeSetSystemIncludes 已返回 Promise<Envelope<undefined>>(Wave3 类型收口),直接断言 */
@@ -152,17 +168,19 @@ async function invoke(opts: {
 describe('executeSetSystemIncludes(envelope 对齐)', () => {
   let logger: Logger;
   let config: Config;
+  let updateMock: Mock<[], Promise<void>>;
   let detection: DetectionHandles;
   let workspace: WorkspaceState;
   let clangdOps: ClangdOps;
+  let applyAddFlagsMock: Mock<[], Promise<{ ok: boolean; reason?: string }>>;
   let showQuickPickMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     logger = createLoggerMock();
-    config = createConfigMock();
+    ({ config, updateMock } = createConfigMock());
     detection = createDetectionMock([PROJECT]);
     workspace = createWorkspaceMock();
-    clangdOps = createClangdOpsMock();
+    ({ ops: clangdOps, applyAddFlagsMock } = createClangdOpsMock());
 
     mockDiscover.mockReset().mockResolvedValue(DETECTED);
     mockListMsvc.mockReset().mockResolvedValue(['14.36.32532', '14.38.33130']);
@@ -182,8 +200,8 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     const env = await invoke({ config, logger, detection, workspace, clangdOps });
 
     expect(mockDiscover).toHaveBeenCalledWith(config.clangdPath, logger);
-    expect(clangdOps.applyAddFlags).toHaveBeenCalledWith(['FLAG_A']);
-    expect(config.update).toHaveBeenCalledWith('clangd.userAddFlags', [
+    expect(applyAddFlagsMock).toHaveBeenCalledWith(['FLAG_A']);
+    expect(updateMock).toHaveBeenCalledWith('clangd.userAddFlags', [
       'system-include-windows',
     ]);
     expect(
@@ -243,7 +261,7 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     // [错误码缺口登记] 探测到 clangd 但版本目录为空,枚举无贴切码 → 兜底 INTERNAL_ERROR
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INTERNAL_ERROR');
-    expect(clangdOps.applyAddFlags).not.toHaveBeenCalled();
+    expect(applyAddFlagsMock).not.toHaveBeenCalled();
   });
 
   it('用户取消 MSVC QuickPick → OPERATION_CANCELLED', async () => {
@@ -254,11 +272,11 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     // [envelope 对齐] 用户取消 QuickPick → OPERATION_CANCELLED(映射表直配;现有静默返回行为保持)
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('OPERATION_CANCELLED');
-    expect(clangdOps.applyAddFlags).not.toHaveBeenCalled();
+    expect(applyAddFlagsMock).not.toHaveBeenCalled();
   });
 
   it('applyAddFlags 失败 → err envelope,且成功提示仍弹出(spec-asis 现有控制流保持)', async () => {
-    const failingOps = createClangdOpsMock({ ok: false, reason: 'boom' });
+    const { ops: failingOps } = createClangdOpsMock({ ok: false, reason: 'boom' });
 
     const env = await invoke({ config, logger, detection, workspace, clangdOps: failingOps });
 
