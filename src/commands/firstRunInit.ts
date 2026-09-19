@@ -26,6 +26,12 @@ import json5 from 'json5';
 import type { Logger } from '@core/logger';
 import type { Config } from '@core/config';
 import type { WorkspaceState } from '@core/workspace';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_INTERNAL_ERROR,
+  type Envelope,
+} from '@core/envelope';
 import type { ClangdHandles } from '@clangd';
 import type { ClangdOps } from '@clangd/clangdOps';
 import type { DetectionHandles } from '@detection';
@@ -629,14 +635,19 @@ export async function markInitializedInWorkspace(workspaceFile: string): Promise
  * 7. executeEnableClangdProxy 失败 → 弹错误信息 + 'fail'（AC-5）
  * 8. markInitializedInWorkspace 失败 → 仅 warn（不阻断 reload）
  * 9. 触发 reload window
- * 10. 返回 'init'
+ * 10. 返回 okEnvelope(data='init')
  *
- * @returns 编排结果分类（见 FirstRunInitResult）
+ * [Wave2 契约对齐] 返回契约 envelope(决策 D5):init/skip/later → okEnvelope
+ * (data 保留 FirstRunInitResult 分类);fail → errEnvelope(INTERNAL_ERROR,
+ * details.step 标注失败步骤)。UI 行为(弹窗/日志/重试入口)保持原样。
+ *
+ * @returns Envelope,data 为编排结果分类（见 FirstRunInitResult）;
+ *          fail 时 ok=false + error.code=INTERNAL_ERROR + error.details.step
  */
 export async function runFirstTimeInit(
   deps: FirstRunInitDeps,
   _context: vscode.ExtensionContext,
-): Promise<FirstRunInitResult> {
+): Promise<Envelope<FirstRunInitResult>> {
   const { config, logger, detection, clangd, workspace } = deps;
 
   // 等待 detection 完成注入（避免 race condition：project 可能为 null）
@@ -644,18 +655,18 @@ export async function runFirstTimeInit(
 
   // 非 UE 工程 → 直接跳过（AC-7）
   if (!workspace.project) {
-    return 'skip';
+    return okEnvelope('skip', '未检测到 UE 工程,跳过首次初始化');
   }
 
   // 无 .code-workspace 文件 → 跳过（AC-7）
   const wsFile = workspace.workspaceFile;
   if (!wsFile) {
-    return 'skip';
+    return okEnvelope('skip', '无 .code-workspace 文件,跳过首次初始化');
   }
 
   // 已初始化 → 跳过（AC-3 末态）
   if (!(await isFirstRunVscodeWorkspace(wsFile))) {
-    return 'skip';
+    return okEnvelope('skip', '首次初始化已完成,无需重复执行');
   }
 
   // 弹窗：Initialize / Later（AC-1）
@@ -665,9 +676,9 @@ export async function runFirstTimeInit(
     t('init.btn.later'),
   );
 
-  // 用户选择 Later 或关闭弹窗 → 'later'（AC-2）
+  // 用户选择 Later 或关闭弹窗 → 'later'（AC-2,非失败路径 → ok envelope）
   if (choice !== t('init.btn.initialize')) {
-    return 'later';
+    return okEnvelope('later', '用户选择稍后初始化');
   }
 
   // 第一步：Create Unreal Clangd Project（AC-4）
@@ -676,7 +687,7 @@ export async function runFirstTimeInit(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await reportInitFailure(logger, 'createProject', msg, err, wsFile);
-    return 'fail';
+    return errEnvelope(EC_INTERNAL_ERROR, msg, { step: 'createProject', result: 'fail' });
   }
 
   // 第二步：Enable Clangd Proxy（AC-5）
@@ -689,7 +700,7 @@ export async function runFirstTimeInit(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await reportInitFailure(logger, 'enableProxy', msg, err, wsFile);
-    return 'fail';
+    return errEnvelope(EC_INTERNAL_ERROR, msg, { step: 'enableProxy', result: 'fail' });
   }
 
   // 写标记。失败 → 弹错并返回 fail,不触发 reload(与文件头设计原则 3 一致:
@@ -699,7 +710,7 @@ export async function runFirstTimeInit(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await reportInitFailure(logger, 'markWorkspace', msg, err, wsFile);
-    return 'fail';
+    return errEnvelope(EC_INTERNAL_ERROR, msg, { step: 'markWorkspace', result: 'fail' });
   }
 
   // 触发窗口 reload（AC-3）。失败仅 warn，不影响 init 返回值
@@ -709,5 +720,5 @@ export async function runFirstTimeInit(
     logger.warn('[firstRunInit] reloadWindow failed:', err);
   }
 
-  return 'init';
+  return okEnvelope('init', '首次初始化完成,窗口即将重新加载');
 }
