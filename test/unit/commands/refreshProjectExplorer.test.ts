@@ -11,4 +11,14 @@ describe('executeRefreshProjectExplorer', () => {
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
+
+  it('[契约对齐] 返回 ok envelope(纯 UI 命令,summary 复用刷新语义)', () => {
+    const provider = { refresh: vi.fn() } as unknown as ProjectExplorerProvider;
+
+    const envelope = executeRefreshProjectExplorer(provider);
+
+    expect(envelope.ok).toBe(true);
+    expect(envelope.error).toBeUndefined();
+    expect(envelope.summary).toBeDefined();
+  });
 });

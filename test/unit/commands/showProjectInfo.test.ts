@@ -90,11 +90,13 @@ const fakeEngine: EngineInstall = {
   isLauncherInstall: true,
 };
 
-function makeDetection(overrides: {
-  projects?: ProjectInfo[];
-  engines?: EngineInstall[];
-  workspaceFile?: string;
-} = {}): DetectionHandles {
+function makeDetection(
+  overrides: {
+    projects?: ProjectInfo[];
+    engines?: EngineInstall[];
+    workspaceFile?: string;
+  } = {},
+): DetectionHandles {
   const projects = overrides.projects ?? [fakeProject];
   const engines = overrides.engines ?? [fakeEngine];
   return {
@@ -116,24 +118,27 @@ function makeDetection(overrides: {
   } as unknown as DetectionHandles;
 }
 
-function makeWorkspace(overrides: {
-  resolveSelectedProject?: (ps: ProjectInfo[]) => ProjectInfo | undefined;
-  resolveSelectedEngine?: (es: EngineInstall[]) => EngineInstall | undefined;
-  workspaceRoot?: string;
-  workspaceFolders?: { name: string; absPath: string; role: string }[];
-  selectedProject?: string;
-  selectedEngine?: string;
-  workspaceFile?: string;
-} = {}): WorkspaceState {
+function makeWorkspace(
+  overrides: {
+    resolveSelectedProject?: (ps: ProjectInfo[]) => ProjectInfo | undefined;
+    resolveSelectedEngine?: (es: EngineInstall[]) => EngineInstall | undefined;
+    workspaceRoot?: string;
+    workspaceFolders?: { name: string; absPath: string; role: string }[];
+    selectedProject?: string;
+    selectedEngine?: string;
+    workspaceFile?: string;
+  } = {},
+): WorkspaceState {
   // 用 'in' 检查区分"未传" vs "显式设 undefined"
   // (?? 在显式 undefined 时仍会 fallback,导致测试无法表达"未设"语义)
   return {
     resolveSelectedProject: overrides.resolveSelectedProject ?? ((ps) => ps[0]),
     resolveSelectedEngine: overrides.resolveSelectedEngine ?? ((es) => es[0]),
     workspaceRoot: 'workspaceRoot' in overrides ? overrides.workspaceRoot : 'D:/proj/MyGame',
-    workspaceFolders: 'workspaceFolders' in overrides
-      ? overrides.workspaceFolders
-      : [{ name: 'MyGame', absPath: 'D:/proj/MyGame', role: 'project' }],
+    workspaceFolders:
+      'workspaceFolders' in overrides
+        ? overrides.workspaceFolders
+        : [{ name: 'MyGame', absPath: 'D:/proj/MyGame', role: 'project' }],
     selectedProject: overrides.selectedProject,
     selectedEngine: overrides.selectedEngine,
     workspaceFile: overrides.workspaceFile,
@@ -141,10 +146,14 @@ function makeWorkspace(overrides: {
 }
 
 describe('showProjectInfo — 早退', () => {
-  it('无 detection → logger.warn + return,不弹模态', async () => {
+  it('无 detection → logger.warn + PROJECT_NOT_DETECTED envelope,不弹模态', async () => {
     const logger = makeSilentLogger();
-    await showProjectInfo(makeConfig(), logger);
-    expect(asMockLogger(logger).warn).toHaveBeenCalledWith(expect.stringContaining('detection handles unavailable'));
+    const envelope = await showProjectInfo(makeConfig(), logger);
+    expect(asMockLogger(logger).warn).toHaveBeenCalledWith(
+      expect.stringContaining('detection handles unavailable'),
+    );
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error?.code).toBe('PROJECT_NOT_DETECTED');
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
   });
@@ -158,7 +167,22 @@ describe('showProjectInfo — happy path(有 engines)', () => {
 
     (vscode.window.showInformationMessage as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
-    await showProjectInfo(makeConfig(), logger, detection, workspace);
+    const envelope = await showProjectInfo(makeConfig(), logger, detection, workspace);
+
+    // [契约对齐] 成功 → ok envelope;data 对齐契约 ProjectInfo 实际已收集字段;summary 复用现有文案
+    expect(envelope.ok).toBe(true);
+    expect(envelope.error).toBeUndefined();
+    expect(envelope.summary).toBeDefined();
+    const data = envelope.data as {
+      name?: string;
+      uprojectPath?: string;
+      enginePath?: string;
+      engineVersion?: string;
+    };
+    expect(data.name).toBe('MyGame');
+    expect(data.uprojectPath).toBe('D:/proj/MyGame/MyGame.uproject');
+    expect(data.enginePath).toBe('D:/UE_5.4');
+    expect(data.engineVersion).toBe('5.4.0');
 
     // 找到含 lines 拼接的 info 调用
     const infoCalls = asMockLogger(logger).info.mock.calls.map((c) => c[0] as string);
