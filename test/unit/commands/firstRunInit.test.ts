@@ -615,7 +615,10 @@ describe('runFirstTimeInit failure semantics', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('fail');
+    // [Wave2 契约对齐] fail → errEnvelope(INTERNAL_ERROR, details.step=createProject)
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INTERNAL_ERROR');
+    expect(result.error?.details).toMatchObject({ step: 'createProject', result: 'fail' });
     expect(executeCreateProjectMock).toHaveBeenCalledOnce();
     expect(executeEnableClangdProxyMock).not.toHaveBeenCalled();
     expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
@@ -643,7 +646,10 @@ describe('runFirstTimeInit failure semantics', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('fail');
+    // [Wave2 契约对齐] fail → errEnvelope(INTERNAL_ERROR, details.step=enableProxy)
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INTERNAL_ERROR');
+    expect(result.error?.details).toMatchObject({ step: 'enableProxy', result: 'fail' });
     expect(executeCreateProjectMock).toHaveBeenCalledOnce();
     expect(executeEnableClangdProxyMock).toHaveBeenCalledOnce();
     expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
@@ -675,7 +681,10 @@ describe('runFirstTimeInit failure semantics', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('fail');
+    // [Wave2 契约对齐] fail → errEnvelope(INTERNAL_ERROR, details.step=markWorkspace)
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INTERNAL_ERROR');
+    expect(result.error?.details).toMatchObject({ step: 'markWorkspace', result: 'fail' });
     expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'workbench.action.reloadWindow',
     );
@@ -705,7 +714,9 @@ describe('runFirstTimeInit failure semantics', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('fail');
+    // [Wave2 契约对齐] fail → errEnvelope(INTERNAL_ERROR)
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INTERNAL_ERROR');
     const calls = (vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>).mock
       .calls;
     // 找出最后的错误弹窗调用(createProject 失败的)
@@ -770,7 +781,10 @@ describe('runFirstTimeInit happy path', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('init');
+    // [Wave2 契约对齐] init → okEnvelope(data='init')
+    expect(result.ok).toBe(true);
+    expect(result.data).toBe('init');
+    expect(result.summary).toBeTruthy();
     expect(executeCreateProjectMock).toHaveBeenCalledOnce();
     expect(executeEnableClangdProxyMock).toHaveBeenCalledOnce();
     expect(renameMock).toHaveBeenCalledOnce();
@@ -794,7 +808,10 @@ describe('runFirstTimeInit happy path', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('init');
+    // [Wave2 契约对齐] init → okEnvelope(data='init')
+    expect(result.ok).toBe(true);
+    expect(result.data).toBe('init');
+    expect(result.summary).toBeTruthy();
     expect(executeEnableClangdProxyMock).toHaveBeenCalledWith(config, logger, clangd, {
       suppressReloadPrompt: true,
     });
@@ -825,7 +842,9 @@ describe('runFirstTimeInit skip branches', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('skip');
+    // [Wave2 契约对齐] skip → okEnvelope(data='skip')
+    expect(result.ok).toBe(true);
+    expect(result.data).toBe('skip');
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(executeCreateProjectMock).not.toHaveBeenCalled();
     expect(executeEnableClangdProxyMock).not.toHaveBeenCalled();
@@ -839,7 +858,9 @@ describe('runFirstTimeInit skip branches', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('skip');
+    // [Wave2 契约对齐] skip → okEnvelope(data='skip')
+    expect(result.ok).toBe(true);
+    expect(result.data).toBe('skip');
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(executeCreateProjectMock).not.toHaveBeenCalled();
   });
@@ -858,7 +879,9 @@ describe('runFirstTimeInit skip branches', () => {
       createContextMock(),
     );
 
-    expect(result).toBe('skip');
+    // [Wave2 契约对齐] skip → okEnvelope(data='skip')
+    expect(result.ok).toBe(true);
+    expect(result.data).toBe('skip');
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(executeCreateProjectMock).not.toHaveBeenCalled();
     expect(executeEnableClangdProxyMock).not.toHaveBeenCalled();
