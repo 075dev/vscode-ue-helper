@@ -29,6 +29,7 @@ import type { Logger } from '@core/logger';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
+import { errEnvelope, EC_MCP_CONTEXT_NOT_INITIALIZED, EC_UNKNOWN_TOOL } from '@core/envelope';
 import { executeBuild } from '@commands/build';
 import { executeLaunchEditor } from '@commands/launchEditor';
 import { executeLiveCoding } from '@commands/liveCoding';
@@ -113,7 +114,7 @@ export const MCP_TOOLS: MCPTool[] = [
 /**
  * MCP runtime context —— activateMCP 调 setMCPContext 注入。
  * MCP 模块在 Cursor / Claude Code spawn 时启动,普通 VS Code 完全不调,
- * 所以 _ctx 在普通环境下永远是 null,callTool 返回 `{ok: false, error}`。
+ * 所以 _ctx 在普通环境下永远是 null,callTool 返回 `{ok: false, error: {code, message}}`。
  */
 export interface MCPContext {
   config: Config;
@@ -141,14 +142,18 @@ export function getMCPContext(): MCPContext | null {
  *
  * 保持同步签名:executeXxx 是 async 真实命令,但 MCP 不阻塞 AI agent,
  * 所以 fire-and-forget dispatch 后立刻返回 `{ok: true, dispatched}`,
- * 真实进度通过 logger 输出。错误路径同步返回 `{ok: false, error}`。
+ * 真实进度通过 logger 输出。错误路径同步返回 `{ok: false, error: {code, message}}`
+ * (契约 openapi.yaml Error + 决策 D5,错误码取自全局 9 项枚举)。
  */
 export function callTool(name: string, args: Record<string, unknown>): string {
   if (!_ctx) {
-    return JSON.stringify({
-      ok: false,
-      error: 'MCP context not initialized — extension is not running in Cursor / Claude Code host',
-    });
+    // 契约错误出口(openapi.yaml Error + 决策 D5):{ok: false, error: {code, message}},非裸字符串
+    return JSON.stringify(
+      errEnvelope(
+        EC_MCP_CONTEXT_NOT_INITIALIZED,
+        'MCP context not initialized — extension is not running in Cursor / Claude Code host',
+      ),
+    );
   }
   const { config, logger, detection, workspace, clangdOps } = _ctx;
 
@@ -217,6 +222,7 @@ export function callTool(name: string, args: Record<string, unknown>): string {
       );
       return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     default:
-      return JSON.stringify({ ok: false, error: `Unknown tool: ${name}` });
+      // 契约错误出口(openapi.yaml Error + 决策 D5):{ok: false, error: {code, message}},非裸字符串
+      return JSON.stringify(errEnvelope(EC_UNKNOWN_TOOL, `Unknown tool: ${name}`));
   }
 }
