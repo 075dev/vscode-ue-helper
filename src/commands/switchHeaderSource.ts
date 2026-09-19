@@ -38,6 +38,14 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { t } from '@i18n';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_PROJECT_NOT_DETECTED,
+  EC_OPERATION_CANCELLED,
+  EC_INTERNAL_ERROR,
+  type Envelope,
+} from '@core/envelope';
 import { type Logger } from '@core/logger';
 
 /** 文件归类：头文件侧 / 源文件侧 */
@@ -125,10 +133,7 @@ export function buildCounterpartCandidates(filePath: string): string[] {
   const exts = targetExts(side, fromExt);
   // X.generated.h 属头侧但目标扩展补上 .h/.hpp（同 stem 主头文件也是合理落点）
   const stemInfo = splitCppStem(fileName);
-  const allExts =
-    stemInfo?.isGenerated && side === 'header'
-      ? [...exts, '.h', '.hpp']
-      : exts;
+  const allExts = stemInfo?.isGenerated && side === 'header' ? [...exts, '.h', '.hpp'] : exts;
   const dir = path.dirname(filePath);
 
   const candidates: string[] = [];
@@ -202,11 +207,7 @@ function defaultDeps(): SwitchDeps {
       const exts = targets.flatMap((side) => (side === 'source' ? SOURCE_EXTS : HEADER_EXTS));
       const found: string[] = [];
       for (const ext of exts) {
-        const uris = await vscode.workspace.findFiles(
-          `**/${stem}${ext}`,
-          SEARCH_EXCLUDE,
-          50,
-        );
+        const uris = await vscode.workspace.findFiles(`**/${stem}${ext}`, SEARCH_EXCLUDE, 50);
         for (const uri of uris) {
           const p = uri.fsPath;
           // 排除 UHT 产物（含 stub）与自身
@@ -241,66 +242,90 @@ function defaultDeps(): SwitchDeps {
  * @param editor 可注入编辑器（测试用）；默认当前活动编辑器
  * @param logger 可选日志器
  * @param deps 可注入依赖（测试用）
- * @returns 是否打开了目标文件
+ * @returns 契约 envelope:成功 `okEnvelope({ opened }, summary)`;
+ *          失败按错误码映射(无配对 → PROJECT_NOT_DETECTED 为最接近项、
+ *          QuickPick 取消 → OPERATION_CANCELLED、兜底 → INTERNAL_ERROR)
  */
 export async function executeSwitchHeaderSource(
   editor?: vscode.TextEditor,
   logger?: Logger,
   deps: SwitchDeps = defaultDeps(),
-): Promise<boolean> {
-  const active = editor ?? vscode.window.activeTextEditor;
-  const filePath = active?.document.uri.fsPath;
-  if (!active || !filePath) {
-    deps.notify(t('cmd.switchHeaderSource.noEditor'));
-    return false;
-  }
-
-  const fileName = path.basename(filePath);
-  const side = classifyCppFile(fileName);
-  if (!side) {
-    deps.notify(t('cmd.switchHeaderSource.unsupported', { name: fileName }));
-    return false;
-  }
-  const target: CounterpartSide = side === 'header' ? 'source' : 'header';
-
-  // 1. 确定性候选：第一个真实存在的直接打开
-  const candidates = buildCounterpartCandidates(filePath);
-  for (const candidate of candidates) {
-    if (path.resolve(candidate) === path.resolve(filePath)) {
-      continue;
+): Promise<Envelope> {
+  try {
+    const active = editor ?? vscode.window.activeTextEditor;
+    const filePath = active?.document.uri.fsPath;
+    if (!active || !filePath) {
+      deps.notify(t('cmd.switchHeaderSource.noEditor'));
+      // [契约对齐] 无编辑器属调用异常,9 项枚举无贴切码 → 兜底 INTERNAL_ERROR(登记缺口)
+      return errEnvelope(EC_INTERNAL_ERROR, t('cmd.switchHeaderSource.noEditor'));
     }
-    if (await deps.fileExists(candidate)) {
-      await deps.openFile(candidate);
-      return true;
-    }
-  }
 
-  // 2. 规则未命中 → workspace 同 stem 搜索
-  const stemInfo = splitCppStem(fileName);
-  if (!stemInfo) {
-    return false;
+    const fileName = path.basename(filePath);
+    const side = classifyCppFile(fileName);
+    if (!side) {
+      deps.notify(t('cmd.switchHeaderSource.unsupported', { name: fileName }));
+      // [契约对齐] 非源/头文件,9 项枚举无贴切码 → 兜底 INTERNAL_ERROR(登记缺口)
+      return errEnvelope(
+        EC_INTERNAL_ERROR,
+        t('cmd.switchHeaderSource.unsupported', { name: fileName }),
+        { file: fileName },
+      );
+    }
+    const target: CounterpartSide = side === 'header' ? 'source' : 'header';
+
+    // 1. 确定性候选：第一个真实存在的直接打开
+    const candidates = buildCounterpartCandidates(filePath);
+    for (const candidate of candidates) {
+      if (path.resolve(candidate) === path.resolve(filePath)) {
+        continue;
+      }
+      if (await deps.fileExists(candidate)) {
+        await deps.openFile(candidate);
+        return okEnvelope({ opened: candidate }, '已打开对应文件');
+      }
+    }
+
+    // 2. 规则未命中 → workspace 同 stem 搜索
+    const stemInfo = splitCppStem(fileName);
+    if (!stemInfo) {
+      return errEnvelope(
+        EC_INTERNAL_ERROR,
+        t('cmd.switchHeaderSource.unsupported', { name: fileName }),
+        { file: fileName },
+      );
+    }
+    // UHT 产物 X.generated.h：X.h 与 X.cpp 都可能想去，双侧都搜；
+    // 普通文件只搜对侧。
+    const searchTargets: CounterpartSide[] = stemInfo.isGenerated ? ['header', 'source'] : [target];
+    const found = (await deps.searchCounterparts(stemInfo.stem, searchTargets)).filter(
+      (p) => path.resolve(p) !== path.resolve(filePath),
+    );
+    if (found.length === 0) {
+      deps.notify(t('cmd.switchHeaderSource.notFound', { name: fileName }));
+      // [契约对齐] 无对应头/源配对 → 契约 404 语义;9 项枚举无贴切码,
+      // 选最接近的 PROJECT_NOT_DETECTED 并在完成报告登记缺口
+      return errEnvelope(
+        EC_PROJECT_NOT_DETECTED,
+        t('cmd.switchHeaderSource.notFound', { name: fileName }),
+        { file: fileName },
+      );
+    }
+    if (found.length === 1 && found[0] !== undefined) {
+      await deps.openFile(found[0]);
+      return okEnvelope({ opened: found[0] }, '已打开对应文件');
+    }
+    const picked = await deps.pick(found, filePath);
+    if (!picked) {
+      // [契约对齐] 用户取消 QuickPick → OPERATION_CANCELLED
+      return errEnvelope(EC_OPERATION_CANCELLED, '已取消选择对应文件');
+    }
+    await deps.openFile(picked);
+    logger?.info(`[switchHeaderSource] picked ${picked} among ${found.length} candidates`);
+    return okEnvelope({ opened: picked }, '已打开对应文件');
+  } catch (err) {
+    // [契约对齐] 函数出口统一 catch:意外异常包装为 INTERNAL_ERROR envelope
+    const msg = err instanceof Error ? err.message : String(err);
+    logger?.error('[switchHeaderSource] unexpected error:', msg);
+    return errEnvelope(EC_INTERNAL_ERROR, msg);
   }
-  // UHT 产物 X.generated.h：X.h 与 X.cpp 都可能想去，双侧都搜；
-  // 普通文件只搜对侧。
-  const searchTargets: CounterpartSide[] = stemInfo.isGenerated
-    ? ['header', 'source']
-    : [target];
-  const found = (await deps.searchCounterparts(stemInfo.stem, searchTargets)).filter(
-    (p) => path.resolve(p) !== path.resolve(filePath),
-  );
-  if (found.length === 0) {
-    deps.notify(t('cmd.switchHeaderSource.notFound', { name: fileName }));
-    return false;
-  }
-  if (found.length === 1 && found[0] !== undefined) {
-    await deps.openFile(found[0]);
-    return true;
-  }
-  const picked = await deps.pick(found, filePath);
-  if (!picked) {
-    return false;
-  }
-  await deps.openFile(picked);
-  logger?.info(`[switchHeaderSource] picked ${picked} among ${found.length} candidates`);
-  return true;
 }

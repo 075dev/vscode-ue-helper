@@ -6,6 +6,13 @@
 
 import * as vscode from 'vscode';
 import type { Logger } from '@core/logger';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_PROJECT_NOT_DETECTED,
+  EC_INTERNAL_ERROR,
+  type Envelope,
+} from '@core/envelope';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
@@ -21,33 +28,42 @@ export async function executeDiagnoseProject(
   workspace?: WorkspaceState,
   // [Phase 9 SSoT 收尾] 可选——为老调用方/test 留 fallback；生产 index.ts 必传，让 .clangd 读取走 ClangdOps 单一入口
   clangdOps?: ClangdOps,
-): Promise<void> {
+): Promise<Envelope> {
   logger.info('[diagnoseProject] invoked');
 
-  // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅解析不持久化）
-  const project = await resolveProjectOrPick({
-    detection,
-    workspace,
-    warningKey: 'diagnoseProject.noProject',
-  });
-  if (!project) {
-    return;
+  try {
+    // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅解析不持久化）
+    const project = await resolveProjectOrPick({
+      detection,
+      workspace,
+      warningKey: 'diagnoseProject.noProject',
+    });
+    if (!project) {
+      // [契约对齐] 无项目 → PROJECT_NOT_DETECTED(契约 404);warning 弹窗由 _resolve 保持原样
+      return errEnvelope(EC_PROJECT_NOT_DETECTED, t('diagnoseProject.noProject'));
+    }
+
+    // 扫描可能较慢：套 withProgress，避免面板 toast「正在执行…」之外无任何反馈
+    const report = await withProgress(t('diagnoseProject.running'), async (reportProgress) => {
+      reportProgress('Scanning .clangd / compile_commands / helper files...');
+      return diagnoseProject(project.path, workspace, clangdOps);
+    });
+    const formatted = formatDiagnosticReport(report);
+    logger.info(formatted);
+    logger.show();
+
+    const message =
+      report.overallStatus === 'ok'
+        ? t('diagnoseProject.summary.ok')
+        : t('diagnoseProject.summary.failed', {
+            count: String(report.checks.filter((check) => check.status === 'fail').length),
+          });
+    void vscode.window.showInformationMessage(message, t('showInfo.openOutput'));
+    // [契约对齐] 诊断执行成功即 ok(检查失败项属于 data,不是命令失败)
+    return okEnvelope(report, message);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error('[diagnoseProject] failed:', msg);
+    return errEnvelope(EC_INTERNAL_ERROR, msg);
   }
-
-  // 扫描可能较慢：套 withProgress，避免面板 toast「正在执行…」之外无任何反馈
-  const report = await withProgress(t('diagnoseProject.running'), async (reportProgress) => {
-    reportProgress('Scanning .clangd / compile_commands / helper files...');
-    return diagnoseProject(project.path, workspace, clangdOps);
-  });
-  const formatted = formatDiagnosticReport(report);
-  logger.info(formatted);
-  logger.show();
-
-  const message =
-    report.overallStatus === 'ok'
-      ? t('diagnoseProject.summary.ok')
-      : t('diagnoseProject.summary.failed', {
-          count: String(report.checks.filter((check) => check.status === 'fail').length),
-        });
-  void vscode.window.showInformationMessage(message, t('showInfo.openOutput'));
 }

@@ -9,14 +9,16 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { t } from '@i18n';
+import { okEnvelope, errEnvelope, EC_PROJECT_NOT_DETECTED, type Envelope } from '@core/envelope';
 import type { WorkspaceState } from '@core/workspace';
 
-export async function executeOpenWorkspaceFile(workspace?: WorkspaceState): Promise<void> {
+export async function executeOpenWorkspaceFile(workspace?: WorkspaceState): Promise<Envelope> {
   // [Phase 11 SSoT 包 6] workspace.workspaceFolders 是单一真相源——删除 vscode.workspace.workspaceFolders fallback
   const folders = workspace?.workspaceFolders ?? [];
   if (folders.length === 0) {
     void vscode.window.showWarningMessage(t('openWorkspaceFile.noWorkspace'));
-    return;
+    // [契约对齐] 无工作区 → PROJECT_NOT_DETECTED(映射表"工作区无 .uproject"最接近项)
+    return errEnvelope(EC_PROJECT_NOT_DETECTED, t('openWorkspaceFile.noWorkspace'));
   }
   // Look for a .code-workspace in any of the workspace roots.
   for (const folder of folders) {
@@ -33,11 +35,13 @@ export async function executeOpenWorkspaceFile(workspace?: WorkspaceState): Prom
       if (ws) {
         const filePath = path.join(folderPath, ws);
         void vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
-        return;
+        return okEnvelope(undefined, `已打开 ${filePath}`);
       }
     } catch {
       // skip
     }
   }
   void vscode.window.showInformationMessage(t('openWorkspaceFile.notFound'));
+  // [契约对齐] 未找到 .code-workspace → PROJECT_NOT_DETECTED(最接近项,完成报告登记缺口)
+  return errEnvelope(EC_PROJECT_NOT_DETECTED, t('openWorkspaceFile.notFound'));
 }

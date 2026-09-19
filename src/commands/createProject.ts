@@ -40,6 +40,15 @@ import type { FillResult } from '@clangd/compileCommands';
 import type { ClangdOps } from '@clangd/clangdOps';
 import { t } from '@i18n';
 import { resolveProgressLocation } from '@ui/notifications';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_PROJECT_NOT_DETECTED,
+  EC_UBT_NOT_FOUND,
+  EC_OPERATION_CANCELLED,
+  EC_INTERNAL_ERROR,
+  type Envelope,
+} from '@core/envelope';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import { resolveProjectOrPick, resolveEngineOrPick, persistSelection } from '@commands/_resolve';
@@ -71,19 +80,46 @@ export async function executeCreateProject(
   clangdOps?: ClangdOps,
   // [Phase 9 SSoT] 可选——为老调用方/test 留 fallback；生产 index.ts 必传
   workspace?: WorkspaceState,
-): Promise<void> {
+): Promise<Envelope> {
   logger.info('[createProject] invoked');
 
+  // [契约对齐 C8/D5] 函数出口统一 catch:意外异常包装为 INTERNAL_ERROR envelope
+  try {
+    return await runCreateProjectPipeline(config, logger, detection, clangdOps, workspace);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error('[createProject] unexpected failure:', msg);
+    return errEnvelope(EC_INTERNAL_ERROR, msg);
+  }
+}
+
+/** executeCreateProject 主体(项目/引擎解析 + 5 步管道),仅返回值 envelope 化,行为保持原样 */
+async function runCreateProjectPipeline(
+  config: Config,
+  logger: Logger,
+  detection: DetectionHandles,
+  clangdOps?: ClangdOps,
+  workspace?: WorkspaceState,
+): Promise<Envelope> {
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({ detection, workspace });
   if (!project) {
-    return;
+    // [契约对齐] _resolve 的 warning 弹窗保持原样;此处按未检出/用户取消区分错误码
+    const { projects } = await detection.ready;
+    return projects.length === 0
+      ? errEnvelope(EC_PROJECT_NOT_DETECTED, t('cmd.noUprojectSelected'))
+      : errEnvelope(EC_OPERATION_CANCELLED, t('cmd.noUprojectSelected'));
   }
   await persistSelection(workspace, detection, project, undefined);
 
   const engine = await resolveEngineOrPick({ detection, workspace });
   if (!engine) {
-    return;
+    // [契约对齐] 引擎未检出 → UBT_NOT_FOUND(映射表"引擎/UBT 路径不可用"最接近项);
+    // 其余(用户取消选择) → OPERATION_CANCELLED
+    const { engines } = await detection.ready;
+    return engines.length === 0
+      ? errEnvelope(EC_UBT_NOT_FOUND, t('cmd.noUnrealEngineSelected'))
+      : errEnvelope(EC_OPERATION_CANCELLED, t('cmd.noUnrealEngineSelected'));
   }
   await persistSelection(workspace, detection, undefined, engine);
 
@@ -463,4 +499,7 @@ export async function executeCreateProject(
 
   // 简化弹窗：只显示成功提示
   void vscode.window.showInformationMessage(t('createProject.success'));
+
+  // [契约对齐] 命令本身执行完毕 → ok;各步骤成败明细属于 data
+  return okEnvelope({ okSteps: ok, totalSteps: total, steps: results }, t('createProject.success'));
 }

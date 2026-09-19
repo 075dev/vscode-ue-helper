@@ -21,6 +21,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { t } from '@i18n';
+import { okEnvelope, errEnvelope, EC_INTERNAL_ERROR, type Envelope } from '@core/envelope';
 import type { Logger } from '@core/logger';
 
 /**
@@ -72,12 +73,13 @@ const MOVE_INTO_NEW_WINDOW_COMMAND = 'workbench.action.terminal.moveIntoNewWindo
 export async function executeOpenTerminalInNewWindow(
   uri: OpenTerminalArg | undefined,
   logger?: Logger,
-): Promise<void> {
+): Promise<Envelope> {
   const cwd = await resolveDirectory(uri);
   if (!cwd) {
     logger?.warn('[commands] openTerminalInNewWindow: 无效的目录 URI,已跳过');
     void vscode.window.showWarningMessage(t('openTerminalInNewWindow.invalidPath'));
-    return;
+    // [契约对齐] 无效入参,9 项枚举无贴切码 → 兜底 INTERNAL_ERROR(完成报告登记缺口)
+    return errEnvelope(EC_INTERNAL_ERROR, t('openTerminalInNewWindow.invalidPath'));
   }
 
   // 1) 创建一个 cwd 正确的新终端实例
@@ -94,11 +96,17 @@ export async function executeOpenTerminalInNewWindow(
   try {
     await vscode.commands.executeCommand(MOVE_INTO_NEW_WINDOW_COMMAND);
     logger?.info(`[commands] moved terminal to new window at ${cwd}`);
+    // [契约对齐] 纯 UI 命令:成功返回 summary(C6 从宽:中文文案待填充阶段接 i18n)
+    return okEnvelope(undefined, '已在独立窗口打开终端');
   } catch (err) {
     // 旧版 VS Code 可能没有该命令;终端已在主窗口创建,告诉用户。
     logger?.error(
       `[commands] moveIntoNewWindow failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     void vscode.window.showWarningMessage(t('openTerminalInNewWindow.moveFailed'));
+    // [契约对齐] 新窗口目标未达成(终端留在主窗口) → ok:false,兜底 INTERNAL_ERROR(登记缺口)
+    return errEnvelope(EC_INTERNAL_ERROR, t('openTerminalInNewWindow.moveFailed'), {
+      cwd,
+    });
   }
 }
