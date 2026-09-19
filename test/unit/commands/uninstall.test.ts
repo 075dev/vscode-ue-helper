@@ -73,8 +73,12 @@ describe('executeUninstall', () => {
     vi.clearAllMocks();
   });
 
-  it('无工作区根目录 → 弹警告并返回,不执行任何清理', async () => {
-    await executeUninstall(createLoggerMock(), undefined);
+  it('无工作区根目录 → 弹警告并返回 PROJECT_NOT_DETECTED envelope,不执行任何清理', async () => {
+    const result = await executeUninstall(createLoggerMock(), undefined);
+    // [Wave2 契约对齐] 无项目根 → 契约错误码 PROJECT_NOT_DETECTED
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('PROJECT_NOT_DETECTED');
+    expect(result.error?.message).toContain('No workspace root found.');
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('No workspace root found.'),
     );
@@ -84,7 +88,13 @@ describe('executeUninstall', () => {
     await makePluginLayout(tmpRoot);
     const helperDir = path.join(tmpRoot, '.vscode', 'vscodeuehelper');
 
-    await executeUninstall(createLoggerMock(), makeWorkspace(tmpRoot));
+    const result = await executeUninstall(createLoggerMock(), makeWorkspace(tmpRoot));
+
+    // [Wave2 契约对齐] 成功 → ok envelope,data.removed 携带清理清单
+    expect(result.ok).toBe(true);
+    expect(result.data?.removed).toContain('.clangd');
+    expect(result.data?.removed).toContain('.vscode/vscodeuehelper/');
+    expect(result.summary).toContain('.vscode/vscodeuehelper/');
 
     // 托管文件已删除
     await expect(fs.access(path.join(tmpRoot, '.clangd'))).rejects.toThrow();
@@ -110,7 +120,11 @@ describe('executeUninstall', () => {
     // 只创建项目根,不创建 .vscode/vscodeuehelper
     await fs.writeFile(path.join(tmpRoot, '.clangd'), 'CompileFlags:\n', 'utf-8');
 
-    await expect(executeUninstall(createLoggerMock(), makeWorkspace(tmpRoot))).resolves.toBeUndefined();
+    const result = await executeUninstall(createLoggerMock(), makeWorkspace(tmpRoot));
+    // [Wave2 契约对齐] 正常完成 → ok envelope;removed 为已处理目标 label
+    // (存量语义:fs.rm force 对不存在的文件不抛错,故列表含全部目标 label)
+    expect(result.ok).toBe(true);
+    expect(result.data?.removed).toContain('.clangd');
     await expect(fs.access(path.join(tmpRoot, '.clangd'))).rejects.toThrow();
   });
 });

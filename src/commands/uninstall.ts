@@ -18,6 +18,13 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { type Logger } from '@core/logger';
+import {
+  okEnvelope,
+  errEnvelope,
+  EC_PROJECT_NOT_DETECTED,
+  EC_INTERNAL_ERROR,
+  type Envelope,
+} from '@core/envelope';
 import { t } from '@i18n';
 import type { WorkspaceState } from '@core/workspace';
 
@@ -70,56 +77,67 @@ export async function executeUninstall(
   logger: Logger,
   // [Phase 9 SSoT] 唯一真相源 workspace.projectDir——删除 detection 与 workspaceFolders 双真相源反模式
   workspace?: WorkspaceState,
-): Promise<void> {
-  // [Phase 9 SSoT] 单一真相源；.clangd 路径用 WorkspaceState 派生
-  const root = workspace?.projectDir;
-  const clangdPath = workspace?.clangdConfigPath;
-  if (!root) {
-    void vscode.window.showWarningMessage(t('cmd.noWorkspaceRoot'));
-    return;
-  }
+): Promise<Envelope<{ removed: string[] }>> {
+  try {
+    // [Phase 9 SSoT] 单一真相源；.clangd 路径用 WorkspaceState 派生
+    const root = workspace?.projectDir;
+    const clangdPath = workspace?.clangdConfigPath;
+    if (!root) {
+      // 项目未检测到 → 契约错误码;UI 行为(警告弹窗)保持原样
+      const msg = t('cmd.noWorkspaceRoot');
+      void vscode.window.showWarningMessage(msg);
+      return errEnvelope(EC_PROJECT_NOT_DETECTED, msg);
+    }
 
-  const targets: CleanupTarget[] = [
-    // [Phase 9 SSoT] .clangd 路径用 WorkspaceState 派生，不走 path.join
-    { label: '.clangd', paths: [clangdPath ?? path.join(root, '.clangd')] },
-    { label: 'compile_commands.json', paths: [path.join(root, 'compile_commands.json')] },
-    {
-      label: '.vscode/.code-workspace.backup',
-      paths: [path.join(root, '.vscode', '.code-workspace.backup')],
-    },
-    {
-      label: '.cursor/rules/unreal-cpp.mdc',
-      paths: [path.join(root, '.cursor', 'rules', 'unreal-cpp.mdc')],
-    },
-    {
-      label: '.github/copilot-instructions.md',
-      paths: [path.join(root, '.github', 'copilot-instructions.md')],
-    },
-  ];
+    const targets: CleanupTarget[] = [
+      // [Phase 9 SSoT] .clangd 路径用 WorkspaceState 派生，不走 path.join
+      { label: '.clangd', paths: [clangdPath ?? path.join(root, '.clangd')] },
+      { label: 'compile_commands.json', paths: [path.join(root, 'compile_commands.json')] },
+      {
+        label: '.vscode/.code-workspace.backup',
+        paths: [path.join(root, '.vscode', '.code-workspace.backup')],
+      },
+      {
+        label: '.cursor/rules/unreal-cpp.mdc',
+        paths: [path.join(root, '.cursor', 'rules', 'unreal-cpp.mdc')],
+      },
+      {
+        label: '.github/copilot-instructions.md',
+        paths: [path.join(root, '.github', 'copilot-instructions.md')],
+      },
+    ];
 
-  const removed: string[] = [];
-  for (const t of targets) {
-    for (const p of t.paths) {
-      try {
-        await fs.rm(p, { recursive: true, force: true });
-        removed.push(t.label);
-      } catch {
-        // ignore — file may not exist
+    const removed: string[] = [];
+    for (const t of targets) {
+      for (const p of t.paths) {
+        try {
+          await fs.rm(p, { recursive: true, force: true });
+          removed.push(t.label);
+        } catch {
+          // ignore — file may not exist
+        }
       }
     }
-  }
 
-  // [F2-20/§8.8] .vscode/vscodeuehelper/ 不能整目录递归删除 —— addCompletions.h 与
-  // addMacroCompletions.h 声明保留用户编辑。只删托管文件,保留这两个文件。
-  const helperDir = path.join(root, '.vscode', 'vscodeuehelper');
-  if (await cleanupHelperDir(helperDir)) {
-    removed.push('.vscode/vscodeuehelper/');
-  }
+    // [F2-20/§8.8] .vscode/vscodeuehelper/ 不能整目录递归删除 —— addCompletions.h 与
+    // addMacroCompletions.h 声明保留用户编辑。只删托管文件,保留这两个文件。
+    const helperDir = path.join(root, '.vscode', 'vscodeuehelper');
+    if (await cleanupHelperDir(helperDir)) {
+      removed.push('.vscode/vscodeuehelper/');
+    }
 
-  void vscode.window.showInformationMessage(
-    removed.length > 0
-      ? t('uninstall.cleaned', { 0: removed.join(', ') })
-      : t('uninstall.cleanedEmpty'),
-  );
-  logger.info(`[uninstall] removed ${removed.length} target(s)`);
+    // summary 复用现有用户文案语义
+    const summary =
+      removed.length > 0
+        ? t('uninstall.cleaned', { 0: removed.join(', ') })
+        : t('uninstall.cleanedEmpty');
+    void vscode.window.showInformationMessage(summary);
+    logger.info(`[uninstall] removed ${removed.length} target(s)`);
+    return okEnvelope({ removed }, summary);
+  } catch (err) {
+    // 函数出口兜底:未知错误 → INTERNAL_ERROR
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error('[uninstall] unexpected error:', err);
+    return errEnvelope(EC_INTERNAL_ERROR, `卸载清理失败: ${msg}`);
+  }
 }
