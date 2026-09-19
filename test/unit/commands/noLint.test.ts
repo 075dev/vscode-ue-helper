@@ -62,15 +62,20 @@ describe('executeNoLint', () => {
     };
   }
 
-  it('无活动编辑器 → 提示并返回 false', async () => {
+  it('无活动编辑器 → 提示并返回 err envelope(INTERNAL_ERROR 缺口登记)', async () => {
     (vscode.window.activeTextEditor as unknown) = undefined;
     const show = vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>;
 
-    await expect(executeNoLint('current')).resolves.toBe(false);
+    // [envelope 对齐] 无编辑器不属取消(任务卡明示慎用 OPERATION_CANCELLED),
+    // 契约 9 项枚举无贴切码 → 兜底 INTERNAL_ERROR
+    await expect(executeNoLint('current')).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR' },
+    });
     expect(show).toHaveBeenCalled();
   });
 
-  it('多光标批量插入(忽略已屏蔽的行)', async () => {
+  it('多光标批量插入(忽略已屏蔽的行) → ok envelope', async () => {
     const editor = fakeEditor(['a();', 'b(); // NOLINT', 'c();'], [0, 1, 2]);
     const inserted: string[] = [];
     // executeNoLint 内部 editBuilder 回调无返回值,cb 按 void 标注
@@ -85,16 +90,38 @@ describe('executeNoLint', () => {
       },
     );
 
-    await expect(executeNoLint('current', editor as never)).resolves.toBe(true);
+    const env = await executeNoLint('current', editor as never);
+    // [envelope 对齐] 插入成功 → ok envelope,摘要含插入处数
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
+    expect(env.summary).toEqual(expect.stringContaining('2 处'));
     // 第 1/3 行插入,第 2 行(已有 NOLINT)跳过
     expect(inserted).toEqual([' // NOLINT', ' // NOLINT']);
   });
 
-  it('所有光标行都已屏蔽 → 不产生编辑,返回 false', async () => {
+  it('所有光标行都已屏蔽 → 不产生编辑,返回 ok envelope(幂等无操作)', async () => {
     // 光标在第 1 行,其上一行(第 0 行)已是 NOLINTNEXTLINE → 幂等跳过
     const editor = fakeEditor(['// NOLINTNEXTLINE', 'a();'], [1]);
 
-    await expect(executeNoLint('next', editor as never)).resolves.toBe(false);
+    const env = await executeNoLint('next', editor as never);
+    // [envelope 对齐] 幂等跳过 = 成功无操作(与旧行为一致:不产生编辑、不弹窗)
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
     expect(editor.edit).not.toHaveBeenCalled();
+  });
+
+  it('编辑未应用(edit resolve false) → err envelope(INTERNAL_ERROR 缺口登记)', async () => {
+    const editor = fakeEditor(['a();'], [0]);
+    editor.edit.mockImplementation(
+      (cb: (b: { insert: (pos: unknown, text: string) => void }) => void) => {
+        cb({ insert: () => undefined });
+        return Promise.resolve(false);
+      },
+    );
+
+    await expect(executeNoLint('current', editor as never)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR' },
+    });
   });
 });

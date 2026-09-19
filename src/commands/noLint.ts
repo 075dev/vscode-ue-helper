@@ -17,6 +17,7 @@
 import * as vscode from 'vscode';
 import { t } from '@i18n';
 import { type Logger } from '@core/logger';
+import { okEnvelope, errEnvelope, EC_INTERNAL_ERROR, type Envelope } from '@core/envelope';
 
 export type NoLintMode = 'current' | 'next';
 
@@ -91,17 +92,22 @@ export function planNoLintEdit(
  *
  * @param mode 'current' = 行尾 NOLINT；'next' = 上方 NOLINTNEXTLINE
  * @param editor 可注入编辑器（测试用）；默认当前活动编辑器
- * @returns 是否产生了实际编辑
+ * @returns 契约 envelope（noLintCurrentLine / noLintNextLine 共用,返回值语义一致）：
+ *   - 插入成功 → okEnvelope(摘要含插入处数)
+ *   - 无活动编辑器 → errEnvelope(用户未打开文件不属取消,契约 9 项枚举无贴切码,
+ *     按兜底规则取 EC_INTERNAL_ERROR,缺口登记见完成报告)
+ *   - 全部光标行已屏蔽 → okEnvelope(幂等无操作,与旧行为一致:不产生编辑、不弹窗)
+ *   - 编辑未应用(只读文档等) → errEnvelope(EC_INTERNAL_ERROR)
  */
 export async function executeNoLint(
   mode: NoLintMode,
   editor?: vscode.TextEditor,
   logger?: Logger,
-): Promise<boolean> {
+): Promise<Envelope> {
   const active = editor ?? vscode.window.activeTextEditor;
   if (!active) {
     void vscode.window.showInformationMessage(t('cmd.noLint.noEditor'));
-    return false;
+    return errEnvelope(EC_INTERNAL_ERROR, t('cmd.noLint.noEditor'));
   }
 
   // 多光标：逐个选区计算计划，跳过已屏蔽的行
@@ -115,13 +121,22 @@ export async function executeNoLint(
   }
   if (plans.length === 0) {
     logger?.info(`[noLint] ${mode}: all cursor lines already suppressed, nothing to do`);
-    return false;
+    // [envelope 对齐] 幂等跳过 = 成功无操作;摘要为 envelope 新增信息,非 UI 弹窗
+    return okEnvelope(undefined, '所选行均已包含 NOLINT 屏蔽注释，无需重复插入。');
   }
 
   // editor.edit 的回调同步执行完毕后 VS Code 才应用编辑,resolve 值为是否应用成功
-  return active.edit((editBuilder) => {
+  const applied = await active.edit((editBuilder) => {
     for (const plan of plans) {
       editBuilder.insert(new vscode.Position(plan.line, plan.character), plan.text);
     }
   });
+  if (!applied) {
+    // 文档只读等导致编辑未应用:契约枚举无贴切码,兜底 INTERNAL_ERROR(缺口登记见报告)
+    return errEnvelope(EC_INTERNAL_ERROR, 'NOLINT 屏蔽注释插入未能应用。', {
+      mode,
+      planned: plans.length,
+    });
+  }
+  return okEnvelope(undefined, `已插入 NOLINT 屏蔽注释（${plans.length} 处）。`);
 }

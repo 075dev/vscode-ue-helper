@@ -116,10 +116,14 @@ describe('executeEnableClangdProxy', () => {
   it('已激活时重新应用参数并提示重启', async () => {
     const clangd = createClangdHandlesMock({ isActive: true });
     clangd.proxyManager.reapply = vi.fn().mockResolvedValue(undefined) as never;
-    await executeEnableClangdProxy(config, logger, clangd as never);
+    const env = await executeEnableClangdProxy(config, logger, clangd as never);
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('reapply'));
     expect(clangd.proxyManager.reapply).toHaveBeenCalledOnce();
     expect(clangd.proxyManager.enable).not.toHaveBeenCalled();
+    // [envelope 对齐] 成功路径返回 ok envelope,摘要复用现有启用成功文案
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
+    expect(env.summary).toBe(t('proxy.enable.success'));
   });
 
   it('Given 默认 disabled When 首次启用 Then 不再写 enabled toggle，直接调 proxyManager.enable', async () => {
@@ -128,7 +132,7 @@ describe('executeEnableClangdProxy', () => {
     const clangd = createClangdHandlesMock({ config });
 
     // When
-    await executeEnableClangdProxy(config, logger, clangd as never);
+    const env = await executeEnableClangdProxy(config, logger, clangd as never);
 
     // Then
     expect(clangd.proxyManager.enable).toHaveBeenCalledOnce();
@@ -136,6 +140,9 @@ describe('executeEnableClangdProxy', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(config.update as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('proxy enabled successfully'));
+    // [envelope 对齐] 成功路径返回 ok envelope
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
   });
 
   it('Given proxyManager 启用失败 When 首次启用 Then 弹错误，不回滚 enabled toggle', async () => {
@@ -146,7 +153,7 @@ describe('executeEnableClangdProxy', () => {
     );
 
     // When
-    await executeEnableClangdProxy(config, logger, clangd as never);
+    const env = await executeEnableClangdProxy(config, logger, clangd as never);
 
     // Then
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -155,6 +162,10 @@ describe('executeEnableClangdProxy', () => {
     expect(
       vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
     ).toHaveBeenCalled();
+    // [envelope 对齐] 失败路径返回 err envelope,错误码 CLANGD_NOT_AVAILABLE(映射表直配)
+    expect(env.ok).toBe(false);
+    expect(env.error?.code).toBe('CLANGD_NOT_AVAILABLE');
+    expect(env.error?.message).toBe(t('proxy.enable.failed'));
   });
 });
 
@@ -179,7 +190,7 @@ describe('executeDisableClangdProxy', () => {
 
   it('禁用成功时恢复设置并显示成功消息', async () => {
     const clangd = createClangdHandlesMock();
-    await executeDisableClangdProxy(config, logger, clangd as never);
+    const env = await executeDisableClangdProxy(config, logger, clangd as never);
     expect(clangd.proxyManager.disable).toHaveBeenCalledOnce();
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(config.update as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
@@ -187,6 +198,10 @@ describe('executeDisableClangdProxy', () => {
       false,
     );
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('settings restored'));
+    // [envelope 对齐] 成功路径返回 ok envelope,摘要复用现有禁用成功文案
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
+    expect(env.summary).toBe(t('proxy.disable.success'));
   });
 
   it('禁用失败时显示错误消息', async () => {
@@ -194,11 +209,14 @@ describe('executeDisableClangdProxy', () => {
     clangd.proxyManager.disable = vi.fn<[], Promise<void>>(() =>
       Promise.reject(new Error('mock failure')),
     );
-    await executeDisableClangdProxy(config, logger, clangd as never);
+    const env = await executeDisableClangdProxy(config, logger, clangd as never);
     expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('failed'), expect.any(Error));
     expect(
       vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
     ).toHaveBeenCalled();
+    // [envelope 对齐] 失败路径返回 err envelope,错误码 CLANGD_NOT_AVAILABLE(最接近的 clangd 域码)
+    expect(env.ok).toBe(false);
+    expect(env.error?.code).toBe('CLANGD_NOT_AVAILABLE');
   });
 
   it('restart 失败但设置已恢复时，不弹"禁用失败"、弹成功提示', async () => {
@@ -213,7 +231,7 @@ describe('executeDisableClangdProxy', () => {
     );
 
     // When
-    await executeDisableClangdProxy(config, logger, clangd as never);
+    const env = await executeDisableClangdProxy(config, logger, clangd as never);
 
     // Then: 主流程按"设置恢复成功"收尾——弹成功提示，不弹失败
     expect(clangd.proxyManager.disable).toHaveBeenCalledOnce();
@@ -234,6 +252,9 @@ describe('executeDisableClangdProxy', () => {
       expect.any(Error),
     );
     expect(errorMock).not.toHaveBeenCalled();
+    // [envelope 对齐] restart 失败不影响 ok 结果(设置已恢复语义,与原行为一致)
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
   });
 });
 
@@ -266,7 +287,7 @@ describe('executeShowClangdProxyStatus', () => {
       logPath: '/tmp/clangd-proxy.log',
       realClangdPath: '/usr/bin/clangd',
     });
-    executeShowClangdProxyStatus(config, logger, clangd as never);
+    const env = executeShowClangdProxyStatus(config, logger, clangd as never);
     expect(showMock).toHaveBeenCalledOnce();
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Config Enabled'));
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Currently Active'));
@@ -280,6 +301,12 @@ describe('executeShowClangdProxyStatus', () => {
     expect(
       vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
     ).toHaveBeenCalled();
+    // [envelope 对齐] 只读命令恒成功,摘要复用现有状态弹窗文案
+    expect(env.ok).toBe(true);
+    expect(env.error).toBeUndefined();
+    expect(env.summary).toBe(
+      t('proxy.status.summary', { enabled: t('common.yes'), active: t('common.yes') }),
+    );
   });
 
   it('未配置路径时显示自动检测', () => {
@@ -293,9 +320,11 @@ describe('executeShowClangdProxyStatus', () => {
       hasBackup: false,
       logPath: undefined,
     });
-    executeShowClangdProxyStatus(configNoPath, logger, clangd as never);
+    const env = executeShowClangdProxyStatus(configNoPath, logger, clangd as never);
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('auto-detect'));
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('not set'));
+    // [envelope 对齐] 只读命令恒成功
+    expect(env.ok).toBe(true);
   });
 
   it('配置未启用但已激活时，enabled 与 active 两行文案各自正确', () => {
@@ -308,13 +337,15 @@ describe('executeShowClangdProxyStatus', () => {
       isActive: true,
       hasBackup: true,
     });
-    executeShowClangdProxyStatus(configDisabled, logger, clangd as never);
+    const env = executeShowClangdProxyStatus(configDisabled, logger, clangd as never);
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Config Enabled:  No'));
     expect(infoMock).toHaveBeenCalledWith(expect.stringContaining('Currently Active: Yes'));
     // 汇总弹窗同样区分 enabled 与 active
     expect(
       vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
     ).toHaveBeenCalledWith(expect.stringContaining('enabled=No, active=Yes'));
+    // [envelope 对齐] 摘要与弹窗文案一致,区分 enabled 与 active
+    expect(env.summary).toEqual(expect.stringContaining('enabled=No, active=Yes'));
   });
 });
 
