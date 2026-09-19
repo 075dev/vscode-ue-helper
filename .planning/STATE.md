@@ -2,8 +2,11 @@
 ql_state_version: '1.0'
 ql_version: '0.15.0'
 current_phase: 1
-status: discussed
+status: reviewed
 api_endpoints_count: 36
+review_verdict: approved
+review_rounds: 1
+reviewed_range: 263848e..ba8a897
 event_messages_count: 4
 ---
 # 项目状态
