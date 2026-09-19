@@ -205,18 +205,26 @@ describe('MCP tools', () => {
   // 2. context 缺失 / 未知工具
   // ============================================================
 
-  it('未设 context 时 callTool 同步返回 ok=false error', () => {
+  it('未设 context 时 callTool 同步返回 ok=false 契约错误(MCP_CONTEXT_NOT_INITIALIZED)', () => {
     setMCPContext(null);
     expect(getMCPContext()).toBeNull();
-    const parsed = JSON.parse(callTool('ue_build', {})) as { ok: boolean; error: string };
+    const parsed = JSON.parse(callTool('ue_build', {})) as {
+      ok: boolean;
+      error: { code: string; message: string };
+    };
     expect(parsed.ok).toBe(false);
-    expect(parsed.error).toMatch(/MCP context not initialized/);
+    expect(parsed.error.code).toBe('MCP_CONTEXT_NOT_INITIALIZED');
+    expect(parsed.error.message).toMatch(/MCP context not initialized/);
   });
 
-  it('未知工具返回 ok=false error', () => {
-    const parsed = JSON.parse(callTool('ue_unknown', {})) as { ok: boolean; error: string };
+  it('未知工具返回 ok=false 契约错误(UNKNOWN_TOOL)', () => {
+    const parsed = JSON.parse(callTool('ue_unknown', {})) as {
+      ok: boolean;
+      error: { code: string; message: string };
+    };
     expect(parsed.ok).toBe(false);
-    expect(parsed.error).toContain('Unknown tool: ue_unknown');
+    expect(parsed.error.code).toBe('UNKNOWN_TOOL');
+    expect(parsed.error.message).toContain('Unknown tool: ue_unknown');
   });
 
   // ============================================================
