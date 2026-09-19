@@ -241,6 +241,10 @@
   "cmd.editorRunning.buildAnyway": "Build Anyway",
   "cmd.copyBuildCommand.success": "UBT {mode} command copied to clipboard.",
   "cmd.noLint.noEditor": "Open a C++ file to insert a NOLINT comment.",
+  "cmd.switchHeaderSource.noEditor": "Open a C++ source or header file first.",
+  "cmd.switchHeaderSource.unsupported": "\"{name}\" is not a C++ source/header file.",
+  "cmd.switchHeaderSource.notFound": "No counterpart source/header file found for \"{name}\".",
+  "cmd.switchHeaderSource.pickPlaceholder": "Multiple counterpart files found — pick one",
 
   "clangd.newFilesHint": "{count} new C++ file(s) detected. Update compile_commands.json so clangd can see them?",
   "clangd.newFilesHint.update": "Update compile_commands.json",

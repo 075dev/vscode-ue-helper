@@ -91,12 +91,16 @@ export function resolveEditorPath(engineRoot: string, platform: string): string 
 }
 
 /**
- * Live Coding console command — sent via `UnrealEditor-Cmd -ExecCmds="LiveCoding.Compile"`.
+ * Live Coding 命令 —— UBT -LiveCoding 方式(UE 官方等价于编辑器内 Live Coding 按钮)。
+ *
+ * UBT 连接正在运行的编辑器实例的 Live Coding server(编译变更模块 → 编辑器
+ * 热补丁),全程不启动新的编辑器实例;编辑器未运行时 UBT 回退为普通构建。
+ *
+ * bugfix-001:旧实现 spawn 不带 -Project 的全新 UnrealEditor.exe -ExecCmds,
+ * UE 弹出项目管理器(表现为"打开一个新的项目"),且热重载作用在新实例上。
  */
-export function resolveLiveCodingCmd(engineRoot: string, platform: string): UBTCommand {
-  const editor = resolveEditorPath(engineRoot, platform);
-  return {
-    file: editor,
-    args: ['-ExecCmds="LiveCoding.Compile"', '-nullrhi', '-unattended'],
-  };
+export function resolveLiveCodingCmd(args: UBTArgs): UBTCommand {
+  const cmd = buildUBTCommand(args);
+  cmd.args.push('-LiveCoding');
+  return cmd;
 }

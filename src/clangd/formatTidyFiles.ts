@@ -2,8 +2,8 @@
  * formatTidyFiles —— createProject 的可选脚手架:.clang-format / .clang-tidy
  *
  * 模式借鉴 boocs/unreal-clangd 的 creation.tidy / .clang-format 基础文件生成:
- *   - .clang-format:Epic 官方风格基础(UCppType 风格要点:4 空格缩进、
- *     指针左对齐、120 列宽、模板声明折行)
+ *   - .clang-format:UE5 C++ 编码标准(Tab 缩进 4 宽、Allman 大括号、UE 反射宏
+ *     识别;取值对齐 TensorWorks/UE-Clang-Format,见 add-001)
  *   - .clang-tidy:启用 bugprone / performance / readability 三族常用检查,
  *     并**默认禁用 readability-static-accessed-through-instance** ——
  *     boocs 项目记录的已知问题:该检查会让 clang-tidy 在 Lyra 类项目上崩溃
@@ -39,34 +39,80 @@ export interface ScaffoldFormatTidyOptions {
 }
 
 /**
- * .clang-format 基础模板 —— UE C++ 官方风格要点
+ * .clang-format 模板 —— UE5 C++ 编码标准风格(add-001)
  *
- * 说明:UE 自带 Epic 的定制 clang-format 配置随引擎分发
- * (Engine/Build/Tools/等),这里给不依赖引擎路径的"够用"基础版;
- * 已有引擎配置的用户文件不会被覆盖。
+ * 基于 Epic UE 编码标准:Tab 缩进(4 宽)、Allman 大括号、UE 反射宏识别;
+ * 具体取值对齐社区验证配置 TensorWorks/UE-Clang-Format(MIT)。
+ * UE 自带 Epic 定制 clang-format 配置随引擎分发(非官方完整版),
+ * 这里给不依赖引擎路径的"开箱即用"版;已有用户文件不会被覆盖。
  */
-export const CLANG_FORMAT_TEMPLATE = `# Unreal Engine C++ 基础格式化配置(vscode-ue-helper 生成,可自由修改)
+export const CLANG_FORMAT_TEMPLATE = `# Unreal Engine C++ 格式化配置(vscode-ue-helper 生成,可自由修改)
+# 基于 Epic UE 编码标准:Tab 缩进(4 宽)、Allman 大括号、UE 反射宏识别。
+# 需要 clang-format/clangd >= 13(StatementMacros/BeforeLambdaBody 等选项),更旧版本会静默回退内置风格。
 ---
-BasedOnStyle: LLVM
 Language: Cpp
+BasedOnStyle: LLVM
+
+# UE 反射宏按语句宏处理,避免 GENERATED_BODY()/UPROPERTY 等宏后的代码被错误缩进折行
+StatementMacros: ['UPROPERTY', 'UFUNCTION', 'UCLASS', 'USTRUCT', 'UENUM', 'UINTERFACE', 'GENERATED_BODY']
+
+# 缩进:UE 编码标准使用 Tab(4 字符宽);case 标签、预处理指令、命名空间内容跟随缩进
+UseTab: Always
+TabWidth: 4
 IndentWidth: 4
-UseTab: Never
-ColumnLimit: 120
 AccessModifierOffset: -4
-PointerAlignment: Left
-AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: Never
-AlwaysBreakTemplateDeclarations: Yes
+IndentCaseLabels: true
+IndentPPDirectives: BeforeHash
+NamespaceIndentation: All
+
+# 大括号:Allman 风格(类/函数/控制语句大括号均换行,大括号本身不缩进)
 BreakBeforeBraces: Custom
 BraceWrapping:
+  AfterCaseLabel: true
   AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
   AfterFunction: true
-  AfterNamespace: false
+  AfterNamespace: true
   AfterStruct: true
-  BeforeCatch: false
-  BeforeElse: false
-SortIncludes: CaseSensitive
-IncludeBlocks: Preserve
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: true
+  IndentBraces: false
+
+# 行宽 0 = 不强制折行:UE_LOG/Slate 长表达式被硬折可读性差;120 列软标准自行把握
+ColumnLimit: 0
+
+# 短语句:UE 枚举成员独立成行;函数体不并入单行;空块与单行 lambda 保持紧凑
+AllowShortBlocksOnASingleLine: Empty
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLambdasOnASingleLine: All
+
+# 指针/引用靠左(int* Ptr)——UE 编码标准
+PointerAlignment: Left
+
+# 换行细节:构造函数初始化列表逗号前置、二元运算符换行在赋值号前,贴近引擎源码风格
+AlignAfterOpenBracket: DontAlign
+AlignOperands: DontAlign
+AlignTrailingComments: true
+AlignEscapedNewlines: Left
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: AfterColon
+BreakStringLiterals: false
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+Cpp11BracedListStyle: false
+EmptyLineBeforeAccessModifier: LogicalBlock
+SpaceBeforeCaseColon: false
+
+# include 不自动排序:UE 工程的 include 顺序有自身规范,自动排序可能破坏编译语义
+SortIncludes: false
 `;
 
 /**

@@ -31,6 +31,7 @@ import { executeShowControlPanel } from './showControlPanel';
 import { executeRefreshProjectExplorer } from './refreshProjectExplorer';
 import { executeOpenProjectExplorerFile } from './openProjectExplorerFile';
 import { executeNoLint } from './noLint';
+import { executeSwitchHeaderSource } from './switchHeaderSource';
 import { executeCopyBuildCommand } from './copyBuildCommand';
 import type { ProjectExplorerProvider } from '@ui/projectExplorer';
 import type { StatusBarManager } from '@ui/statusBar';
@@ -110,6 +111,13 @@ export function activateCommands(
   );
   track('vscodeUEHelper.noLintNextLine', (editor) =>
     executeNoLint('next', editor as vscode.TextEditor | undefined, logger),
+  );
+  // [bug-fix] UE 惯例感知的源/头切换:clangd 的 switchSourceHeader 在 UE 项目上
+  // 因索引投票 + 平票取字典序最小路径,常从头文件误切到 ObjectMacros.h。
+  track('vscodeUEHelper.switchHeaderSource', (editor) =>
+    executeSwitchHeaderSource(editor as vscode.TextEditor | undefined, logger).catch(
+      (err: unknown) => logger.error('[switchHeaderSource] unexpected error:', err),
+    ),
   );
   // [bug-fix] 重试首次初始化:失败弹窗的 "重试" 按钮 + 用户手动命令面板触发。
   // 复用同一套 deps(全 ready),无需再走 activation 起点。

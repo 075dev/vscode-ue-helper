@@ -241,6 +241,10 @@
   "cmd.editorRunning.buildAnyway": "仍然构建 / Build Anyway",
   "cmd.copyBuildCommand.success": "UBT {mode} 命令已复制到剪贴板。 / UBT {mode} command copied to clipboard.",
   "cmd.noLint.noEditor": "请先打开 C++ 文件再插入 NOLINT 注释。 / Open a C++ file to insert a NOLINT comment.",
+  "cmd.switchHeaderSource.noEditor": "请先打开 C++ 源文件或头文件。 / Open a C++ source or header file first.",
+  "cmd.switchHeaderSource.unsupported": "\"{name}\" 不是 C++ 源文件/头文件。 / \"{name}\" is not a C++ source/header file.",
+  "cmd.switchHeaderSource.notFound": "未找到 \"{name}\" 对应的源文件/头文件。 / No counterpart source/header file found for \"{name}\".",
+  "cmd.switchHeaderSource.pickPlaceholder": "找到多个对应文件，请选择 / Multiple counterpart files found — pick one",
 
   "clangd.newFilesHint": "检测到 {count} 个新增 C++ 文件。是否更新 compile_commands.json 以便 clangd 识别? / {count} new C++ file(s) detected. Update compile_commands.json so clangd can see them?",
   "clangd.newFilesHint.update": "更新 compile_commands.json / Update compile_commands.json",

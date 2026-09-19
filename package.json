@@ -61,7 +61,8 @@
     "onCommand:vscodeUEHelper.openProjectExplorerFile",
     "onCommand:vscodeUEHelper.copyBuildCommand",
     "onCommand:vscodeUEHelper.noLintCurrentLine",
-    "onCommand:vscodeUEHelper.noLintNextLine"
+    "onCommand:vscodeUEHelper.noLintNextLine",
+    "onCommand:vscodeUEHelper.switchHeaderSource"
   ],
   "main": "out/extension.js",
   "contributes": {
@@ -214,6 +215,18 @@
         "command": "vscodeUEHelper.noLintNextLine",
         "title": "%cmd.noLintNextLine.title%",
         "category": "UE Helper"
+      },
+      {
+        "command": "vscodeUEHelper.switchHeaderSource",
+        "title": "%cmd.switchHeaderSource.title%",
+        "category": "UE Helper"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "vscodeUEHelper.switchHeaderSource",
+        "key": "alt+o",
+        "when": "editorTextFocus && editorLangId == 'cpp' || editorTextFocus && editorLangId == 'c'"
       }
     ],
     "viewsContainers": {
@@ -256,6 +269,11 @@
         }
       ],
       "editor/context": [
+        {
+          "command": "vscodeUEHelper.switchHeaderSource",
+          "when": "editorTextFocus && editorLangId == 'cpp' || editorTextFocus && editorLangId == 'c'",
+          "group": "9_uehelper@0"
+        },
         {
           "command": "vscodeUEHelper.noLintCurrentLine",
           "when": "editorTextFocus",

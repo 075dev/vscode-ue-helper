@@ -49,6 +49,7 @@
   "cmd.copyBuildCommand.title": "Copy UBT Build Command",
   "cmd.noLintCurrentLine.title": "Suppress clang-tidy on Current Line (// NOLINT)",
   "cmd.noLintNextLine.title": "Suppress clang-tidy on Next Line (// NOLINTNEXTLINE)",
+  "cmd.switchHeaderSource.title": "Switch Between Source/Header File (UE-aware)",
   "view.controlPanel.name": "Control Panel",
   "view.projectExplorer.name": "Project Explorer"
 }

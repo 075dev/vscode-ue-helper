@@ -30,7 +30,7 @@ export async function executeLiveCoding(
   }
 
   // 选目标 + 触发放在同一 progress 内，避免解析阶段无反馈像"卡住"
-  await withProgress(t('liveCoding.running'), async (report) => {
+  await withProgress(t('liveCoding.running'), async (report, token) => {
     // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
     report('Resolving project / engine...');
     const project = await resolveProjectOrPick({
@@ -57,13 +57,41 @@ export async function executeLiveCoding(
 
     logger.info(`[liveCoding] triggering for ${project.name} on ${engine.version}`);
     try {
-      report('Sending Live Coding recompile request...');
-      await triggerLiveCoding({
-        engineRoot: engine.path,
-        platform: config.platform,
-        projectPath: project.path,
-      });
-      void vscode.window.showInformationMessage(t('liveCoding.triggered', { 0: project.name }));
+      report('Running UBT Live Coding compile...');
+      // Bridge VS Code's CancellationToken to a Web AbortSignal so runBuild
+      // can kill the child process when the user clicks Cancel(与 build.ts 同模式)。
+      const controller = new AbortController();
+      const onCancel = (): void => controller.abort();
+      if (token.isCancellationRequested) {
+        void onCancel();
+      } else {
+        token.onCancellationRequested(onCancel);
+      }
+      const outcome = await triggerLiveCoding(
+        {
+          engineRoot: engine.path,
+          platform: config.platform,
+          projectPath: project.path,
+          configuration: config.configuration,
+          targetType: config.target,
+        },
+        // UBT 编译可能持续数十秒到几分钟,把进度推给 withProgress 避免"像卡住"
+        { signal: controller.signal, onProgress: (chunk) => report(chunk) },
+      );
+      if (!outcome.ok) {
+        void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: outcome.error.message }));
+      } else if (outcome.value.cancelled) {
+        // [F2-1] 用户取消:中性提示,不弹失败警告
+        void vscode.window.showInformationMessage(t('cmd.buildCancelled'));
+      } else if (outcome.value.exitCode === 0) {
+        void vscode.window.showInformationMessage(t('liveCoding.triggered', { 0: project.name }));
+      } else {
+        // 编译失败:附 UBT 输出尾部几行帮助定位
+        const tail = outcome.value.output.slice(-5).join('\n');
+        void vscode.window.showErrorMessage(
+          t('liveCoding.failed', { 0: `UBT exit ${outcome.value.exitCode}\n${tail}` }),
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: msg }));

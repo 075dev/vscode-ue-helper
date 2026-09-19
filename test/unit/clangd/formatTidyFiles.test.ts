@@ -95,3 +95,42 @@ describe('scaffoldClangFormatAndTidy', () => {
     expect(CLANG_FORMAT_TEMPLATE).toContain('IndentWidth: 4');
   });
 });
+
+describe('.clang-format 模板内容符合 UE5 C++ 风格(add-001 契约)', () => {
+  // 契约:模板须对齐 Epic UE 编码标准与社区验证配置(TensorWorks/UE-Clang-Format, MIT)
+  it('识别 UE 反射宏(StatementMacros),避免 GENERATED_BODY/UPROPERTY 后代码错乱', () => {
+    for (const macro of ['UPROPERTY', 'UFUNCTION', 'UCLASS', 'USTRUCT', 'UENUM', 'GENERATED_BODY']) {
+      expect(CLANG_FORMAT_TEMPLATE).toContain(macro);
+    }
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/StatementMacros:\s*\[/);
+  });
+
+  it('Allman 大括号:控制语句/while/case 的大括号换行(UE 官方代码风格)', () => {
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/AfterControlStatement:\s*true/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/BeforeWhile:\s*true/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/AfterCaseLabel:\s*true/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/BreakBeforeBraces:\s*Custom/);
+  });
+
+  it('UE 枚举不折行、case 标签缩进、预处理指令缩进、命名空间内容缩进', () => {
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/AllowShortEnumsOnASingleLine:\s*false/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/IndentCaseLabels:\s*true/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/IndentPPDirectives:\s*BeforeHash/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/NamespaceIndentation:\s*All/);
+  });
+
+  it('UE 编码标准缩进:Tab(4 字符宽)', () => {
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/UseTab:\s*Always/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/TabWidth:\s*4/);
+  });
+
+  it('不强制折行(ColumnLimit: 0)且不自动排序 include(UE include 顺序有自身规范)', () => {
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/ColumnLimit:\s*0/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/SortIncludes:\s*false/);
+  });
+
+  it('指针靠左 + 构造函数初始化列表逗号前置(引擎源码风格)', () => {
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/PointerAlignment:\s*Left/);
+    expect(CLANG_FORMAT_TEMPLATE).toMatch(/BreakConstructorInitializers:\s*BeforeComma/);
+  });
+});

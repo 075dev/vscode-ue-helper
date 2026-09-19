@@ -18,15 +18,18 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **UE 惯例感知的源/头文件切换命令**：`vscodeUEHelper.switchHeaderSource`（快捷键 `Alt+O`，已挂编辑器右键菜单）。修复"从头文件切换经常跳到引擎 `ObjectMacros.h`"的问题——该症状来自 clangd 扩展 `clangd.switchSourceHeader` 的实现：它按"头文件符号在索引中的定义位置"投票选目标、平票取路径字典序最小者，UE 头文件符号定义分散且后台索引不完整时票源稀疏，`Engine/Source/Runtime/CoreUObject/Public/UObject/ObjectMacros.h` 的路径字典序几乎最靠前于是屡屡胜出（本插件预包含链进一步放大了引擎公共头在索引中的富集度）。新命令不依赖索引，改用确定性路径规则：同目录同 stem 互换扩展名 → `Public`↔`Private`↔`Classes` 目录互换（保留子路径，插件模块路径同样支持）→ `X.generated.h` 剥 `.generated` 双侧匹配 → `.inl` 对应主头文件 → workspace 同 stem 搜索兜底（排除 Intermediate/Binaries 等目录，多候选弹 QuickPick）。
 - **编辑器感知构建**（借鉴 [engine-link](https://github.com/rmoubayed/engine-link) / [UE Build Bridge](https://marketplace.visualstudio.com/items?itemName=Alingkumo.unreal-engine-link) 的 editor-aware build）：`build` 前通过 `tasklist` 检测 Unreal Editor 是否运行，运行中则提示改走 Live Coding（避免 DLL 锁定失败），`editorAwareBuild` 设置可关闭；MCP / silent 调用自动跳过。
 - **新增源文件提示刷新 compile_commands**（借鉴 [boocs/unreal-clangd](https://github.com/boocs/unreal-clangd)）：增量 watcher 现在区分 add/change/unlink，检测到新增 C++ 文件时按 10 分钟节流提示一键刷新编译数据库（`CompileCommandsRefreshHint`）。
 - **MCP 工具扩到 9 个**（对齐 engine-link / UE Build Bridge 的工具面）：新增 `ue_rebuild`、`ue_clean`（独立工具名）与 `ue_get_build_errors` —— 返回最近一次构建的结构化诊断（error/warning 计数、出错文件去重、截断明细），让 AI 代理闭环"构建 → 读错误 → 修复"。
 - **clang-tidy 行级屏蔽命令**（借鉴 boocs/unreal-clangd）：`vscodeUEHelper.noLintCurrentLine`（行尾 `// NOLINT`）与 `vscodeUEHelper.noLintNextLine`（上方 `// NOLINTNEXTLINE`），幂等跳过已屏蔽行，支持多光标，已挂编辑器右键菜单。
 - **createProject 可选生成 .clang-format / .clang-tidy**（借鉴 boocs/unreal-clangd）：`scaffold.clangFormat`（默认开）与 `scaffold.clangTidy`（默认关）控制；只创建缺失项不覆盖已有配置；模板显式禁用会让 clang-tidy 在 Lyra 类项目崩溃的 `readability-static-accessed-through-instance`。
 - **复制 UBT 构建命令**（借鉴 [vscode-boreal](https://github.com/mainframeindustries/vscode-boreal)）：`vscodeUEHelper.copyBuildCommand` 把当前项目/引擎/配置对应的 UBT 命令行（含 -Rebuild/-Clean）复制到剪贴板，便于在任意终端复现构建问题。
+- **.clang-format 模板升级为 UE5 C++ 编码标准风格**：`scaffoldClangFormatAndTidy` 生成的 `.clang-format` 从"基础版"重写为对齐 Epic UE 编码标准 + 社区验证配置（[TensorWorks/UE-Clang-Format](https://github.com/TensorWorks/UE-Clang-Format)，MIT）的完整版——UE 反射宏识别（`StatementMacros`：GENERATED_BODY/UPROPERTY 等宏后的代码不再被错误缩进折行）、Allman 大括号（if/for/while 大括号换行）、Tab 缩进（4 宽，UE 标准）、case 标签/预处理指令/命名空间内容缩进、UE 枚举不折行、`ColumnLimit: 0` 不强制折行（UE_LOG/Slate 长表达式友好）、include 不自动排序（避免破坏编译语义）；需 clang-format/clangd ≥ 13（模板头已注明）。只影响新生成的文件，已存在的用户配置不覆盖。
 
 ### Fixed
 
+- **Live Coding 不再打开新项目实例**：点击 Live Coding 按钮此前 spawn 一个不带 `-Project` 的全新 `UnrealEditor.exe`（`-ExecCmds` 方式）——UE 弹出项目管理器且热重载作用在错误实例上。已改为 UBT `-LiveCoding` 官方方式：直接连接正在运行的编辑器触发热重载，不弹任何新窗口（编辑器未运行时回退为普通构建）；编译期间进度实时可见、可取消，失败时弹出 UBT 输出尾部错误。
 - **设置/命令/视图的中文说明从未生效（非标准本地化字段）**：`package.json` 此前用 `description@zh` / `title@zh` / `name@zh` 字段写中文——VS Code 会忽略这些非标准字段，中文用户在设置界面只看到英文；且中文语言文件误命名为 `package.nls.zh.json`（VS Code 只加载 `package.nls.zh-cn.json`）。已全量迁移到标准 nls 机制：`package.json` 用 `%key%` 占位符，`package.nls.json`（英文默认）与 `package.nls.zh-cn.json`（简体中文）提供翻译——覆盖 22 个设置项（含 `progressLocation` 的枚举描述与 `clangd.userAddFlags` 的 markdown 说明）、26 个命令标题、2 个侧边栏视图名。新增 `nlsPlaceholders.test.ts` 守护测试（占位符缺键/孤儿键/`@zh` 回归/文件名）防再次失效。
 - **控制面板分页无法切换（webview 脚本被注释截断）**：`controlPanel.html.ts` 内联脚本注释中含字面 `</script` 序列——HTML 解析器据此在注释中间提前终止 `<script>` 块，整个 IIFE 从未执行，分页/按钮/保存/状态刷新全部失灵，残余脚本文本被当作正文渲染。已改写注释并加回归测试（生成的 HTML 必须恰好一对 script 开合标签）。
 - **激活提示**: 补齐 `package.json#activationEvents` 的 18 个缺失 `onCommand` 事件,使全部 22 个命令 ID 在被点击时立即触发激活,不再显示 "Extension 'VSCodeUEHelper' is activating…"。仓库根 AGENTS.md 与 `src/commands/AGENTS.md` 同步把"在 `activationEvents` 加 `onCommand`"纳入新增命令铁律,避免回归。

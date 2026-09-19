@@ -49,6 +49,7 @@
   "cmd.copyBuildCommand.title": "复制 UBT 构建命令",
   "cmd.noLintCurrentLine.title": "屏蔽当前行的 clang-tidy (// NOLINT)",
   "cmd.noLintNextLine.title": "屏蔽下一行的 clang-tidy (// NOLINTNEXTLINE)",
+  "cmd.switchHeaderSource.title": "在源文件/头文件之间切换 (UE 惯例)",
   "view.controlPanel.name": "控制面板",
   "view.projectExplorer.name": "项目目录"
 }
