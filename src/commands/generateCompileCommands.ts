@@ -40,6 +40,7 @@ import {
   EC_OPERATION_CANCELLED,
   EC_PROJECT_NOT_DETECTED,
   EC_UBT_NOT_FOUND,
+  type Envelope,
 } from '@core/envelope';
 // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
@@ -54,10 +55,9 @@ export async function executeGenerateCompileCommands(
   // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5)——无项目 →
   // PROJECT_NOT_DETECTED,无引擎 → UBT_NOT_FOUND,取消 QuickPick → OPERATION_CANCELLED,
   // UBT 管线失败 → BUILD_FAILED,成功 → okEnvelope(data.linkPath)。
-  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
-  // 本任务边界外)参数锁定 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
-  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
-): Promise<any> {
+  // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
+  // 声明收紧为精确的 Promise<Envelope<{ linkPath: string }>>(泛型以实际 data 形状为准)。
+): Promise<Envelope<{ linkPath: string }>> {
   // [Phase 8] cancelHeaderWatcherTrigger removed — headerWatcher.ts deleted
 
   // [Phase 11 SSoT] generateCompileCommands 是「显式重生成」语义，picker 优先于 selection，

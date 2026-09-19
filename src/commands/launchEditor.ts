@@ -19,6 +19,7 @@ import {
   EC_INTERNAL_ERROR,
   EC_PROJECT_NOT_DETECTED,
   EC_UBT_NOT_FOUND,
+  type Envelope,
 } from '@core/envelope';
 
 export async function executeLaunchEditor(
@@ -30,11 +31,10 @@ export async function executeLaunchEditor(
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
   // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5)——未找到 .uproject →
-  // PROJECT_NOT_DETECTED(契约 404),成功 → okEnvelope(summary 复用现有文案)。
-  // 声明用 Promise<any> 而非 Promise<Envelope>:MCP 层 dispatch(src/mcp/tools.ts,
-  // 本任务边界外)参数锁定 Promise<void>,Promise<Envelope> 对其不可赋值(TS2322);
-  // dispatch 放宽为 Promise<unknown> 后应收紧回 Promise<Envelope>。
-): Promise<any> {
+  // PROJECT_NOT_DETECTED(契约 404),成功 → okEnvelope(summary 复用现有文案,data 恒为空)。
+  // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
+  // 声明收紧为精确的 Promise<Envelope<undefined>>(成功路径无 data)。
+): Promise<Envelope<undefined>> {
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({
     detection,
