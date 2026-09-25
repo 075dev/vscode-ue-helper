@@ -194,11 +194,18 @@ describe('MCP tools', () => {
     expect(MCP_TOOLS.find((t) => t.name === 'ue_toggle_completion_mode')).toBeUndefined();
   });
 
-  it('ue_build schema 包含 mode enum', () => {
+  it('ue_build schema 包含 mode enum 与 module 属性', () => {
     const tool = MCP_TOOLS.find((t) => t.name === 'ue_build');
     expect(tool).toBeDefined();
-    const props = tool?.inputSchema.properties as Record<string, { enum?: string[] }>;
+    const props = tool?.inputSchema.properties as Record<
+      string,
+      { enum?: string[]; type?: string; description?: string }
+    >;
     expect(props.mode?.enum).toEqual(['build', 'rebuild', 'clean']);
+    // [add-002] module 可选参数:schema 有描述,无 enum
+    expect(props.module?.type).toBe('string');
+    expect(props.module?.description).toContain('UBT -Module=');
+    expect(props.module?.enum).toBeUndefined();
   });
 
   // ============================================================
@@ -231,6 +238,7 @@ describe('MCP tools', () => {
   // 3. 6 个 case dispatch + silent = true 透传
   // ============================================================
 
+  // [add-002] ue_build dispatch 带 statusBar/module 占位(silent 后两个位置参数)
   it('ue_build dispatch 到 executeBuild(mode=rebuild, ..., silent=true)', async () => {
     await expectDispatched('ue_build', mockExecuteBuild, { mode: 'rebuild' }, [
       'rebuild',
@@ -239,6 +247,8 @@ describe('MCP tools', () => {
       fakeDetection,
       fakeWorkspace,
       true,
+      undefined,
+      undefined,
     ]);
   });
 
@@ -253,12 +263,109 @@ describe('MCP tools', () => {
       fakeDetection,
       fakeWorkspace,
       true,
+      undefined,
+      undefined,
     );
   });
 
   it('ue_build 非法 mode 字符串 normalize 为 build', () => {
     const parsed = JSON.parse(callTool('ue_build', { mode: 'garbage' })) as { mode?: string };
     expect(parsed.mode).toBe('build');
+  });
+
+  // ============================================================
+  // 3.2 [add-002] ue_build 单模块过滤(module 参数)
+  // ============================================================
+
+  it('ue_build 带 module 透传到 executeBuild 第 8 参', async () => {
+    await expectDispatched('ue_build', mockExecuteBuild, { module: 'Foo' }, [
+      'build',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+      undefined,
+      'Foo',
+    ]);
+    // dispatch 响应无 warning
+    const parsed = JSON.parse(callTool('ue_build', { module: 'Foo' })) as { warning?: string };
+    await flushMicrotasks();
+    expect(parsed.warning).toBeUndefined();
+  });
+
+  it('ue_build mode=rebuild 携带 module → 忽略 module 并返回 warning', async () => {
+    const parsed = JSON.parse(
+      callTool('ue_build', { mode: 'rebuild', module: 'Foo' }),
+    ) as { ok: boolean; mode?: string; warning?: string };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.mode).toBe('rebuild');
+    expect(parsed.warning).toContain('module ignored');
+    await flushMicrotasks();
+    expect(mockExecuteBuild).toHaveBeenCalledWith(
+      'rebuild',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('ue_build mode=clean 携带 module → 同样忽略并返回 warning', async () => {
+    const parsed = JSON.parse(callTool('ue_build', { mode: 'clean', module: 'Foo' })) as {
+      warning?: string;
+    };
+    expect(parsed.warning).toContain('module ignored');
+    await flushMicrotasks();
+    expect(mockExecuteBuild).toHaveBeenCalledWith(
+      'clean',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('ue_build module 为空白字符串时视为未提供(不透传,无 warning)', async () => {
+    const parsed = JSON.parse(callTool('ue_build', { module: '   ' })) as { warning?: string };
+    expect(parsed.warning).toBeUndefined();
+    await flushMicrotasks();
+    expect(mockExecuteBuild).toHaveBeenCalledWith(
+      'build',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('[评审 major] ue_build module 含 cmd 元字符时白名单拒绝(warning,不透传)', async () => {
+    // 命令注入样本:引号提前闭合 -Module=" 引出 & calc
+    const parsed = JSON.parse(
+      callTool('ue_build', { module: 'x" & calc & "' }),
+    ) as { ok: boolean; warning?: string };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.warning).toContain('ignored');
+    await flushMicrotasks();
+    expect(mockExecuteBuild).toHaveBeenCalledWith(
+      'build',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+      undefined,
+      undefined,
+    );
   });
 
   it('ue_launch_editor dispatch silent=true', async () => {
@@ -405,6 +512,47 @@ describe('MCP tools', () => {
     expect(parsed.build.filesWithErrors).toEqual(['C:/proj/Source/A.cpp', 'C:/proj/Source/B.cpp']);
     expect(parsed.build.diagnostics).toHaveLength(3);
     expect(parsed.build.diagnosticsTruncated).toBe(false);
+  });
+
+  it('[add-002] ue_get_build_errors 快照带 module 时 build.module 透出', () => {
+    rememberBuildSnapshot({
+      mode: 'build',
+      module: 'XianDreamwalking',
+      ok: true,
+      cancelled: false,
+      exitCode: 0,
+      durationMs: 800,
+      finishedAtIso: '2026-09-25T00:00:00.000Z',
+      diagnostics: [],
+    });
+
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      ok: boolean;
+      hasResult: boolean;
+      build: { module?: string; errorCount: number };
+    };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.hasResult).toBe(true);
+    expect(parsed.build.module).toBe('XianDreamwalking');
+  });
+
+  it('[add-002] ue_get_build_errors 全量构建快照无 module 字段', () => {
+    rememberBuildSnapshot({
+      mode: 'build',
+      ok: true,
+      cancelled: false,
+      exitCode: 0,
+      durationMs: 800,
+      finishedAtIso: '2026-09-25T00:00:00.000Z',
+      diagnostics: [],
+    });
+
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      build: { module?: string };
+    };
+
+    expect(parsed.build.module).toBeUndefined();
   });
 
   // ============================================================

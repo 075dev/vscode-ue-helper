@@ -46,6 +46,8 @@ type Mode = 'build' | 'rebuild' | 'clean';
 /** okEnvelope 的 data 形状(契约 openapi.yaml components.schemas.BuildResult,不含 summary 位) */
 type BuildResultData = {
   mode: Mode;
+  /** [add-002] 单模块过滤(UBT -Module=);全 target 构建时缺省 */
+  module?: string;
   exitCode: number;
   durationMs: number;
 };
@@ -71,6 +73,9 @@ export async function executeBuild(
   silent: boolean = false,
   // [F2-14/W16] 状态栏构建反馈；未注入时仅走 withProgress / 通知
   statusBar?: StatusBarManager,
+  // [add-002] UBT -Module= 单模块过滤;仅 mode=build 语义(MCP 层已拦截 rebuild/clean),
+  // 只编译不链接,定位是快速验证编译错误
+  module?: string,
   // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5,见 @core/envelope):
   // 成功 okEnvelope(data: BuildResult, summary) / 失败 errEnvelope(契约全局错误码)。
   // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
@@ -82,7 +87,7 @@ export async function executeBuild(
     void vscode.window.showInformationMessage(t('cmd.buildInFlight'));
     return errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildInFlight'));
   }
-  const task = executeBuildInner(mode, config, logger, detection, workspace, silent, statusBar);
+  const task = executeBuildInner(mode, config, logger, detection, workspace, silent, statusBar, module);
   buildInFlight = task;
   try {
     return await task;
@@ -105,6 +110,8 @@ async function executeBuildInner(
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
   statusBar?: StatusBarManager,
+  // [add-002] UBT -Module= 单模块过滤;与编辑器感知构建互斥(module 仅从 MCP silent 路径进来)
+  module?: string,
 ): Promise<BuildEnvelope> {
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({
@@ -158,6 +165,13 @@ async function executeBuildInner(
     }
   }
 
+  // [add-002] module 可选字段的统一展开:未指定时对象里不出现 module 键,
+  // 保证"不带 module 的调用与现状行为一致"(快照/envelope 均无该字段)
+  // [评审 minor] 函数层防线:module 仅 build 模式语义(MCP 层已拦截,这里兜住
+  // 未来直调 executeBuild('rebuild'|'clean', …, module) 的调用方)
+  const effectiveModule = mode === 'build' ? module : undefined;
+  const moduleFields = effectiveModule ? { module: effectiveModule } : {};
+
   const ubtPath = resolveUBTPath(engine.path);
   const cmd = buildUBTCommand({
     project: project.path,
@@ -165,6 +179,7 @@ async function executeBuildInner(
     platform: config.platform,
     configuration: config.configuration,
     ubtPath,
+    module: effectiveModule,
   });
 
   // Adjust args for rebuild/clean modes.
@@ -185,6 +200,10 @@ async function executeBuildInner(
   channel.clear();
   channel.appendLine(`[UE Helper] ${mode}: file=${cmd.file}`);
   channel.appendLine(`[UE Helper] ${mode}: args=${cmd.args.join(' ')}`);
+  if (effectiveModule) {
+    // [add-002] 单模块过滤一目了然,便于排查"只编了部分模块"的困惑
+    channel.appendLine(`[UE Helper] ${mode}: module=${effectiveModule} (compile-only, no link)`);
+  }
   channel.appendLine(`[UE Helper] ${mode}: engine=${engine.path}`);
   channel.appendLine(`[UE Helper] ${mode}: project=${project.path}`);
   channel.show(true);
@@ -200,6 +219,7 @@ async function executeBuildInner(
     // 记录失败快照：MCP ue_get_build_errors 需要能看到"构建没跑起来"的原因
     rememberBuildSnapshot({
       mode,
+      ...moduleFields,
       ok: false,
       cancelled: false,
       exitCode: null,
@@ -301,6 +321,7 @@ async function executeBuildInner(
     // MCP 工具 ue_get_build_errors 从这里读（AI 闭环"构建 → 读错误 → 修复"）。
     rememberBuildSnapshot({
       mode,
+      ...moduleFields,
       ok: !!result && !result.cancelled && result.exitCode === 0,
       cancelled: !!result?.cancelled,
       exitCode: result?.exitCode ?? null,
@@ -310,6 +331,10 @@ async function executeBuildInner(
     });
 
     // [Wave2 envelope 对齐] 结果分支同时产出契约 envelope;UI 弹窗/状态栏行为保持原样
+    // [add-002] 带 module 时结果文案注明模块名,避免与全量构建的提示混淆
+    const resultLabel = effectiveModule
+      ? `Module build (${effectiveModule})`
+      : titleMap[mode];
     let env: BuildEnvelope;
     if (result?.cancelled) {
       // [F2-1] 用户取消构建:显示中性提示,不弹"构建失败"警告
@@ -319,18 +344,24 @@ async function executeBuildInner(
     } else if (result && result.exitCode === 0) {
       statusBar?.showBuildResult(true, result.diagnostics.length, statusCtx, statusSettings);
       const summary =
-        `${titleMap[mode]} succeeded (${(result.durationMs / 1000).toFixed(1)}s, ` +
+        `${resultLabel} succeeded (${(result.durationMs / 1000).toFixed(1)}s, ` +
         `${result.diagnostics.length} diagnostics)`;
       void vscode.window.showInformationMessage(summary);
-      // data 对齐契约 BuildResult { mode, exitCode, durationMs? }(openapi.yaml
+      // data 对齐契约 BuildResult { mode, module?, exitCode, durationMs? }(openapi.yaml
       // components.schemas.BuildResult);summary 复用现有成功文案语义
-      env = okEnvelope({ mode, exitCode: result.exitCode, durationMs: result.durationMs }, summary);
+      env = okEnvelope(
+        { mode, ...moduleFields, exitCode: result.exitCode, durationMs: result.durationMs },
+        summary,
+      );
     } else if (result) {
       statusBar?.showBuildResult(false, result.diagnostics.length, statusCtx, statusSettings);
-      const summary = `${titleMap[mode]} failed with exit code ${result.exitCode}. See output for details.`;
+      const summary = `${resultLabel} failed with exit code ${result.exitCode}. See output for details.`;
       void vscode.window.showWarningMessage(summary);
       // 契约 BuildDone 语义:进程跑完但 exitCode≠0 仍 ok:true,成败以 data.exitCode 判定
-      env = okEnvelope({ mode, exitCode: result.exitCode, durationMs: result.durationMs }, summary);
+      env = okEnvelope(
+        { mode, ...moduleFields, exitCode: result.exitCode, durationMs: result.durationMs },
+        summary,
+      );
     } else {
       // spawn 失败 / 前期异常：恢复按钮，不显示错误角标（错误通知已单独弹）
       statusBar?.resetFromBuilding(statusCtx, statusSettings);
@@ -344,6 +375,7 @@ async function executeBuildInner(
     // 异常中断也记录快照（error 字段说明为什么没有 exitCode）
     rememberBuildSnapshot({
       mode,
+      ...moduleFields,
       ok: false,
       cancelled: false,
       exitCode: null,

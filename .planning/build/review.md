@@ -7,6 +7,7 @@ range_commits: 20
 diff_scope: 51 文件(+2857/-491);src 侧仅 src/commands/*(24 文件)+ src/core/envelope.ts(新增)+ src/mcp/tools.ts,逻辑层(src/build、src/core 其余、src/clangd、src/detection)diff 零改动
 strictness: THOROUGH(>20 文件;宪法 C1-C8 全量对照 + S1-S8 全量扫描)
 verification_trust: verification.md verified_at_commit(ba8a897)== 当前 HEAD,工作区除 .planning/ 工件外干净 → 无 stale_state / dirty_worktree;PASS 命令未重跑
+add002_review: approved(第 2 轮,2026-09-25,0 critical / 1 major / 2 minor,三项当场修复)
 ---
 
 # 独立评审报告(第 1 轮)
@@ -86,3 +87,40 @@ non-critical 缺口(详见处置账本 N1-N3):openWorkspaceFile 契约 requestBo
 
 - 本轮 0 critical,无需修复回路。
 - R1-N1/R1-N2 若走契约修订,属 /ql-design 契约变更而非代码修复;R1-N3 待 UI 消费落地时随迁。
+
+---
+
+# 独立评审报告(第 2 轮:add-002 增量,2026-09-25)
+
+## verdict: approved
+
+评审对象:7acb84c 之上 add-002 全部未提交变更(5 src + 5 test + 契约工件,+402/-21)。
+评审者:ql-reviewer(全新上下文);验证基线:typecheck 0 错、改动文件 eslint 0 问题、vitest 全绿
+(评审者亲自复跑 typecheck + 5 个改动测试文件 68 用例)。
+
+### 结论一:契约合规 —— approved
+
+openapi.yaml 0.2.0 五处变更(module/warning/BuildResult.module/BuildSummary.module/version)
+逐项与实现核对 pass;.planning/add/002-module-build.md 验收清单 6 条全部 pass 且有测试证据。
+
+### 结论二:正确性 —— approved(附 1 major,已当场修复)
+
+贯穿链(UBTArgs → buildUBTCommand → executeBuild → 快照 → summarize → ue_get_build_errors)
+逐环节核实;"不带 module 与现状逐字节一致"有 toStrictEqual 级断言钉死;S1-S8 套路清单 0 命中。
+
+| 级别 | 发现 | 处置 |
+|------|------|------|
+| major | module 值未白名单,经 cmd.exe verbatim 拼接(agent 可控字符串首次进入该链路)存在命令注入面 | **当场修复**:MCP 入口白名单 `/^[\w.+-]+$/u`(src/mcp/tools.ts),注入样本 `x" & calc & "` 测试钉死;修复后全量 1330/1330 复测 |
+| minor | executeBuild 函数层对 rebuild/clean+module 无防线 | **当场修复**:`effectiveModule = mode === 'build' ? module : undefined` + 测试 |
+| minor | 异常路径快照 module 缺断言 | **当场修复**:withProgress reject 用例补齐(catch 路径快照带 module) |
+
+### 结论三:代码库一致性 —— approved
+
+[add-002] 标签体系、测试结构、可选字段"缺省不出现键"惯例均与周边一致;越界检查:domain 层零改动、
+UI 命令面零改动、契约改动仅限记录声明范围,无夹带。
+
+### NOT_RUN 声明
+
+UBT `-Module=` 真实引擎行为(只编译不链接、obj 复用、Live Coding 拒绝)未在评审环境复现,
+采信 add 记录的 UE 5.8 源码实证(TargetDescriptor.cs:58 / BuildMode.cs GatherOutputItems /
+UEBuildTarget.cs:1900)与本机对照实验(过滤后 1 vs 21 待执行动作);单元测试只断言 args 形态与贯穿逻辑。

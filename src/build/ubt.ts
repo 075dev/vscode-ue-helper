@@ -55,6 +55,13 @@ export function buildUBTCommand(args: UBTArgs): UBTCommand {
     '-waitmutex',
   ];
 
+  // [add-002] 单模块过滤:UBT 只调度该模块的编译动作(不链接/不部署,编出的 obj
+  // 会被后续全量构建增量复用)。resolveLiveCodingCmd 复用本函数,但其调用方从不传
+  // module,Live Coding 链路不受影响。
+  if (args.module) {
+    scriptArgs.push(`-Module="${args.module}"`);
+  }
+
   return {
     file: args.ubtPath,
     args: scriptArgs,

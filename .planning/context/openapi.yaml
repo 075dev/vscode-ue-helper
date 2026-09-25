@@ -8,7 +8,7 @@
 openapi: 3.1.0
 info:
   title: vscode-ue-helper 插件能力契约
-  version: 0.1.0
+  version: 0.2.0
   description: |
     UE C++ 开发的 VSCode 全能插件:UBT 构建、Live Coding 热重载、clangd 智能感知、
     项目诊断与可选 MCP AI agent 集成。
@@ -317,7 +317,7 @@ paths:
     post:
       tags: [MCPTools]
       operationId: ue_build
-      summary: 构建/重建/清理(模式参数化)
+      summary: 构建/重建/清理(模式参数化),可选单模块过滤
       requestBody:
         required: true
         content:
@@ -326,6 +326,17 @@ paths:
               type: object
               properties:
                 mode: { type: string, enum: [build, rebuild, clean], default: build }
+                module:
+                  type: string
+                  description: |
+                    单模块编译(UBT `-Module=<名>`,add-002)。仅 mode=build 生效;
+                    mode=rebuild/clean 携带时被忽略,dispatch 响应带 warning 说明。
+                    语义边界:只编译该模块到目标文件(.obj)级,**不链接、不产出 DLL**,
+                    定位是秒级验证编译错误;编出的 obj 会被后续全量构建增量复用。
+                    模块名不预校验(合法集含插件/引擎模块,不可枚举);UBT 找不到时
+                    构建失败,报错(`Unable to find output items for module`)进快照,
+                    经 ue_get_build_errors 回读。
+                    注意:编辑器 Live Coding 会话激活时 UBT 拒绝普通构建,属构建失败场景。
       responses:
         '200': { $ref: '#/components/responses/MCPDispatched' }
 
@@ -449,6 +460,9 @@ components:
       required: [mode, exitCode]
       properties:
         mode: { type: string, enum: [build, rebuild, clean] }
+        module:
+          type: string
+          description: 本次构建的单模块过滤(UBT -Module=,add-002);全 target 构建时缺省
         exitCode: { type: integer }
         durationMs: { type: integer }
         summary: { type: string }
@@ -462,6 +476,9 @@ components:
           type: boolean
           description: 构建级成败(与工具调用级 ok 分层,避免冲突)
         mode: { type: string, enum: [build, rebuild, clean] }
+        module:
+          type: string
+          description: 快照对应的单模块过滤(UBT -Module=,add-002);全 target 构建时缺省
         exitCode: { type: integer }
         errorCount: { type: integer }
         warningCount: { type: integer }
@@ -502,6 +519,9 @@ components:
         ok: { type: boolean, const: true }
         dispatched: { type: string }
         mode: { type: string }
+        warning:
+          type: string
+          description: 参数被忽略时的一句话说明(如 mode=rebuild/clean 携带 module,add-002)
         note:
           type: string
           description: 固定为 fire-and-forget 提示;真实进度经 logger 流出

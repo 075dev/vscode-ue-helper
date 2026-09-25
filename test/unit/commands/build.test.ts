@@ -416,6 +416,115 @@ describe('executeBuild', () => {
     expect(env).toMatchObject({ ok: false, error: { code: 'UBT_NOT_FOUND' } });
     expect((env.error as { message?: string }).message).toContain('UBT script not found');
   });
+
+  // ============ [add-002] 单模块编译(module 参数贯穿) ============
+
+  it('[add-002] 带 module:透传 buildUBTCommand,envelope/快照/通知均带模块名', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    const env = await executeBuild(
+      'build',
+      config,
+      logger,
+      detection,
+      undefined,
+      false,
+      undefined,
+      'Foo',
+    );
+
+    // UBTArgs 透传 module
+    expect(mockBuildUBTCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ module: 'Foo' }),
+    );
+    // envelope data 对齐契约 BuildResult.module
+    expect(env).toMatchObject({ ok: true, data: { mode: 'build', module: 'Foo', exitCode: 0 } });
+    // 成功通知注明模块名,避免与全量构建提示混淆
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Module build (Foo)'),
+    );
+    // 快照记录 module,供 ue_get_build_errors 回读
+    const snap = getLastBuildSnapshot();
+    expect(snap?.module).toBe('Foo');
+  });
+
+  it('[add-002] 带 module 且构建失败:失败快照同样记录 module', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(2, false));
+
+    await executeBuild('build', config, logger, detection, undefined, false, undefined, 'Foo');
+
+    const snap = getLastBuildSnapshot();
+    expect(snap?.module).toBe('Foo');
+    expect(snap?.ok).toBe(false);
+  });
+
+  it('[add-002] 不带 module:全链路与现状一致(UbtArgs/data/快照均无 module 键)', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    const env = await executeBuild('build', config, logger, detection);
+
+    // buildUBTCommand 收到的对象精确无 module 键(toStrictEqual 严格比较)
+    expect(mockBuildUBTCommand).toHaveBeenCalledWith({
+      project: 'D:/fake/MyGame/MyGame.uproject',
+      target: 'MyGameEditor',
+      platform: 'Win64',
+      configuration: 'Development',
+      ubtPath: 'D:/UE_5.2/Engine/Build/BatchFiles/RunUBT.bat',
+    });
+    expect(env.data).toBeDefined();
+    expect('module' in env.data!).toBe(false);
+    const snap = getLastBuildSnapshot();
+    expect(snap).not.toBeNull();
+    expect('module' in snap!).toBe(false);
+    // 通知文案不出现模块名前缀
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringMatching(/^Building UE project succeeded/),
+    );
+  });
+
+  it('[评审 minor] rebuild 直调携带 module:函数层防线丢弃,UBTArgs 无 module 键', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    const env = await executeBuild(
+      'rebuild',
+      config,
+      logger,
+      detection,
+      undefined,
+      false,
+      undefined,
+      'Foo',
+    );
+
+    // module 被函数层丢弃:不带 -Module,快照/envelope 亦无 module 键
+    const ubtArgs = mockBuildUBTCommand.mock.calls[0]?.[0] as { module?: string } | undefined;
+    expect(ubtArgs?.module).toBeUndefined();
+    expect('module' in env.data!).toBe(false);
+    expect('module' in getLastBuildSnapshot()!).toBe(false);
+  });
+
+  it('[评审 minor] withProgress 异常中断:catch 路径快照同样带 module', async () => {
+    (mockWithProgress as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('boom'),
+    );
+
+    const env = await executeBuild(
+      'build',
+      config,
+      logger,
+      detection,
+      undefined,
+      false,
+      undefined,
+      'Foo',
+    );
+
+    // 异常经外层包装为 INTERNAL_ERROR
+    expect(env).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
+    const snap = getLastBuildSnapshot();
+    expect(snap?.module).toBe('Foo');
+    expect(snap?.error).toBe('boom');
+  });
 });
 
 /** runBuild 成功返回体(可带诊断列表) */

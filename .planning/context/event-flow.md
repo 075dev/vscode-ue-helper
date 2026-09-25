@@ -41,16 +41,16 @@ sequenceDiagram
     participant B as executeBuild(同一执行层)
     participant LB as lastBuild 快照
 
-    AI->>MCP: tools/call ue_build {mode}
+    AI->>MCP: tools/call ue_build {mode, module?}
     MCP->>CT: callTool("ue_build", args)
-    CT->>B: dispatch(executeBuild(...)) — 不等待
-    CT-->>MCP: {ok:true, dispatched:"ue_build", note}
+    CT->>B: dispatch(executeBuild(...)) — 不等待(module 仅 build 模式生效,add-002)
+    CT-->>MCP: {ok:true, dispatched:"ue_build", note, warning?}
     MCP-->>AI: dispatch 确认(立即)
     Note over B,LB: 异步:构建真实执行,进度经 logger 流出
-    B->>LB: 写入构建快照(诊断/计数/exitCode)
+    B->>LB: 写入构建快照(诊断/计数/exitCode/module?)
     AI->>MCP: tools/call ue_get_build_errors
     MCP->>LB: 同步读取进程内快照
-    LB-->>AI: {ok, hasResult, build:BuildSummary}
+    LB-->>AI: {ok, hasResult, build:BuildSummary(module?)}
     Note over AI: AI 据诊断改代码 → 再触发 ue_build 闭环
 ```
 
@@ -102,6 +102,8 @@ stateDiagram-v2
 | UBT 进程被用户取消 | code=OPERATION_CANCELLED,子进程被终止(subprocessRegistry 回收) |
 | MCP 未在 Cursor/Claude Code 宿主中启动 | callTool 返回 {ok:false, error:MCP_CONTEXT_NOT_INITIALIZED},不返回 stub |
 | ue_get_build_errors 在无构建历史时调用 | 返回 {ok:true, hasResult:false},note 提示先 ue_build |
+| ue_build mode=rebuild/clean 携带 module(add-002) | 忽略 module,dispatch 响应带 warning,不报错 |
+| ue_build module 名在 target 中不存在 | UBT 构建失败(`Unable to find output items for module`),报错进快照,经 ue_get_build_errors 回读 |
 | Live Coding 目标 Editor 已在运行 | 尝试连接已有控制台(bugfix/001 修复的行为),不重复拉起 |
 | 构建模式参数非法(ue_build mode 乱写) | 回落默认 build(callTool 现行为),不报错 |
 | 同一命令重入(构建进行中再点构建) | 现状由命令层/子进程注册表把关;若未拦截,登记为验证阶段待确认差距 |

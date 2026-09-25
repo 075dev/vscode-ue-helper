@@ -23,6 +23,11 @@ export interface UBTArgs {
   configuration: BuildConfiguration;
   /** UBT executable to invoke (full path). */
   ubtPath: string;
+  /**
+   * [add-002] UBT -Module= 单模块过滤:只编译该模块到 .obj 级(不链接、不产出 DLL),
+   * 定位是快速验证编译错误;仅 mode=build 语义。全 target 构建时缺省。
+   */
+  module?: string;
 }
 
 export interface UBTCommand {

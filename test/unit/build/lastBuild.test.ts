@@ -104,4 +104,12 @@ describe('summarizeBuildErrorsForAgent', () => {
     const withError = summarizeBuildErrorsForAgent(snapshot({ error: 'UBT script not found' }));
     expect(withError.error).toBe('UBT script not found');
   });
+
+  // [add-002] module 可选字段:与 error 同一"缺省不出现键"风格
+  it('[add-002] 无 module 时摘要不含该键,有则透传', () => {
+    expect('module' in summarizeBuildErrorsForAgent(snapshot())).toBe(false);
+
+    const withModule = summarizeBuildErrorsForAgent(snapshot({ module: 'MyGame' }));
+    expect(withModule.module).toBe('MyGame');
+  });
 });

@@ -51,7 +51,7 @@ export interface MCPTool {
 export const MCP_TOOLS: MCPTool[] = [
   {
     name: 'ue_build',
-    description: 'Build / Rebuild / Clean via UBT.',
+    description: 'Build / Rebuild / Clean via UBT. Supports optional single-module filtering.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -59,6 +59,14 @@ export const MCP_TOOLS: MCPTool[] = [
           type: 'string',
           enum: ['build', 'rebuild', 'clean'],
           description: 'Build mode. Default: build.',
+        },
+        module: {
+          type: 'string',
+          description:
+            '[add-002] Single-module compile filter (UBT -Module=). Only used with mode=build; ' +
+            'ignored for rebuild/clean. Compiles the module to object files only — no link, no DLL ' +
+            'output, so use it to verify compilation errors quickly. Unknown module names fail the ' +
+            'build; read the error via ue_get_build_errors.',
         },
       },
     },
@@ -171,11 +179,29 @@ export function callTool(name: string, args: Record<string, unknown>): string {
       const rawMode = typeof args.mode === 'string' ? args.mode : 'build';
       const mode: 'build' | 'rebuild' | 'clean' =
         rawMode === 'rebuild' || rawMode === 'clean' ? rawMode : 'build';
-      dispatch(executeBuild(mode, config, logger, detection, workspace, true), name);
+      // [add-002] module 仅 mode=build 生效;rebuild/clean 携带时忽略并在响应带
+      // warning(契约 MCPDispatch.warning),不报错——与"非法 mode 静默回落"同一宽容风格
+      // [评审 major] module 是首个 agent 可控且进入 verbatim cmd.exe 命令行的字符串
+      // (buildRunner F1-1 整条命令原样拼接交 cmd 解析),含引号可闭合 -Module=" 引出
+      // 命令注入 —— 白名单到 UE 模块名合法字符集,不匹配按未提供处理并返回 warning
+      const trimmedModule = typeof args.module === 'string' ? args.module.trim() : '';
+      const validModule = /^[\w.+-]+$/u.test(trimmedModule);
+      const module = mode === 'build' && validModule ? trimmedModule : undefined;
+      let warning: string | undefined;
+      if (trimmedModule && mode !== 'build') {
+        warning = 'module ignored for rebuild/clean; only mode=build supports module filtering';
+      } else if (trimmedModule && !validModule) {
+        warning = 'module ignored: contains characters outside [A-Za-z0-9_.+-]';
+      }
+      dispatch(
+        executeBuild(mode, config, logger, detection, workspace, true, undefined, module),
+        name,
+      );
       return JSON.stringify({
         ok: true,
         dispatched: name,
         mode,
+        ...(warning ? { warning } : {}),
         note: 'fire-and-forget; see logger',
       });
     }

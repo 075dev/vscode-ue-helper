@@ -15,6 +15,8 @@ import type { ParsedDiagnostic } from '@core/types/diagnostic';
 export interface LastBuildSnapshot {
   /** 构建模式 */
   mode: 'build' | 'rebuild' | 'clean';
+  /** [add-002] 单模块过滤(UBT -Module=);全 target 构建时缺省 */
+  module?: string;
   /** exitCode === 0 且未取消 */
   ok: boolean;
   /** 用户通过进度条取消 */
@@ -53,6 +55,8 @@ export const MAX_AGENT_DIAGNOSTICS = 100;
 
 export interface BuildErrorsSummary {
   mode: LastBuildSnapshot['mode'];
+  /** [add-002] 单模块过滤(UBT -Module=);全 target 构建时缺省 */
+  module?: string;
   ok: boolean;
   cancelled: boolean;
   exitCode: number | null;
@@ -102,6 +106,9 @@ export function summarizeBuildErrorsForAgent(
     diagnostics: snapshot.diagnostics.slice(0, MAX_AGENT_DIAGNOSTICS),
     diagnosticsTruncated: truncated,
   };
+  if (snapshot.module !== undefined) {
+    summary.module = snapshot.module;
+  }
   if (snapshot.error !== undefined) {
     summary.error = snapshot.error;
   }

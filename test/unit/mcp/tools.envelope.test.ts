@@ -151,6 +151,8 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
     };
     expect(parsed.ok).toBe(true);
     expect(parsed.mode).toBe('build');
+    // [add-002] callTool ue_build 分支固定 8 参(silent 后为 statusBar/module 占位),
+    // 非法 mode 与空 args 场景 module 均为 undefined
     expect(mockExecuteBuild).toHaveBeenCalledWith(
       'build',
       expect.anything(),
@@ -158,6 +160,8 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
       expect.anything(),
       expect.anything(),
       true,
+      undefined,
+      undefined,
     );
   });
 

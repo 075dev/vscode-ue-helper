@@ -8,11 +8,13 @@ review_verdict: approved
 review_rounds: 1
 reviewed_range: 263848e..ba8a897
 event_messages_count: 4
+last_activity: add-002 added to chapter-01 (2026-09-25,reviewed)
 ---
 # 项目状态
 
 ## 当前位置
 阶段: 1 (讨论完成,契约已冻结)
+增量: add-002(ue_build 单模块编译)已并入 chapter-01,契约 0.2.0,评审 approved —— 下一步 /ql-deliver
 
 ## Clarity Breakdown(2026-09-19 冻结评分)
 - 目标清晰度: 8/10 —— 36 个操作(27 命令 + 9 MCP 工具)清单明确、无"或/待定";交互式向导类命令(createProject)只定义到入口语义
@@ -27,8 +29,9 @@ event_messages_count: 4
 - 命令重入(构建中再触发构建)现状未确认是否拦截,已登记 event-flow.md 边缘场景待验证
 
 ## 产出物
-- 契约: .planning/context/openapi.yaml(36 端点,operationId 无重复)
+- 契约: .planning/context/openapi.yaml(36 端点,operationId 无重复;0.2.0 起 ue_build 支持可选 module)
 - 流程: .planning/context/event-flow.md(2 个 sequenceDiagram + 2 个 stateDiagram + 消息契约)
-- 决策: .planning/context/decisions.md(D1–D6,全部 active)
+- 决策: .planning/context/decisions.md(D1–D7,全部 active)
 - 宪法: .planning/context/constitution.md(v1.0.0,C1–C8)
 - 文档树: .qiling/docs/(chapter-01,基线 0d738d8c)
+- 增量: .planning/add/002-module-build.md + .planning/build/fill-report-add002.md

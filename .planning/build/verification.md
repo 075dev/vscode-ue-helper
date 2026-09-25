@@ -4,6 +4,8 @@ verified_at: 2026-09-20T04:10:00+08:00
 verified_at_commit: ba8a897
 base_sha: 263848e
 mode: inline(主会话亲自执行)
+add002_verified_at: 2026-09-25
+add002_verified_at_commit: 7acb84c
 ---
 
 # 验证报告(阶段 1:骨架 + 填充 + lint 定向修复)
@@ -66,3 +68,24 @@ mode: inline(主会话亲自执行)
 ## 七、验证结论
 
 **status: passed**(base 263848e → head ba8a897,含 WIP 基线 + Wave 1/2 + 填充 + lint 修复,共 20 个提交)
+
+---
+
+## 八、增量验证(add-002,2026-09-25)
+
+> add-002(ue_build 单模块编译,`.planning/add/002-module-build.md`)在内联模式下构建
+> (协调器上下文无 worker 派发通道,按门控规则降级),验证延续"主会话亲自执行"纪律,
+> 在 7acb84c + 工作区 diff(14 改 + 3 新增)上 fresh 执行:
+
+| 命令 | 结果 | 证据 |
+|------|------|------|
+| `npm run typecheck` | **PASS** | 0 error(修复 effectiveModule TDZ 后复跑) |
+| `npx eslint <9 个改动文件>` | **PASS** | 0 error / 0 warning |
+| `npm test`(vitest 全量) | **PASS** | **110 文件 / 1330 测试全绿**(基线 109/1312 → 净增 1 文件/18 用例;首轮 2 处既有断言 6→8 参适配后全绿) |
+| 验收清单 6 条 | **PASS** | 逐条证据见 `.planning/build/fill-report-add002.md` |
+
+**评审闭环:** ql-reviewer 第 2 轮 approved(0 critical / 1 major / 2 minor),三项当场修复并补测试:
+命令注入白名单(`src/mcp/tools.ts`,agent 可控字符串首个进入 cmd.exe verbatim 拼接链路)、
+executeBuild 函数层 rebuild/clean 防线、异常路径快照断言。修复后 fresh 复测 1330/1330。
+
+**status 维持: passed**(全景 ba8a897 + 增量 add-002 @ 7acb84c)

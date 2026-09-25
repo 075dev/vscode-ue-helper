@@ -82,6 +82,14 @@ events: 1
 |--------|------|------------------|
 | `exit` | emit | `test/unit/core/subprocessRegistry.test.ts:88` |
 
+### 1.4 MCP 工具契约增量(add-002,契约 openapi.yaml 0.2.0)
+
+| 变更 | 内容 | 证据(文件) |
+|------|------|----------------|
+| `ue_build` 新增可选 `module` 参数 | UBT `-Module=<名>` 单模块过滤:仅 mode=build 生效(rebuild/clean 忽略 + 响应 warning);只编译到 .obj 级**不链接/不产 DLL**;MCP 入口字符白名单 `[A-Za-z0-9_.+-]`(防 cmd.exe verbatim 注入);模块名不预校验,UBT 报错进快照 | `src/mcp/tools.ts`、`src/build/ubt.ts` |
+| `MCPDispatch` 新增可选 `warning` | module 被忽略(非 build 模式/非法字符)时的一句话说明 | `src/mcp/tools.ts` |
+| `BuildResult`/`BuildSummary` 新增可选 `module` | envelope data 与 `ue_get_build_errors` 快照标注单模块范围;缺省时字段不出现 | `src/commands/build.ts`、`src/build/lastBuild.ts` |
+
 ---
 
 ## 二、项目结构与启动流程
@@ -258,3 +266,4 @@ events: 1
 | 日期 | 操作 | 说明 |
 |------|------|------|
 | 2026-09-19T15:12:20.601Z | 自动生成 | 由 `/ql-scan` 初始化,基线 commit `0d738d8c` |
+| 2026-09-25 | add-002 | ue_build 支持单模块编译(UBT `-Module=`),契约 0.1.0 → 0.2.0,决策 D7 |
