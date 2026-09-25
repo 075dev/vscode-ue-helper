@@ -11,8 +11,8 @@
  * 这是 fire-and-forget dispatch 的必要前置——未注入时 callTool 同步
  * 返回 "MCP context not initialized" 错误。
  *
- * 注意:扩展主入口 extension.ts 当前没调 activateMCP(dead code),
- * Plan 12 处理 dispatch 接入。这里只是把 index.ts 改造好,方便后续接入。
+ * [bugfix-002] extension.ts 已接线 activateMCP(激活流程 fire-and-forget 调用),
+ * 本模块不再是 dead code;宿主门控(detectHost + config.useMCP)决定是否真正启动。
  */
 
 import type * as vscode from 'vscode';

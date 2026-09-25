@@ -13,9 +13,8 @@
  * ## MCP runtime context
  *
  * `setMCPContext()` 在 `activateMCP()` 中调用,注入本进程单例 config/logger/
- * detection/workspace/clangdOps。MCP 服务器在 Cursor / Claude Code spawn 时
- * 才会启动(index.ts 检测 env vars),extension.ts 当前未调 activateMCP(Plan 12
- * 处理)。在 context 未注入的情况下 callTool 返回明确错误,而不是返回 stub。
+ * detection/workspace/clangdOps。[bugfix-002] extension.ts 激活流程已接线 activateMCP:
+ * 在 Cursor / Claude Code 宿主(检测 env vars)下启动,普通 VS Code 为 no-op。
  *
  * ## 同步签名 / fire-and-forget dispatch
  *

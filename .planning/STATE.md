@@ -8,7 +8,7 @@ review_verdict: approved
 review_rounds: 1
 reviewed_range: 263848e..ba8a897
 event_messages_count: 4
-last_activity: add-002 committed(8cd2bc6)并提交;推送/PR 待用户确认收尾方式(deliver 步骤 2 未应答)
+last_activity: bugfix-002 fixed(extension.ts 接线 activateMCP,MCP 此前完全不可用;评审 approved)
 ---
 # 项目状态
 
@@ -35,3 +35,7 @@ last_activity: add-002 committed(8cd2bc6)并提交;推送/PR 待用户确认收�
 - 宪法: .planning/context/constitution.md(v1.0.0,C1–C8)
 - 文档树: .qiling/docs/(chapter-01,基线 0d738d8c)
 - 增量: .planning/add/002-module-build.md + .planning/build/fill-report-add002.md
+- 修复: .planning/bugfix/002-mcp-not-wired.md(extension.ts 接线 activateMCP)
+
+## 已知阻塞
+- ql/phase-1-panorama 分支已提交未推送(deliver 收尾方式待用户确认:创建 PR / 仅推送 / 保留本地)

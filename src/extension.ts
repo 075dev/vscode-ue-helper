@@ -22,6 +22,7 @@ import { runFirstTimeInit } from '@commands/firstRunInit';
 import { showProjectInfo } from '@commands/showProjectInfo';
 import { initI18n, t } from '@i18n';
 import { ControlPanelProvider } from '@ui/controlPanel';
+import { activateMCP } from '@mcp/index';
 
 let logger: Logger;
 const disposables: vscode.Disposable[] = [];
@@ -86,6 +87,15 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
       { context, config, logger, detection, clangd, workspace, clangdOps },
       context,
     ).catch((err: unknown) => logger.error('[firstRunInit] unexpected error:', err));
+
+    // [bugfix-002] MCP 服务器接线 —— Phase 11 起 extension.ts 从未调 activateMCP
+    // (src/mcp/index.ts 头注释自称"Plan 12 处理"但从未落地),导致 MCP 在任何宿主
+    // 下都不可用(AI agent 的 9 个 ue_* 工具全部拿到 MCP_CONTEXT_NOT_INITIALIZED)。
+    // 宿主门控在 activateMCP 内部(detectHost + config.useMCP):Cursor / Claude Code
+    // 宿主启动 stdio server,普通 VS Code 为 no-op;启动失败只记日志,不阻塞激活。
+    void activateMCP(context, config, logger, detection, workspace, clangdOps).catch(
+      (err: unknown) => logger.error('[mcp] activation error:', err),
+    );
 
     // [T2.7] workspace + clangdOps 已 implements vscode.Disposable
     // 接入 context.subscriptions 让 deactivate 时随 extension 一起释放
