@@ -8,7 +8,7 @@ review_verdict: approved
 review_rounds: 1
 reviewed_range: 263848e..ba8a897
 event_messages_count: 4
-last_activity: add-002 added to chapter-01 (2026-09-25,reviewed)
+last_activity: add-002 committed(8cd2bc6)并提交;推送/PR 待用户确认收尾方式(deliver 步骤 2 未应答)
 ---
 # 项目状态
 
