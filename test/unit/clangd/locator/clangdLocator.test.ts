@@ -25,6 +25,8 @@ const DEFAULT_CLANGD = 'C:/Program Files/LLVM/bin/clangd.exe';
 interface IoCalls {
   execFile: number;
   fileExists: number;
+  /** 每次 execFile 收到的 timeout(ms),用于锁定 where / --version 的 5s 超时。 */
+  readonly execFileTimeouts: number[];
 }
 
 interface IoOptions {
@@ -35,10 +37,11 @@ interface IoOptions {
 
 function makeIo(options: IoOptions = {}): { io: ClangdLocatorIo; calls: IoCalls } {
   const existing = new Set(options.existingPaths ?? []);
-  const calls: IoCalls = { execFile: 0, fileExists: 0 };
+  const calls: IoCalls = { execFile: 0, fileExists: 0, execFileTimeouts: [] };
   const io: ClangdLocatorIo = {
-    execFile: (file, args) => {
+    execFile: (file, args, opts) => {
       calls.execFile += 1;
+      calls.execFileTimeouts.push(opts.timeout);
       if (file === 'where') {
         return Promise.resolve({ stdout: options.whereStdout ?? '', stderr: '' });
       }
@@ -111,6 +114,24 @@ describe('ClangdLocator — 懒探测与缓存', () => {
 
     // Then
     expect(calls.execFile).toBe(2);
+  });
+
+  it('Given 探测执行子进程 When where/--version 调用 Then 携带 5s 超时', async () => {
+    // Given
+    const installedDir = 'C:/llvm/bin';
+    const { io, calls } = makeIo({
+      whereStdout: `${WHERE_CLANGD}\n`,
+      versionStdout: `InstalledDir: ${installedDir}\n`,
+      existingPaths: [WHERE_CLANGD],
+    });
+    const locator = new ClangdLocator({ launcherPath: LAUNCHER, io });
+
+    // When
+    await locator.locateClangDriver();
+
+    // Then — where 与 clangd --version 两次子进程调用均为 5s 超时
+    expect(calls.execFile).toBe(2);
+    expect(calls.execFileTimeouts).toEqual([5_000, 5_000]);
   });
 });
 

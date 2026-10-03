@@ -108,11 +108,14 @@ export class ClangdProxyManager implements vscode.Disposable {
 
     // [add-003 / D8] clangd 路径解析源变更时丢弃 locator 探测缓存，
     // 保证下次 enable/reapply / SDK 探测读到新值（懒探测 + 失效策略的失效半边）。
+    // 三个源键都必须挂：override（clangdProxy.realClangdPath）变更后 reapply 若命中
+    // 旧缓存会用 stale 路径写 proxy 参数（评审 CRITICAL-1 回归）。
     // 监听在本文件挂载（clangd/index.ts 保持 vscode type-only import）。
     this.context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (
           e.affectsConfiguration('vscodeUEHelper.clangdPath') ||
+          e.affectsConfiguration('vscodeUEHelper.clangdProxy.realClangdPath') ||
           e.affectsConfiguration('clangd.path')
         ) {
           this.locator.invalidate();
@@ -185,16 +188,6 @@ export class ClangdProxyManager implements vscode.Disposable {
   /** 当前生效的 clangd 路径解析服务（外部注入优先，否则内部实例） */
   private get locator(): ClangdLocator {
     return this.deps.locator ?? this.ownedLocator;
-  }
-
-  /**
-   * [add-003] 丢弃 locator 缓存。
-   *
-   * 装配处（clangd/index.ts）在 `vscodeUEHelper.clangdPath` / `clangd.path`
-   * 配置变更时调用，保证下次解析读到新值。
-   */
-  invalidateLocator(): void {
-    this.locator.invalidate();
   }
 
   /**
