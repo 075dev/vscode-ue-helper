@@ -1,0 +1,113 @@
+/**
+ * ubt —— 构造 UnrealBuildTool 命令行调用
+ *
+ * UBT 入口在 EngineRoot/Engine/Build/BatchFiles/Platform/Build.sh 或 Build.bat,
+ * 脚本再 forward 到 EngineRoot/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll,
+ * 用 dotnet 加载 .NET 程序集。
+ *
+ * UBT 参数格式(UE 5.x):
+ *   Target Platform Configuration -Project=file.uproject -waitmutex
+ *
+ * 主要导出:
+ *   - buildUBTCommand: 构造 UBT 命令(参数数组)
+ *   - resolveUBTPath: <Engine>/Engine/Build/BatchFiles/Build.bat 或 RunUBT.sh
+ *   - resolveUBTTarget: 把 Editor/Game 类型转成 XianDreamwalkingEditor 等具体 target 名
+ *   - resolveEditorPath: 找 UnrealEditor.exe 路径
+ *   - resolveLiveCodingCmd: 构造 Live Coding 命令
+ */
+
+import * as path from 'node:path';
+import { type UBTArgs, type UBTCommand } from './types';
+
+/**
+ * Map a `BuildTarget` type + .uproject path to UBT's concrete target name.
+ *
+ * UBT looks up target rules by name (e.g. `XianDreamwalkingEditor.Target.cs`),
+ * NOT by the abstract type `Editor`. The convention is `<ProjectName><Suffix>`:
+ *
+ *   Editor  → <ProjectName>Editor
+ *   Game    → <ProjectName>
+ *   Server  → <ProjectName>Server
+ *   Client  → <ProjectName>Client
+ */
+export function resolveUBTTarget(uprojectPath: string, type: string): string {
+  const projectName = path.basename(uprojectPath, '.uproject');
+  switch (type) {
+    case 'Editor':
+      return `${projectName}Editor`;
+    case 'Server':
+      return `${projectName}Server`;
+    case 'Client':
+      return `${projectName}Client`;
+    case 'Game':
+    default:
+      return projectName;
+  }
+}
+
+export function buildUBTCommand(args: UBTArgs): UBTCommand {
+  // Project 路径含空格时必须整体加引号，否则 cmd.exe /c 会拆词导致 UBT 立刻失败
+  const scriptArgs = [
+    args.target,
+    args.platform,
+    args.configuration,
+    `-Project="${args.project}"`,
+    '-waitmutex',
+  ];
+
+  // [add-002] 单模块过滤:UBT 只调度该模块的编译动作(不链接/不部署,编出的 obj
+  // 会被后续全量构建增量复用)。resolveLiveCodingCmd 复用本函数,但其调用方从不传
+  // module,Live Coding 链路不受影响。
+  if (args.module) {
+    scriptArgs.push(`-Module="${args.module}"`);
+  }
+
+  return {
+    file: args.ubtPath,
+    args: scriptArgs,
+  };
+}
+
+/**
+ * Resolve the UBT script path for the current platform.
+ *
+ * Windows: <EngineRoot>/Engine/Build/BatchFiles/Build.bat
+ */
+export function resolveUBTPath(engineRoot: string): string {
+  return path.join(engineRoot, 'Engine', 'Build', 'BatchFiles', 'Build.bat');
+}
+
+/**
+ * Resolve the path to the Unreal Editor executable for launching.
+ *
+ *   Windows: <EngineRoot>/Engine/Binaries/Win64/UnrealEditor.exe
+ *   Mac:     <EngineRoot>/Engine/Binaries/Mac/UnrealEditor.app
+ *   Linux:   <EngineRoot>/Engine/Binaries/Linux/UnrealEditor
+ */
+export function resolveEditorPath(engineRoot: string, platform: string): string {
+  switch (platform) {
+    case 'Win64':
+      return path.join(engineRoot, 'Engine', 'Binaries', 'Win64', 'UnrealEditor.exe');
+    case 'Mac':
+      return path.join(engineRoot, 'Engine', 'Binaries', 'Mac', 'UnrealEditor.app');
+    case 'Linux':
+      return path.join(engineRoot, 'Engine', 'Binaries', 'Linux', 'UnrealEditor');
+    default:
+      throw new Error(`Unsupported platform: ${platform}`);
+  }
+}
+
+/**
+ * Live Coding 命令 —— UBT -LiveCoding 方式(UE 官方等价于编辑器内 Live Coding 按钮)。
+ *
+ * UBT 连接正在运行的编辑器实例的 Live Coding server(编译变更模块 → 编辑器
+ * 热补丁),全程不启动新的编辑器实例;编辑器未运行时 UBT 回退为普通构建。
+ *
+ * bugfix-001:旧实现 spawn 不带 -Project 的全新 UnrealEditor.exe -ExecCmds,
+ * UE 弹出项目管理器(表现为"打开一个新的项目"),且热重载作用在新实例上。
+ */
+export function resolveLiveCodingCmd(args: UBTArgs): UBTCommand {
+  const cmd = buildUBTCommand(args);
+  cmd.args.push('-LiveCoding');
+  return cmd;
+}

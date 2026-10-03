@@ -37,160 +37,196 @@
   "activationEvents": [
     "workspaceContains:**/*.uproject",
     "onCommand:vscodeUEHelper.build",
+    "onCommand:vscodeUEHelper.rebuild",
+    "onCommand:vscodeUEHelper.clean",
+    "onCommand:vscodeUEHelper.launchEditor",
     "onCommand:vscodeUEHelper.liveCoding",
+    "onCommand:vscodeUEHelper.generateCompileCommands",
+    "onCommand:vscodeUEHelper.createProject",
+    "onCommand:vscodeUEHelper.diagnoseProject",
     "onCommand:vscodeUEHelper.showProjectInfo",
-    "onCommand:vscodeUEHelper.diagnoseProject"
+    "onCommand:vscodeUEHelper.setSystemIncludes",
+    "onCommand:vscodeUEHelper.installRules",
+    "onCommand:vscodeUEHelper.uninstall",
+    "onCommand:vscodeUEHelper.openWorkspaceFile",
+    "onCommand:vscodeUEHelper.openTerminalInNewWindow",
+    "onCommand:vscodeUEHelper.selectConfig",
+    "onCommand:vscodeUEHelper.selectTarget",
+    "onCommand:vscodeUEHelper.enableClangdProxy",
+    "onCommand:vscodeUEHelper.disableClangdProxy",
+    "onCommand:vscodeUEHelper.showClangdProxyStatus",
+    "onCommand:vscodeUEHelper.showControlPanel",
+    "onCommand:vscodeUEHelper.retryFirstTimeInit",
+    "onCommand:vscodeUEHelper.refreshProjectExplorer",
+    "onCommand:vscodeUEHelper.openProjectExplorerFile",
+    "onCommand:vscodeUEHelper.copyBuildCommand",
+    "onCommand:vscodeUEHelper.noLintCurrentLine",
+    "onCommand:vscodeUEHelper.noLintNextLine",
+    "onCommand:vscodeUEHelper.switchHeaderSource"
   ],
   "main": "out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "vscodeUEHelper.build",
-        "title": "Build",
-        "title@zh": "构建",
+        "title": "%cmd.build.title%",
         "category": "UE Helper",
         "icon": "$(tools)"
       },
       {
         "command": "vscodeUEHelper.rebuild",
-        "title": "Rebuild",
-        "title@zh": "重新构建",
+        "title": "%cmd.rebuild.title%",
         "category": "UE Helper",
         "icon": "$(refresh)"
       },
       {
         "command": "vscodeUEHelper.clean",
-        "title": "Clean",
-        "title@zh": "清理",
+        "title": "%cmd.clean.title%",
         "category": "UE Helper",
         "icon": "$(trash)"
       },
       {
         "command": "vscodeUEHelper.launchEditor",
-        "title": "Launch Unreal Editor",
-        "title@zh": "启动 Unreal 编辑器",
+        "title": "%cmd.launchEditor.title%",
         "category": "UE Helper",
         "icon": "$(play)"
       },
       {
         "command": "vscodeUEHelper.liveCoding",
-        "title": "Live Coding (Hot Reload)",
-        "title@zh": "Live Coding 热重载",
+        "title": "%cmd.liveCoding.title%",
         "category": "UE Helper",
         "icon": "$(zap)"
       },
       {
         "command": "vscodeUEHelper.generateCompileCommands",
-        "title": "Generate compile_commands.json",
-        "title@zh": "生成 compile_commands.json",
+        "title": "%cmd.generateCompileCommands.title%",
         "category": "UE Helper"
       },
       {
         "command": "vscodeUEHelper.diagnoseProject",
-        "title": "Diagnose Clangd Project",
-        "title@zh": "诊断 Clangd 项目",
+        "title": "%cmd.diagnoseProject.title%",
         "category": "UE Helper",
         "icon": "$(checklist)"
       },
       {
         "command": "vscodeUEHelper.createProject",
-        "title": "Create Unreal Clangd Project",
-        "title@zh": "创建 Unreal Clangd 项目",
+        "title": "%cmd.createProject.title%",
         "category": "UE Helper",
         "icon": "$(new-folder)"
       },
       {
         "command": "vscodeUEHelper.showProjectInfo",
-        "title": "Show Project Info",
-        "title@zh": "显示项目信息",
+        "title": "%cmd.showProjectInfo.title%",
         "category": "UE Helper",
         "icon": "$(info)"
       },
       {
         "command": "vscodeUEHelper.setSystemIncludes",
-        "title": "Set System Includes (Windows SDK / C++ Standard)",
-        "title@zh": "设置系统包含路径(Windows SDK / C++ 标准)",
+        "title": "%cmd.setSystemIncludes.title%",
         "category": "UE Helper"
       },
       {
         "command": "vscodeUEHelper.installRules",
-        "title": "Install AI Agent Rules",
-        "title@zh": "安装 AI Agent 规则",
+        "title": "%cmd.installRules.title%",
         "category": "UE Helper"
       },
       {
         "command": "vscodeUEHelper.uninstall",
-        "title": "Uninstall (Clean Generated Files)",
-        "title@zh": "卸载(清理生成的文件)",
+        "title": "%cmd.uninstall.title%",
         "category": "UE Helper",
         "icon": "$(trash)"
       },
       {
         "command": "vscodeUEHelper.openWorkspaceFile",
-        "title": "Open .code-workspace",
-        "title@zh": "打开 .code-workspace",
+        "title": "%cmd.openWorkspaceFile.title%",
         "category": "UE Helper"
       },
       {
         "command": "vscodeUEHelper.openTerminalInNewWindow",
-        "title": "%vscodeUEHelper.openTerminalInNewWindow%",
+        "title": "%cmd.openTerminalInNewWindow.title%",
         "category": "UE Helper",
         "icon": "$(terminal)"
       },
       {
         "command": "vscodeUEHelper.selectConfig",
-        "title": "Select Build Configuration",
-        "title@zh": "选择构建配置",
+        "title": "%cmd.selectConfig.title%",
         "category": "UE Helper",
         "icon": "$(gear)"
       },
       {
         "command": "vscodeUEHelper.selectTarget",
-        "title": "Select Build Target",
-        "title@zh": "选择构建目标",
+        "title": "%cmd.selectTarget.title%",
         "category": "UE Helper",
         "icon": "$(symbol-class)"
       },
       {
         "command": "vscodeUEHelper.enableClangdProxy",
-        "title": "Enable Clangd LSP Proxy",
-        "title@zh": "启用 Clangd LSP 代理",
+        "title": "%cmd.enableClangdProxy.title%",
         "category": "UE Helper",
         "icon": "$(plug)"
       },
       {
         "command": "vscodeUEHelper.disableClangdProxy",
-        "title": "Disable Clangd LSP Proxy",
-        "title@zh": "禁用 Clangd LSP 代理",
+        "title": "%cmd.disableClangdProxy.title%",
         "category": "UE Helper",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "vscodeUEHelper.showClangdProxyStatus",
-        "title": "Show Clangd Proxy Status",
-        "title@zh": "显示 Clangd 代理状态",
+        "title": "%cmd.showClangdProxyStatus.title%",
         "category": "UE Helper",
         "icon": "$(info)"
       },
       {
         "command": "vscodeUEHelper.showControlPanel",
-        "title": "Show Control Panel",
-        "title@zh": "显示控制面板",
+        "title": "%cmd.showControlPanel.title%",
         "category": "UE Helper",
         "icon": "$(dashboard)"
       },
       {
+        "command": "vscodeUEHelper.retryFirstTimeInit",
+        "title": "%cmd.retryFirstTimeInit.title%",
+        "category": "UE Helper",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "vscodeUEHelper.refreshProjectExplorer",
-        "title": "Refresh Project Explorer",
-        "title@zh": "刷新项目目录",
+        "title": "%cmd.refreshProjectExplorer.title%",
         "category": "UE Helper",
         "icon": "$(refresh)"
       },
       {
         "command": "vscodeUEHelper.openProjectExplorerFile",
-        "title": "Open Project File",
-        "title@zh": "打开项目文件",
+        "title": "%cmd.openProjectExplorerFile.title%",
         "category": "UE Helper"
+      },
+      {
+        "command": "vscodeUEHelper.copyBuildCommand",
+        "title": "%cmd.copyBuildCommand.title%",
+        "category": "UE Helper",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "vscodeUEHelper.noLintCurrentLine",
+        "title": "%cmd.noLintCurrentLine.title%",
+        "category": "UE Helper"
+      },
+      {
+        "command": "vscodeUEHelper.noLintNextLine",
+        "title": "%cmd.noLintNextLine.title%",
+        "category": "UE Helper"
+      },
+      {
+        "command": "vscodeUEHelper.switchHeaderSource",
+        "title": "%cmd.switchHeaderSource.title%",
+        "category": "UE Helper"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "vscodeUEHelper.switchHeaderSource",
+        "key": "alt+o",
+        "when": "editorTextFocus && editorLangId == 'cpp' || editorTextFocus && editorLangId == 'c'"
       }
     ],
     "viewsContainers": {
@@ -207,14 +243,12 @@
         {
           "type": "webview",
           "id": "vscodeUEHelper.controlPanel",
-          "name": "Control Panel",
-          "name@zh": "控制面板"
+          "name": "%view.controlPanel.name%"
         },
         {
           "type": "tree",
           "id": "vscodeUEHelper.projectExplorer",
-          "name": "Project Explorer",
-          "name@zh": "项目目录",
+          "name": "%view.projectExplorer.name%",
           "when": "vscodeUEHelper.projectDetected"
         }
       ]
@@ -232,6 +266,23 @@
           "command": "vscodeUEHelper.openTerminalInNewWindow",
           "when": "explorerResourceIsFolder",
           "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "vscodeUEHelper.switchHeaderSource",
+          "when": "editorTextFocus && editorLangId == 'cpp' || editorTextFocus && editorLangId == 'c'",
+          "group": "9_uehelper@0"
+        },
+        {
+          "command": "vscodeUEHelper.noLintCurrentLine",
+          "when": "editorTextFocus",
+          "group": "9_uehelper@1"
+        },
+        {
+          "command": "vscodeUEHelper.noLintNextLine",
+          "when": "editorTextFocus",
+          "group": "9_uehelper@2"
         }
       ],
       "view/item/context": [
@@ -276,12 +327,10 @@
     },
     "configuration": {
       "title": "VSCode UE Helper",
-      "title@zh": "VSCode UE Helper",
       "properties": {
         "vscodeUEHelper.ueVersion": {
           "type": "string",
-          "description": "Preferred Unreal Engine version (e.g., 5.4). Empty = latest detected.",
-          "description@zh": "首选 Unreal Engine 版本(如 5.4)。留空 = 自动检测最新。"
+          "description": "%config.ueVersion.desc%"
         },
         "vscodeUEHelper.configuration": {
           "type": "string",
@@ -300,8 +349,7 @@
             "Test"
           ],
           "default": "Development",
-          "description": "Build configuration.",
-          "description@zh": "构建配置。"
+          "description": "%config.configuration.desc%"
         },
         "vscodeUEHelper.target": {
           "type": "string",
@@ -318,8 +366,7 @@
             "Client"
           ],
           "default": "Editor",
-          "description": "Build target.",
-          "description@zh": "构建目标。"
+          "description": "%config.target.desc%"
         },
         "vscodeUEHelper.platform": {
           "type": "string",
@@ -334,19 +381,44 @@
             "Linux"
           ],
           "default": "Win64",
-          "description": "Target platform.",
-          "description@zh": "目标平台。"
+          "description": "%config.platform.desc%"
         },
         "vscodeUEHelper.clangdPath": {
           "type": "string",
-          "description": "Path to clangd binary. Empty = auto-detect.",
-          "description@zh": "clangd 二进制路径。留空 = 自动检测。"
+          "description": "%config.clangdPath.desc%"
         },
         "vscodeUEHelper.autoBackupWorkspace": {
           "type": "boolean",
           "default": true,
-          "description": "Auto-backup and restore .code-workspace against UBT refresh.",
-          "description@zh": "自动备份并恢复 .code-workspace,防止 UBT 刷新覆盖。"
+          "description": "%config.autoBackupWorkspace.desc%"
+        },
+        "vscodeUEHelper.editorAwareBuild": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.editorAwareBuild.desc%"
+        },
+        "vscodeUEHelper.scaffold.clangFormat": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.scaffold.clangFormat.desc%"
+        },
+        "vscodeUEHelper.scaffold.clangTidy": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.scaffold.clangTidy.desc%"
+        },
+        "vscodeUEHelper.progressLocation": {
+          "type": "string",
+          "enum": [
+            "window",
+            "notification"
+          ],
+          "enumDescriptions": [
+            "%config.progressLocation.enum.0%",
+            "%config.progressLocation.enum.1%"
+          ],
+          "default": "window",
+          "description": "%config.progressLocation.desc%"
         },
         "vscodeUEHelper.useMCP": {
           "type": "string",
@@ -356,8 +428,7 @@
             "never"
           ],
           "default": "auto",
-          "description": "MCP server mode. Auto = enable only in Cursor/Claude Code.",
-          "description@zh": "MCP 服务器模式。auto = 仅在 Cursor/Claude Code 中启用。"
+          "description": "%config.useMCP.desc%"
         },
         "vscodeUEHelper.lspLoggingLevel": {
           "type": "string",
@@ -368,44 +439,37 @@
             "debug"
           ],
           "default": "info",
-          "description": "Log verbosity for the extension.",
-          "description@zh": "扩展日志详细级别。"
+          "description": "%config.lspLoggingLevel.desc%"
         },
         "vscodeUEHelper.clangdProxy.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable clangd LSP proxy with didClose keepalive and localization.",
-          "description@zh": "启用 clangd LSP 代理（didClose 保活和汉化支持）。"
+          "description": "%config.clangdProxy.enabled.desc%"
         },
         "vscodeUEHelper.clangdProxy.keepaliveMax": {
           "type": "number",
           "default": 20,
-          "description": "Maximum number of keepalive documents. Invalid values clamp to 20.",
-          "description@zh": "最大 keepalive 文档数。无效值将 clamp 到 20。"
+          "description": "%config.clangdProxy.keepaliveMax.desc%"
         },
         "vscodeUEHelper.clangdProxy.keepaliveTtlSec": {
           "type": "number",
           "default": 900,
-          "description": "Keepalive TTL in seconds. Invalid values clamp to 900.",
-          "description@zh": "Keepalive 生存时间（秒）。无效值将 clamp 到 900。"
+          "description": "%config.clangdProxy.keepaliveTtlSec.desc%"
         },
         "vscodeUEHelper.clangdProxy.realClangdPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the real clangd binary. Empty = auto-detect.",
-          "description@zh": "真实 clangd 二进制路径。留空 = 自动检测。"
+          "description": "%config.clangdProxy.realClangdPath.desc%"
         },
         "vscodeUEHelper.clangdProxy.logPath": {
           "type": "string",
           "default": "",
-          "description": "Log file path for the proxy. Empty = no file logging (stderr only).",
-          "description@zh": "代理日志文件路径。留空 = 不输出日志文件（仅 stderr）。"
+          "description": "%config.clangdProxy.logPath.desc%"
         },
         "vscodeUEHelper.clangdProxy.localization.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable clangd output localization (Chinese append/zh-only).",
-          "description@zh": "启用 clangd 输出汉化（追加/仅中文模式）。"
+          "description": "%config.clangdProxy.localization.enabled.desc%"
         },
         "vscodeUEHelper.clangdProxy.localization.mode": {
           "type": "string",
@@ -414,20 +478,17 @@
             "zh-only"
           ],
           "default": "append",
-          "description": "Localization mode: append = add Chinese after English, zh-only = Chinese only.",
-          "description@zh": "汉化模式：append = 在英文后追加中文，zh-only = 仅中文替换。"
+          "description": "%config.clangdProxy.localization.mode.desc%"
         },
         "vscodeUEHelper.clangdProxy.dictionaryPath": {
           "type": "string",
           "default": "",
-          "description": "Path to UE docs dictionary JSON file for hover localization. Empty = disabled.",
-          "description@zh": "UE 文档词典 JSON 文件路径，用于 hover 内容汉化。留空 = 禁用。"
+          "description": "%config.clangdProxy.dictionaryPath.desc%"
         },
         "vscodeUEHelper.showPerfInStatusBar": {
           "type": "boolean",
           "default": false,
-          "description": "Show performance metrics (compile_commands gen time, preparse cache hit rate, incremental scan latency) in status bar.",
-          "description@zh": "在状态栏显示性能指标（compile_commands 生成耗时、preparse 缓存命中率、增量扫描延迟）。"
+          "description": "%config.showPerfInStatusBar.desc%"
         },
         "vscodeUEHelper.clangd.userAddFlags": {
           "type": "array",
@@ -443,8 +504,7 @@
             ]
           },
           "default": [],
-          "markdownDescription": "## Custom Add Flags\n\n勾选要写入 `.clangd` `CompileFlags.Add` 的 flag id。**默认空数组 = Add 完全为空(系统零默认注入)**。需要默认 flag 时,请在面板中显式勾选,或运行 `Set System Includes` 让 SDK flag 自动加入。\n\n**id 含义**\n- `compat-header` —— 强制包含 UE Clangd 兼容头 (/FI<ueClangdCompat.h>)\n- `macro-helper` —— 强制包含宏补全 helper\n- `std-cxx20` —— C++20 标准\n- `preparse-headers` —— 预解析 SharedPCH + addMacroCompletions.h\n- `uht-include-dirs` —— UHT 生成头目录 (/I)\n- `system-include-windows` —— Windows SDK / MSVC (/X /imsvc /fms-compatibility-version),由 `Set System Includes` 命令管理",
-          "markdownDescription@zh": "## 自定义 Add Flags\n\n勾选要写入 `.clangd` `CompileFlags.Add` 的 flag id。**默认空数组 = Add 完全为空 (系统零默认注入)**。需要默认 flag 时,请在面板中显式勾选,或运行 `Set System Includes` 让 SDK flag 自动加入。\n\n**id 含义**\n- `compat-header` —— 强制包含 UE Clangd 兼容头 (/FI<ueClangdCompat.h>)\n- `macro-helper` —— 强制包含宏补全 helper\n- `std-cxx20` —— C++20 标准\n- `preparse-headers` —— 预解析 SharedPCH + addMacroCompletions.h\n- `uht-include-dirs` —— UHT 生成头目录 (/I)\n- `system-include-windows` —— Windows SDK / MSVC (/X /imsvc /fms-compatibility-version),由 `Set System Includes` 命令管理"
+          "markdownDescription": "%config.clangd.userAddFlags.desc%"
         }
       }
     },

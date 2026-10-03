@@ -1,0 +1,81 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "project": ["./tsconfig.json"]
+  },
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@typescript-eslint/recommended-requiring-type-checking"
+  ],
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "rules": {
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/consistent-type-imports": ["warn", { "prefer": "type-imports", "fixStyle": "inline-type-imports" }],
+    "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/no-misused-promises": "error",
+    "@typescript-eslint/await-thenable": "error",
+    "@typescript-eslint/no-non-null-assertion": "warn",
+    "@typescript-eslint/prefer-nullish-coalescing": "warn",
+    "no-console": "off",
+    "prefer-const": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "all"],
+    // [Phase 9 SSoT Lock-in] 防止后续 PR 重新引入 vscode.workspace.* bypass
+    // 匹配 `vscode.workspace.workspaceFile` / `vscode.workspace.workspaceFolders` /
+    // `vscode.workspace.getWorkspaceFolder`（不误判 `myWorkspace.workspaceFile` 等合法调用）
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "MemberExpression[object.type='MemberExpression'][object.object.name='vscode'][object.property.name='workspace'][property.name='workspaceFile']",
+        "message": "[SSoT] use workspace.workspaceFile from @core/workspace instead of vscode.workspace.workspaceFile. Detection root (src/detection/index.ts) and WorkspaceState impl (src/core/workspace.ts) are exempt."
+      },
+      {
+        "selector": "MemberExpression[object.type='MemberExpression'][object.object.name='vscode'][object.property.name='workspace'][property.name='workspaceFolders']",
+        "message": "[SSoT] use workspace.workspaceFolders from @core/workspace instead of vscode.workspace.workspaceFolders. Detection root and WorkspaceState impl are exempt."
+      },
+      {
+        "selector": "CallExpression[callee.type='MemberExpression'][callee.object.type='MemberExpression'][callee.object.object.name='vscode'][callee.object.property.name='workspace'][callee.property.name='getWorkspaceFolder']",
+        "message": "[SSoT] vscode.workspace.getWorkspaceFolder 直读被禁止——只在 src/clangd/compileCommands/task.ts 这种需要原生 vscode.WorkspaceFolder 类型构造 vscode.Task 时保留（带注释豁免）。其他场景必须走 WorkspaceState.workspaceFolders."
+      },
+      {
+        "selector": "NewExpression[callee.name='Logger']",
+        "message": "[SSoT] 模块内部禁止 new Logger() —— 用 sharedLogger (src/core/logger.ts)。主入口 src/extension.ts:30 与测试文件例外。"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@clangd/clangdConfig", "**/clangdConfig"],
+            "message": "[SSoT] writeClangdConfig / findClangdConfig 已删除（Phase 9）—— 唯一 .clangd 写入走 ClangdOps (@clangd/clangdOps). 内部 clangd 模块（clangd/index.ts / clangdOps.ts）允许继续 import 自己的 clangdConfig，加 eslint-disable-next-line 标注。"
+          }
+        ]
+      }
+    ]
+  },
+  "ignorePatterns": ["out/", "dist/", "node_modules/", "*.js", "*.mjs", "coverage/", "test/e2e/"],
+  "overrides": [
+    {
+      "files": ["test/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": "off",
+        // 测试 fixture 会先由断言保证存在，保留非空断言比重复展开样板更清晰；测试工厂也保留类型推导。
+        "@typescript-eslint/no-non-null-assertion": "off",
+        "@typescript-eslint/explicit-function-return-type": "off"
+      }
+    }
+  ]
+}

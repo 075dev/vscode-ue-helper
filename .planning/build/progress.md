@@ -1,0 +1,23 @@
+# 进度台账(progress ledger)—— 骨架阶段
+
+> 断点续跑唯一依据:只信台账与 git log。状态三态:PASS | FAIL | NOT_RUN。
+> 恢复顺序:从第一条非 PASS 的任务继续(即 Wave 2 全部 5 任务,按序补跑)。
+
+Wave 1 TASK_INFRA_ENVELOPE        domain:core    status:PASS    | acceptance:"vitest envelope 14 用例绿 + tsc --noEmit 0 错误 + diff 仅 envelope.ts/测试" | strictness:HEAVY | evidence:commit 69bd2f6,合并 5790c72,合并后全量 typecheck 0 错误 + 1249 测试全绿
+Wave 2 TASK_CMD_BUILD             domain:build   status:NOT_RUN | acceptance:"7 端点(build/rebuild/clean/copyBuildCommand/liveCoding/generateCompileCommands/launchEditor)executeXxx 返回契约 Envelope + 相关 vitest 绿 + tsc 0 错误" | strictness:HEAVY | reason:两轮派发均死于 Copilot 429(utility 配额耗尽),零提交;任务卡在 .tmp/task-cards/wave-2-cmd-build.md
+Wave 2 TASK_CMD_PROJECT           domain:project status:NOT_RUN | acceptance:"8 端点(showProjectInfo/diagnoseProject/createProject/refreshProjectExplorer/openProjectExplorerFile/openWorkspaceFile/openTerminalInNewWindow/switchHeaderSource)返回 Envelope + 相关 vitest 绿 + tsc 0 错误" | strictness:LIGHT | reason:同上;任务卡在 .tmp/task-cards/wave-2-cmd-project.md
+Wave 2 TASK_CMD_CLANGD            domain:clangd  status:NOT_RUN | acceptance:"7 端点(enableClangdProxy/disableClangdProxy/showClangdProxyStatus/setSystemIncludes/installRules/noLintCurrentLine/noLintNextLine)返回 Envelope + 相关 vitest 绿 + tsc 0 错误" | strictness:LIGHT | reason:同上;任务卡在 .tmp/task-cards/wave-2-cmd-clangd.md
+Wave 2 TASK_CMD_CONFIG            domain:config  status:NOT_RUN | acceptance:"5 端点(selectConfig/selectTarget/showControlPanel/retryFirstTimeInit/uninstall)返回 Envelope + 相关 vitest 绿 + tsc 0 错误" | strictness:LIGHT | reason:同上;任务卡在 .tmp/task-cards/wave-2-cmd-config.md
+Wave 2 TASK_MCP                   domain:mcp     status:NOT_RUN | acceptance:"9 工具逐条对齐契约(MCPDispatch 形状、ue_get_build_errors 快照、错误码 MCP_CONTEXT_NOT_INITIALIZED/UNKNOWN_TOOL、C3 同步签名)+ tools vitest 绿 + tsc 0 错误" | strictness:HEAVY | reason:同上;任务卡在 .tmp/task-cards/wave-2-mcp.md
+FULL  typecheck+fulltest          domain:all     status:PASS    | acceptance:"npm run typecheck 0 错误 + npm test 全绿" | strictness:- | evidence:2026-09-20 02:52,101 文件/1249 测试通过(基线 + Wave 1 状态;Wave 2 合并后需重跑)
+Wave 2 TASK_CMD_BUILD             domain:build   status:PASS    | acceptance:"7 端点返回契约 Envelope + vitest 49 用例绿 + tsc 0 错误" | strictness:HEAVY | evidence:提交 1fd37e8/85c2c29/411b70e,合并 1cb3710;Completion Notes:Promise<any> 收紧与错误码缺口登记留填充
+Wave 2 TASK_CMD_PROJECT           domain:project status:PASS    | acceptance:"8 端点返回契约 Envelope + vitest 63 用例绿 + tsc 0 错误" | strictness:LIGHT | evidence:提交 ff677d2/07fd529,合并 004378e;Completion Notes:PROJECT_NOT_DETECTED 借用与 i18n 欠账登记留填充
+Wave 2 TASK_CMD_CLANGD            domain:clangd  status:PASS    | acceptance:"7 端点返回契约 Envelope + vitest 32 用例绿 + tsc 0 错误" | strictness:LIGHT | evidence:提交 eddab6c/9a83d43/24c7602,合并 59449d4;Completion Notes:setSystemIncludes 桥接(as unknown as void)留填充清理
+Wave 2 TASK_CMD_CONFIG            domain:config  status:PASS    | acceptance:"5 端点返回契约 Envelope + vitest 36 用例绿 + tsc 0 错误" | strictness:LIGHT | evidence:提交 4835461/4f5d701,合并 ebd0b8f;Completion Notes:firstRunInit INTERNAL_ERROR + details.step 登记
+Wave 2 TASK_MCP                   domain:mcp     status:PASS    | acceptance:"9 工具契约对齐 + vitest 32 用例绿 + tsc 0 错误 + C3 同步签名证明" | strictness:HEAVY | evidence:提交 5c4ec1e,合并 de21457;Completion Notes:BuildSummary errorCount/warningCount 顶层适配留填充
+MERGE wave-2-resolve              domain:mcp     status:PASS    | acceptance:"合并零冲突 + dispatch 形参放宽 Promise<unknown> + 全仓 typecheck 0 错误" | strictness:- | evidence:提交 91af273;全量 npm test 109 文件/1312 测试全绿(2026-09-20 03:26)
+SKELETON  done                    domain:all     status:PASS    | acceptance:"36/36 端点覆盖;逻辑层(src/build|core|clangd|detection)diff 零改动;worktree 与 wave 分支全清理" | strictness:- | evidence:5790c72..91af273 共 49 文件 +2632/-471,均为命令层返回值/MCP 错误出口/测试
+WAVE3a TASK_FILL_TYPECONTRACT     domain:fill    status:PASS    | acceptance:"Promise<any> 收紧 + 桥接删除 + BuildSummary 适配 + tsc 0 错误 + 相关 vitest 绿" | strictness:HEAVY | evidence:提交 a8f982f/fec62f2,合并 4e458c0
+WAVE3  TASK_LINT_FIX              domain:fill    status:PASS    | acceptance:"diff 范围 eslint 0 error/0 warning + 语义零变化 + 全量零回归" | strictness:HEAVY | evidence:提交 8308e9d(11 文件,42E+3W 清零),合并 ba8a897
+VERIFY typecheck+test+build+lint  domain:all     status:PASS    | acceptance:"四项亲测 fresh evidence" | strictness:- | evidence:typecheck 0 错误;1312/1312 全绿;esbuild 成功;diff 范围 lint 0;契约机检 27↔27/24 文件 envelope/9 MCP case
+REVIEW independent-round-1        domain:all     status:PASS    | acceptance:"ql-reviewer 三结论" | strictness:- | evidence:verdict approved;critical 0;non-critical 4(R1-N1/N2 建议契约修订,N3 i18n DEFERRED 成立,N4 spec-as-is 保留)
