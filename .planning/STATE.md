@@ -2,19 +2,21 @@
 ql_state_version: '1.0'
 ql_version: '0.18.0'
 current_phase: 1
-status: reviewed
+status: shipped
 api_endpoints_count: 36
 review_verdict: approved
 review_rounds: 1
 reviewed_range: 263848e..ba8a897
 event_messages_count: 4
-last_activity: bugfix-002 fixed(extension.ts 接线 activateMCP,MCP 此前完全不可用;评审 approved)
+shipped_pr: 'https://github.com/075dev/vscode-ue-helper/pull/1'
+shipped_at: '2026-10-03'
+last_activity: shipped PR #1 + 章节留档已随分支推送(用户选择:创建 PR;远端仓库此前不存在,已新建 private 仓库)
 ---
 # 项目状态
 
 ## 当前位置
-阶段: 1 (讨论完成,契约已冻结)
-增量: add-002(ue_build 单模块编译)已并入 chapter-01,契约 0.2.0,评审 approved —— 下一步 /ql-deliver
+阶段: 1 (已交付)
+增量: PR #1 已创建(ql/phase-1-panorama → main),envelope 契约 0.2.0,评审 approved —— 下一候选:/ql-add(ClangdLocator 统一 clangd 路径解析)或 /ql-design(新阶段讨论)
 
 ## Clarity Breakdown(2026-09-19 冻结评分)
 - 目标清晰度: 8/10 —— 36 个操作(27 命令 + 9 MCP 工具)清单明确、无"或/待定";交互式向导类命令(createProject)只定义到入口语义
@@ -38,4 +40,4 @@ last_activity: bugfix-002 fixed(extension.ts 接线 activateMCP,MCP 此前完全
 - 修复: .planning/bugfix/002-mcp-not-wired.md(extension.ts 接线 activateMCP)
 
 ## 已知阻塞
-- ql/phase-1-panorama 分支已提交未推送(deliver 收尾方式待用户确认:创建 PR / 仅推送 / 保留本地)
+- 无(交付完成;远端仓库 075dev/vscode-ue-helper 为本次交付新建,private)
