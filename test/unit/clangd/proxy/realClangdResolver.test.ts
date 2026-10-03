@@ -33,7 +33,9 @@ function makeInput(overrides: InputOverrides = {}): RealClangdResolverInput {
     configuredClangdPath: overrides.configuredClangdPath,
     currentClangdPath: overrides.currentClangdPath,
     backupClangdPath: overrides.backupClangdPath,
-    launcherPath: overrides.launcherPath ?? LAUNCHER,
+    whereClangdPath: overrides.whereClangdPath,
+    // 显式传 undefined（如 SDK 探测不持有 launcher）与未传需区分——用 in 检查而非 ??
+    launcherPath: 'launcherPath' in overrides ? overrides.launcherPath : LAUNCHER,
     envPath: overrides.envPath,
     pathDelimiter: ';',
     defaultSearchRoots: overrides.defaultSearchRoots ?? [],
@@ -149,6 +151,45 @@ describe('resolveRealClangdPath — 自动解析真实 clangd 路径', () => {
 
     // When / Then
     expectSuccess(input, DEFAULT_CLANGD, 'defaultLlvmPath');
+  });
+
+  it('Given 备份缺失而 where 有结果 When 解析 Then 使用 whereCommand 候选（位于备份后、PATH 前）', () => {
+    // Given
+    const WHERE_CLANGD = 'C:/Program Files/LLVM/bin/clangd.exe';
+    const input = makeInput({
+      backupClangdPath: 'C:/missing/backup/clangd.exe',
+      whereClangdPath: WHERE_CLANGD,
+      envPath: 'C:/tools/LLVM/bin',
+      existingPaths: [WHERE_CLANGD, PATH_CLANGD],
+    });
+
+    // When / Then
+    expectSuccess(input, WHERE_CLANGD, 'whereCommand');
+  });
+
+  it('Given 备份存在且 where 也有结果 When 解析 Then 备份优先于 whereCommand', () => {
+    // Given
+    const WHERE_CLANGD = 'C:/Program Files/LLVM/bin/clangd.exe';
+    const input = makeInput({
+      backupClangdPath: BACKUP_CLANGD,
+      whereClangdPath: WHERE_CLANGD,
+      existingPaths: [BACKUP_CLANGD, WHERE_CLANGD],
+    });
+
+    // When / Then
+    expectSuccess(input, BACKUP_CLANGD, 'backupClangdPath');
+  });
+
+  it('Given 未注入 launcherPath When 解析 Then 不做 launcher 排除（SDK 探测场景）', () => {
+    // Given — SDK 探测链路不持有 launcher 路径；候选即使等于 launcher 也原样返回
+    const input = makeInput({
+      launcherPath: undefined,
+      currentClangdPath: LAUNCHER,
+      existingPaths: [LAUNCHER],
+    });
+
+    // When / Then
+    expectSuccess(input, LAUNCHER, 'currentClangdPath');
   });
 
   it('Given 候选路径缺失或为空 When 解析 Then 返回 typed notFound 且不抛异常', () => {

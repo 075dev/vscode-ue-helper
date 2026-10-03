@@ -27,7 +27,7 @@ import * as vscode from 'vscode';
 import { type Config } from '@core/config';
 import { type Logger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
-import { resolveRealClangdPath } from './proxy/realClangdResolver';
+import { ClangdLocator } from './locator/clangdLocator';
 import { ClangdSettingsManager } from './proxy/settingsManager';
 import { buildStatus, type ClangdProxyStatus } from './proxy/status';
 import { resolveUBTPath } from '@build/ubt';
@@ -36,6 +36,11 @@ import { getProxyLogChannel } from './proxyLogChannel';
 
 export interface ClangdProxyManagerDependencies {
   readonly fileExists?: (candidate: string) => boolean;
+  /**
+   * [add-003 / D8] 外部注入的 ClangdLocator（测试用）。缺省时内部构造一个
+   * 与原 resolveRealClangdPath 候选链语义等价的实例（含 launcher 排除）。
+   */
+  readonly locator?: ClangdLocator;
   /**
    * [Phase 8] WorkspaceState 引用 —— enable/buildProxyArgs 时动态读 projectDir/engineRoot。
    *
@@ -67,6 +72,9 @@ export class ClangdProxyManager implements vscode.Disposable {
   /** proxy 日志 channel 是否已注册到 subscriptions（只注册一次，channel 单例） */
   private channelRegistered = false;
 
+  /** 内部持有的 clangd 路径解析服务（deps.locator 未注入时使用） */
+  private readonly ownedLocator: ClangdLocator;
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly config: Config,
@@ -77,11 +85,41 @@ export class ClangdProxyManager implements vscode.Disposable {
     this.launcherPath = this.context.asAbsolutePath('out/launcher/proxy-launcher.bat');
     this.settingsManager = new ClangdSettingsManager(this.context, this.launcherPath);
 
+    // [add-003 / D8] clangd 路径解析收敛到 ClangdLocator（懒探测，构造零 IO）；
+    // 候选链语义与原 resolveRealClangdPath 一致，另含 where 命令级（行为统一点）。
+    this.ownedLocator =
+      deps.locator ??
+      new ClangdLocator({
+        getProxyOverridePath: () => this.config.clangdProxyRealClangdPath,
+        getConfiguredClangdPath: () => this.config.clangdPath,
+        getCurrentClangdExtensionPath: () =>
+          vscode.workspace.getConfiguration('clangd').get<string | undefined>('path'),
+        getBackupClangdPath: () => this.settingsManager.backup?.path,
+        launcherPath: this.launcherPath,
+        logger: this.logger,
+        io: { fileExists: deps.fileExists },
+      });
+
     // 默认日志路径：VS Code 每次启动给扩展的带时间戳日志目录，按会话隔离不累积
     this.defaultLogPath = vscode.Uri.joinPath(context.logUri, 'clangd-proxy.log').fsPath;
 
     this.logger.info(`[proxyManager] launcher path: ${this.launcherPath}`);
     this.logger.info(`[proxyManager] default proxy log path: ${this.defaultLogPath}`);
+
+    // [add-003 / D8] clangd 路径解析源变更时丢弃 locator 探测缓存，
+    // 保证下次 enable/reapply / SDK 探测读到新值（懒探测 + 失效策略的失效半边）。
+    // 监听在本文件挂载（clangd/index.ts 保持 vscode type-only import）。
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (
+          e.affectsConfiguration('vscodeUEHelper.clangdPath') ||
+          e.affectsConfiguration('clangd.path')
+        ) {
+          this.locator.invalidate();
+          this.logger.info('[proxyManager] clangd path config changed, locator cache invalidated');
+        }
+      }),
+    );
 
     // 窗口重载时 proxy 可能已被 clangd 扩展启动（clangd.path 仍指向我们的 launcher），
     // 此时立即拉起 tailer，否则重载后看不到 proxy 日志。
@@ -144,6 +182,21 @@ export class ClangdProxyManager implements vscode.Disposable {
 
   // ===== 操作 =====
 
+  /** 当前生效的 clangd 路径解析服务（外部注入优先，否则内部实例） */
+  private get locator(): ClangdLocator {
+    return this.deps.locator ?? this.ownedLocator;
+  }
+
+  /**
+   * [add-003] 丢弃 locator 缓存。
+   *
+   * 装配处（clangd/index.ts）在 `vscodeUEHelper.clangdPath` / `clangd.path`
+   * 配置变更时调用，保证下次解析读到新值。
+   */
+  invalidateLocator(): void {
+    this.locator.invalidate();
+  }
+
   /**
    * 启用 proxy：备份原始 clangd 设置并写入 launcher 设置。
    *
@@ -157,8 +210,8 @@ export class ClangdProxyManager implements vscode.Disposable {
     const clangdConfig = vscode.workspace.getConfiguration('clangd');
     const originalArgs = clangdConfig.get<string[]>('arguments') ?? [];
 
-    // 从 Config 与当前 clangd.path 解析真实 clangd，再构建 proxy 参数。
-    const realClangdPath = this.resolveRealClangdPath(clangdConfig);
+    // 从 ClangdLocator 解析真实 clangd（统一候选链），再构建 proxy 参数。
+    const realClangdPath = await this.resolveRealClangdPath();
     const proxyArgs = this.buildProxyArgs(realClangdPath);
 
     // P1-2: 确保后台索引优先级为 normal（用户未显式设置时注入，可逆）
@@ -169,6 +222,8 @@ export class ClangdProxyManager implements vscode.Disposable {
       );
     }
     await this.settingsManager.enable(proxyArgs, ensuredRealArgs);
+    // enable 改变了备份值与 clangd.path 当前值（指向 launcher），丢弃探测缓存
+    this.locator.invalidate();
     this.logger.info('[proxyManager] proxy enabled');
     // proxy 即将由 clangd 扩展启动，拉起 tailer 实时转发日志到 Output 面板
     this.startTailer();
@@ -181,6 +236,8 @@ export class ClangdProxyManager implements vscode.Disposable {
     // proxy 即将被 clangd 扩展停止，先停 tailer 避免读已关闭的文件
     this.stopTailer();
     const result = await this.settingsManager.disable();
+    // disable 恢复了 clangd.path 与备份状态，丢弃探测缓存
+    this.locator.invalidate();
     if (result.restored) {
       this.logger.info('[proxyManager] proxy disabled, settings restored');
     } else {
@@ -205,7 +262,7 @@ export class ClangdProxyManager implements vscode.Disposable {
     const dashDashIdx = originalArgs.indexOf('--');
     const realClangdArgs = dashDashIdx === -1 ? [] : originalArgs.slice(dashDashIdx + 1);
 
-    const realClangdPath = this.resolveRealClangdPath(clangdConfig);
+    const realClangdPath = await this.resolveRealClangdPath();
     const proxyArgs = this.buildProxyArgs(realClangdPath);
 
     // P1-2: reapply 也确保后台索引优先级（幂等，已含则不动）
@@ -217,28 +274,19 @@ export class ClangdProxyManager implements vscode.Disposable {
   // ===== 内部方法 =====
 
   /**
-   * 解析真实 clangd 路径，失败时阻止写入 clangd 设置。
+   * 解析真实 clangd 路径（经 ClangdLocator 统一候选链），失败时阻止写入 clangd 设置。
    */
-  private resolveRealClangdPath(clangdConfig: vscode.WorkspaceConfiguration): string {
-    const result = resolveRealClangdPath({
-      proxyRealClangdPath: this.config.clangdProxyRealClangdPath,
-      configuredClangdPath: this.config.clangdPath,
-      currentClangdPath: clangdConfig.get<string | undefined>('path'),
-      backupClangdPath: this.settingsManager.backup?.path,
-      launcherPath: this.launcherPath,
-      envPath: process.env.PATH,
-      pathDelimiter: path.delimiter,
-      defaultSearchRoots: buildDefaultClangdSearchRoots(),
-      fileExists: this.deps.fileExists ?? fs.existsSync,
-    });
+  private async resolveRealClangdPath(): Promise<string> {
+    const result = await this.locator.resolveRealClangd();
 
     switch (result.kind) {
       case 'found':
         return result.path;
       case 'notFound': {
-        const message = 'Unable to resolve real clangd path for clangd proxy';
-        this.logger.error(`[proxyManager] ${message}`);
-        throw new Error(message);
+        this.logger.error(
+          `[proxyManager] Unable to resolve real clangd path for clangd proxy; checked: ${JSON.stringify(result.checkedCandidates)}`,
+        );
+        throw new Error('Unable to resolve real clangd path for clangd proxy');
       }
       default:
         return assertNever(result);
@@ -429,14 +477,8 @@ export function ensureBackgroundIndexPriority(args: string[]): string[] {
   return [...args, '--background-index-priority=normal'];
 }
 
-function buildDefaultClangdSearchRoots(): readonly string[] {
-  // Windows-only：默认 clangd 搜索根（VS 2022 + LLVM 标准安装路径）
-  return [
-    path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'LLVM', 'bin'),
-    path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'LLVM', 'bin'),
-    path.join(process.env.LocalAppData ?? '', 'Programs', 'LLVM', 'bin'),
-  ];
-}
+// [add-003] 原 buildDefaultClangdSearchRoots 已删除——默认 LLVM 目录列表
+// 唯一收敛在 locator/clangdLocator.ts 的 DEFAULT_LLVM_SEARCH_ROOTS。
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected real clangd resolver result: ${JSON.stringify(value)}`);
