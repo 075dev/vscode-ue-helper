@@ -1,11 +1,11 @@
 ---
 add: 003
 slug: clangd-locator
-status: building
+status: reviewed
 created_at: 2026-10-03T12:00:00+08:00
 at: chapter-01
 placement: auto(唯一重合)
-review: pending
+review: approved(第 2 轮;第 1 轮 1 critical[override 键变更不失效缓存]已修 + 4 minor[2 同批处理、2 登记不修],回归钉锁定;详见 .planning/build/review-add003.md)
 ---
 
 # add-003:ClangdLocator——统一 clangd 路径解析

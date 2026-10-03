@@ -1,11 +1,13 @@
 ---
 review: add-003
 slug: clangd-locator
-review_round: 1
-verdict: criticals_found
+review_round: 2
+verdict: approved
 reviewed_at: 2026-10-03
 base: main
-head: 8da7eaf
+head: 5be8301
+round1_head: 8da7eaf
+round1_verdict: criticals_found
 diff_stat: 9 files, +873/-187 (代码主体 bbbc5b0,6 文件 +744/-185)
 reviewer: ql-reviewer(独立上下文)
 ---
@@ -138,3 +140,34 @@ STANDARD(默认档)。理由:6 个代码文件 +744/-185,不满足 THOROUGH 升�
 - minor-2/minor-3/minor-5:登记不修,留待 diagnoseProject 接入 locator 时统一收敛。
 
 **其余结论:** 契约/范围合规通过(无越界、验收 8 条逐条有据);正确性除 CRITICAL-1 外缓存语义、launcher 排除、windowsSdk 等价性均核查通过;一致性整体良好。
+
+---
+
+# 复审 Round 2(2026-10-03,范围:5be8301,仅 proxyManager 失效路径)
+
+## 复审范围与 diff 覆盖核验
+
+提交 5be8301 共 4 文件:本报告入库 + proxyManager.ts(监听条件+注释/-13)+ 2 个测试文件。**无越界文件**(src 代码仅 proxyManager.ts 一处触及,恰为指定范围)。
+
+| 上轮 finding | 处置声明 | 核验结果 | 证据 |
+|--------------|----------|----------|------|
+| CRITICAL-1 override 失效缺口 | 监听补第三键 | **已解决** | proxyManager.ts:113-119 条件新增 e.affectsConfiguration("vscodeUEHelper.clangdProxy.realClangdPath"),键名与 config.ts:219 clangdProxy.realClangdPath 一致(节 vscodeUEHelper);注释同步登记回归原因 |
+| minor-4 死方法 + 过时注释 | 删除 | **已解决** | invalidateLocator() 整体删除(diff -13 行段);上轮已证全仓零调用方,typecheck 0 错误佐证无残留引用 |
+| minor-1 timeout 无锁定 | 补测试 | **已解决** | clangdLocator.test.ts makeIo 记录 opts.timeout,新用例断言 execFileTimeouts === [5_000, 5_000](where + --version 两个调用点),实现值漂移将被捕获 |
+
+## 修复质量与回归探测
+
+- **回归钉成立性:** proxyManager.test.ts 新用例捕获构造器真实注册的 onDidChangeConfiguration 监听,注入 mock locator,三键逐一 fire 断言 invalidate 各被调用 1 次,并含反向断言(无关键 → 不触发)。被测对象即"监听→invalidate"接线本身,非空测 mock,不属 S6。通过
+- **新引入问题扫描:** proxyManager 逻辑改动仅一行条件 + 注释 + 删方法;this.locator getter(注入/内部构造两态)不变;launcher 排除、notFound 阻断、enable/disable 钩子均未触及。无新问题。
+- **测试卫生备注(不立级):** 新用例的 vi.spyOn(onDidChangeConfiguration).mockImplementation 未显式恢复,vitest 配置无全局 restoreMocks、文件无 afterEach。当前泄漏窗口为零(用例位于文件末尾、vitest 跨文件环境隔离、全量绿佐证);若未来在该 describe 之后追加依赖真实配置监听的用例需注意恢复。与仓库既有测试惯例一致(全仓本无 restoreMocks),不改。
+- **DoneClaim 探测:** 工作区干净(HEAD = 5be8301);亲测 locator 13 + proxyManager 13 = 26/26 绿,与声明"定向 26/26"一致;全量 1349 = 1347 + 2 新用例,对账吻合,未重跑(非 stale)。
+
+## Round 2 裁定
+
+**verdict: approved**(0 critical / 0 major / 0 new minor;1 条不立级测试卫生备注)
+
+CRITICAL-1 已解决,minor-1/4 已解决,minor-2/3/5 维持上轮"登记不修"处置。add-003 三结论最终状态:
+
+1. 契约/范围合规 —— 通过(round 1 结论不变)
+2. 正确性 —— 通过(CRITICAL-1 修复有回归钉锁定)
+3. 代码库一致性 —— 通过(minor-4 已清;minor-5 维持登记)

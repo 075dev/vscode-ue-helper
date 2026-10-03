@@ -10,13 +10,13 @@ reviewed_range: 263848e..ba8a897
 event_messages_count: 4
 shipped_pr: 'https://github.com/075dev/vscode-ue-helper/pull/1'
 shipped_at: '2026-10-03'
-last_activity: shipped PR #1 + 章节留档已随分支推送(用户选择:创建 PR;远端仓库此前不存在,已新建 private 仓库)
+last_activity: add-003 reviewed(ClangdLocator 统一 clangd 路径解析,内联实现,评审 approved 第 2 轮)
 ---
 # 项目状态
 
 ## 当前位置
-阶段: 1 (已交付)
-增量: PR #1 已创建(ql/phase-1-panorama → main),envelope 契约 0.2.0,评审 approved —— 下一候选:/ql-add(ClangdLocator 统一 clangd 路径解析)或 /ql-design(新阶段讨论)
+阶段: 1 (已交付,增量 add-003 已评审待交付)
+增量: add-003(ClangdLocator 统一 clangd 路径解析)在 add/003-clangd-locator 分支评审 approved —— 下一步 /ql-deliver
 
 ## Clarity Breakdown(2026-09-19 冻结评分)
 - 目标清晰度: 8/10 —— 36 个操作(27 命令 + 9 MCP 工具)清单明确、无"或/待定";交互式向导类命令(createProject)只定义到入口语义
@@ -38,6 +38,7 @@ last_activity: shipped PR #1 + 章节留档已随分支推送(用户选择:创�
 - 文档树: .qiling/docs/(chapter-01,基线 0d738d8c)
 - 增量: .planning/add/002-module-build.md + .planning/build/fill-report-add002.md
 - 修复: .planning/bugfix/002-mcp-not-wired.md(extension.ts 接线 activateMCP)
+- 增量: .planning/add/003-clangd-locator.md(ClangdLocator,D8)+ .planning/build/fill-report-add003.md + .planning/build/review-add003.md(approved 第 2 轮)
 
 ## 已知阻塞
 - 无(交付完成;远端仓库 075dev/vscode-ue-helper 为本次交付新建,private)
