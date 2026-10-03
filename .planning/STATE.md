@@ -10,13 +10,13 @@ reviewed_range: 263848e..ba8a897
 event_messages_count: 4
 shipped_pr: 'https://github.com/075dev/vscode-ue-helper/pull/1'
 shipped_at: '2026-10-03'
-last_activity: add-003 reviewed(ClangdLocator 统一 clangd 路径解析,内联实现,评审 approved 第 2 轮)
+last_activity: add-003 shipped(PR #2,ClangdLocator 统一 clangd 路径解析)
 ---
 # 项目状态
 
 ## 当前位置
-阶段: 1 (已交付,增量 add-003 已评审待交付)
-增量: add-003(ClangdLocator 统一 clangd 路径解析)在 add/003-clangd-locator 分支评审 approved —— 下一步 /ql-deliver
+阶段: 1 (已交付,增量 add-003 已交付)
+增量: add-003(ClangdLocator)PR #2 已创建(add/003-clangd-locator → main)—— 无排队增量,下一候选:/ql-design(新阶段讨论)或 /ql-add(下一个功能)
 
 ## Clarity Breakdown(2026-09-19 冻结评分)
 - 目标清晰度: 8/10 —— 36 个操作(27 命令 + 9 MCP 工具)清单明确、无"或/待定";交互式向导类命令(createProject)只定义到入口语义
