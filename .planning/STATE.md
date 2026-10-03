@@ -1,6 +1,6 @@
 ---
 ql_state_version: '1.0'
-ql_version: '0.15.0'
+ql_version: '0.18.0'
 current_phase: 1
 status: reviewed
 api_endpoints_count: 36

@@ -1,0 +1,40 @@
+{
+  "$schema": "./config-schema.json",
+  "mode": "interactive",
+  "discussion": {
+    "auto_mode": false,
+    "min_topics_covered": 4,
+    "require_openapi": true,
+    "require_event_flow": true,
+    "openapi_validation": true
+  },
+  "build": {
+    "skeleton_first": true,
+    "atomic_commits": true,
+    "auto_verify": true,
+    "stop_on_verify_failure": true
+  },
+  "parallelization": {
+    "enabled": true,
+    "max_concurrent": 5,
+    "isolation": "worktree",
+    "auto_merge": true,
+    "fail_fast": false,
+    "fallback_to_sequential": true,
+    "wave_timeout_minutes": 30,
+    "worker_timeout_minutes": 10,
+    "worker_retry_count": 1,
+    "merge_strategy": "merge",
+    "inline_threshold": 2
+  },
+  "ship": {
+    "auto_pr": true,
+    "require_verification_passed": true,
+    "block_on_dirty_tree": true
+  },
+  "safety": {
+    "always_confirm_destructive": true,
+    "always_confirm_external_services": true
+  },
+  "response_language": "zh-CN"
+}
