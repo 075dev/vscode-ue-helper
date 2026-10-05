@@ -5,8 +5,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-05
+
 ### Changed
 
+- **ClangdLocator 统一 clangd 路径解析**（add-003，决策 D8）：此前插件内两条互相独立、已实际漂移的解析链路（clangd 代理的 `realClangdResolver` 6 级候选 / Windows SDK 探测的 `findClangdExecutable` 4 级候选）收敛为 `ClangdLocator` 单服务——懒探测 + 缓存 + 失效（扩展激活零 IO，首次使用才探测），默认 LLVM 目录列表与 `clangd --version` InstalledDir 推导全局唯一份；候选链统一为 7 级（覆盖项 → 插件 clangdPath → 第三方 clangd.path 当前值 → 备份值 → `where clangd` → PATH → 默认目录），配置三键（`clangdPath` / `clangdProxy.realClangdPath` / `clangd.path`）变更与 proxy 启停自动失效缓存。36 端点对外行为不变。
 - **控制面板按项目可用性收敛**：工作区未检测到 `.uproject` 时面板整体不可用——显示"未检测到 UE 项目"空状态（隐藏全部分页与按钮），仅保留"创建 UE 项目"入口；检测到项目后自动恢复。检测到项目但无引擎时，UBT 类按钮（构建/重构建/清理/启动编辑器/Live Coding/生成编译数据库）按适用度置灰，诊断/工具/代理类按钮仍可用。扩展侧 `executeCommand` 增加服务端兜底校验（webview 的 disabled 可被伪造消息绕过），无项目/无引擎时拒绝执行并回推原因。
 - **控制面板按钮适用档位**：`BUTTON_GROUPS` 每个按钮声明 `requirement`（`always` / `project` / `engine`），由 `COMMAND_REQUIREMENT` 查表供 webview 渲染与扩展侧兜底共用，`panelState` 消息把项目/引擎存在性推到 webview 驱动刷新（检测完成、可见性恢复、用户切换项目/引擎选择时）。
 
@@ -18,6 +21,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`ue_build` 支持单模块编译**（add-002）：MCP 工具 `ue_build` 新增可选 `module` 参数（UBT 原生 `-Module=`，仅 `mode=build` 生效，其余模式忽略并返回 warning）——AI 代理改完单个模块后可秒级编译验证，不必全 target 构建。构建结果与快照（`ue_get_build_errors`）透出 module 过滤范围。
 - **UE 惯例感知的源/头文件切换命令**：`vscodeUEHelper.switchHeaderSource`（快捷键 `Alt+O`，已挂编辑器右键菜单）。修复"从头文件切换经常跳到引擎 `ObjectMacros.h`"的问题——该症状来自 clangd 扩展 `clangd.switchSourceHeader` 的实现：它按"头文件符号在索引中的定义位置"投票选目标、平票取路径字典序最小者，UE 头文件符号定义分散且后台索引不完整时票源稀疏，`Engine/Source/Runtime/CoreUObject/Public/UObject/ObjectMacros.h` 的路径字典序几乎最靠前于是屡屡胜出（本插件预包含链进一步放大了引擎公共头在索引中的富集度）。新命令不依赖索引，改用确定性路径规则：同目录同 stem 互换扩展名 → `Public`↔`Private`↔`Classes` 目录互换（保留子路径，插件模块路径同样支持）→ `X.generated.h` 剥 `.generated` 双侧匹配 → `.inl` 对应主头文件 → workspace 同 stem 搜索兜底（排除 Intermediate/Binaries 等目录，多候选弹 QuickPick）。
 - **编辑器感知构建**（借鉴 [engine-link](https://github.com/rmoubayed/engine-link) / [UE Build Bridge](https://marketplace.visualstudio.com/items?itemName=Alingkumo.unreal-engine-link) 的 editor-aware build）：`build` 前通过 `tasklist` 检测 Unreal Editor 是否运行，运行中则提示改走 Live Coding（避免 DLL 锁定失败），`editorAwareBuild` 设置可关闭；MCP / silent 调用自动跳过。
 - **新增源文件提示刷新 compile_commands**（借鉴 [boocs/unreal-clangd](https://github.com/boocs/unreal-clangd)）：增量 watcher 现在区分 add/change/unlink，检测到新增 C++ 文件时按 10 分钟节流提示一键刷新编译数据库（`CompileCommandsRefreshHint`）。
@@ -29,6 +33,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **MCP 服务器从未启动（extension.ts 未接线 activateMCP）**（bugfix-002）：任何宿主下 MCP 服务器都不会启动——AI 代理的 9 个 `ue_*` 工具全部拿不到（连接不上或 callTool 返回 `MCP_CONTEXT_NOT_INITIALIZED`）。根因是 `activate` 流程从未调用 `activateMCP`（MCP 模块改造时留下的 dead code，接线计划此后未落地）。修复后新增回归测试钉住激活链路（`extension.test.ts`）。
 - **Live Coding 不再打开新项目实例**：点击 Live Coding 按钮此前 spawn 一个不带 `-Project` 的全新 `UnrealEditor.exe`（`-ExecCmds` 方式）——UE 弹出项目管理器且热重载作用在错误实例上。已改为 UBT `-LiveCoding` 官方方式：直接连接正在运行的编辑器触发热重载，不弹任何新窗口（编辑器未运行时回退为普通构建）；编译期间进度实时可见、可取消，失败时弹出 UBT 输出尾部错误。
 - **设置/命令/视图的中文说明从未生效（非标准本地化字段）**：`package.json` 此前用 `description@zh` / `title@zh` / `name@zh` 字段写中文——VS Code 会忽略这些非标准字段，中文用户在设置界面只看到英文；且中文语言文件误命名为 `package.nls.zh.json`（VS Code 只加载 `package.nls.zh-cn.json`）。已全量迁移到标准 nls 机制：`package.json` 用 `%key%` 占位符，`package.nls.json`（英文默认）与 `package.nls.zh-cn.json`（简体中文）提供翻译——覆盖 22 个设置项（含 `progressLocation` 的枚举描述与 `clangd.userAddFlags` 的 markdown 说明）、26 个命令标题、2 个侧边栏视图名。新增 `nlsPlaceholders.test.ts` 守护测试（占位符缺键/孤儿键/`@zh` 回归/文件名）防再次失效。
 - **控制面板分页无法切换（webview 脚本被注释截断）**：`controlPanel.html.ts` 内联脚本注释中含字面 `</script` 序列——HTML 解析器据此在注释中间提前终止 `<script>` 块，整个 IIFE 从未执行，分页/按钮/保存/状态刷新全部失灵，残余脚本文本被当作正文渲染。已改写注释并加回归测试（生成的 HTML 必须恰好一对 script 开合标签）。
