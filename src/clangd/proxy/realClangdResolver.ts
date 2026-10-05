@@ -3,13 +3,18 @@
  *
  * 职责：
  * - 在扩展端纯函数解析真实 clangd 可执行文件路径。
- * - 按配置覆盖项、插件 clangdPath、第三方 clangd.path 备份、PATH、默认 LLVM 目录排序。
+ * - 按配置覆盖项、插件 clangdPath、第三方 clangd.path 备份、where 命令、PATH、默认 LLVM 目录排序。
  * - 明确排除本扩展 proxy launcher，避免递归把代理当成真实 clangd 启动。
  *
  * 设计原则：
  * - 不导入 vscode、proxy CLI 或 processBridge，便于单元测试和后续 T2 接线。
  * - 文件系统、环境变量、当前设置都由调用方注入，测试不依赖真实机器状态。
  * - 未找到 clangd 是预期业务结果，返回 typed notFound，不抛异常。
+ *
+ * [add-003 / D8] 本函数是 ClangdLocator 的统一解析内核：proxyManager（经 ClangdLocator）
+ * 与 windowsSdk（SDK 探测）共用同一候选链与检查逻辑，新增 `whereClangdPath` 候选级
+ * （位于备份值之后、PATH 遍历之前）；`launcherPath` 改为可选——SDK 探测场景不持有
+ * launcher 路径，缺省时跳过 launcher 排除。
  */
 
 import * as path from 'node:path';
@@ -20,6 +25,7 @@ export type RealClangdResolverSource =
   | 'configuredClangdPath'
   | 'currentClangdPath'
   | 'backupClangdPath'
+  | 'whereCommand'
   | 'pathEnv'
   | 'defaultLlvmPath';
 
@@ -59,8 +65,10 @@ export interface RealClangdResolverInput {
   readonly currentClangdPath?: string;
   /** settingsManager 备份中的原始 `clangd.path`。 */
   readonly backupClangdPath?: string;
-  /** 本扩展 proxy launcher 路径，必须从候选中排除。 */
-  readonly launcherPath: string;
+  /** `where clangd` 的第一条结果（位于备份值之后、PATH 遍历之前）。 */
+  readonly whereClangdPath?: string;
+  /** 本扩展 proxy launcher 路径；传入的候选命中时被排除。缺省则跳过排除。 */
+  readonly launcherPath?: string;
   /** 注入的 PATH 字符串，传 undefined 表示没有 PATH 候选。 */
   readonly envPath?: string;
   /** 注入的 PATH 分隔符，Windows 为 `;`，POSIX 为 `:`。 */
@@ -84,8 +92,9 @@ interface RealClangdCandidate {
  * 2. `vscodeUEHelper.clangdPath`
  * 3. 当前第三方 `clangd.path`
  * 4. settingsManager 备份中的 `clangd.path`
- * 5. PATH 中的 `clangd(.exe)`
- * 6. 默认 LLVM 安装目录中的 `clangd(.exe)`
+ * 5. `where clangd` 结果
+ * 6. PATH 中的 `clangd(.exe)`
+ * 7. 默认 LLVM 安装目录中的 `clangd(.exe)`
  */
 export function resolveRealClangdPath(input: RealClangdResolverInput): RealClangdResolverResult {
   const rejected: RealClangdCheckedCandidate[] = [];
@@ -97,7 +106,7 @@ export function resolveRealClangdPath(input: RealClangdResolverInput): RealClang
       continue;
     }
 
-    if (isSamePath(normalized, input.launcherPath)) {
+    if (input.launcherPath !== undefined && isSamePath(normalized, input.launcherPath)) {
       rejected.push({ path: normalized, source: candidate.source, reason: 'proxyLauncher' });
       continue;
     }
@@ -126,6 +135,7 @@ function buildCandidates(input: RealClangdResolverInput): readonly RealClangdCan
     literalCandidate(input.configuredClangdPath, 'configuredClangdPath'),
     literalCandidate(input.currentClangdPath, 'currentClangdPath'),
     literalCandidate(input.backupClangdPath, 'backupClangdPath'),
+    literalCandidate(input.whereClangdPath, 'whereCommand'),
     ...pathCandidates(input.envPath, input.pathDelimiter),
     ...defaultCandidates(input.defaultSearchRoots),
   ].filter(isCandidate);

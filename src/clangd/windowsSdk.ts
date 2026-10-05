@@ -16,12 +16,13 @@
  *
  * [deactivate 子进程清理 — 决策记录 2026-07-31,见 AGENTS.md 仓库陷阱 #14]
  *
- * 本文件 4 处 `child_process` 调用全部**短探测**,**不接入 SubprocessRegistry**:
- *   - L34 `runWithEofStdin` 内部 `spawn(file, args)`:clang/clang++ `-v -E -xc++ -` 探测。
+ * 本文件 2 处 `child_process` 调用全部**短探测**,**不接入 SubprocessRegistry**:
+ *   - `runWithEofStdin` 内部 `spawn(file, args)`:clang/clang++ `-v -E -xc++ -` 探测。
  *     **同步 await** 走 Promise,函数返回时 child 已 close,**不会 leak**。
- *   - L339 `execFileAsync('where', ['clangd'])`:探测 clangd 是否在 PATH,**ms 级短任务**。
- *   - L390 `execFileAsync(clangdExe, ['--version'])`:读 clangd banner,**ms 级短任务**。
- *   - L492 `spawn(cl, [])`:cl.exe banner 探测 MSVC 版本,await close 后函数返回。
+ *   - `spawn(cl, [])`:cl.exe banner 探测 MSVC 版本,await close 后函数返回。
+ *
+ * [add-003] 原 where / clangd --version 两处 execFile 探测随 findClangdExecutable /
+ * readInstalledDir 一并迁移至 locator/clangdLocator.ts(同样的 await 短探测模式)。
  *
  * 设计权衡:`SubprocessRegistry` 只跟踪**长时间运行 / 异步 / 跨函数生命周期**的子进程
  * (UBT 编译、UHT codegen、UE Editor、Live Coding 等)。本文件所有 spawn 都是
@@ -30,13 +31,13 @@
  * 若未来某个 spawn 改为 fire-and-forget / detached / 后台持续轮询,**必须**接入 registry。
  */
 
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { type Logger } from '@core/logger';
-
-const execFileAsync = promisify(execFile);
+// [add-003 / D8] clangd 定位与驱动器推导收敛到 locator——本文件不再自带
+// PATH 遍历/默认 LLVM 目录/`clangd --version` 的重复实现。
+import { findClangdShared, locateClangDriverFrom } from './locator/clangdLocator';
 
 /**
  * Spawn a process, capture its stderr, and end its stdin immediately so
@@ -266,163 +267,34 @@ export async function detectSystemIncludesWithEngineRecommendation(
 /**
  * Resolve the path to a clang-family executable we can run with `-v -E`.
  *
- * Step 1 — locate a `clangd.exe`:
+ * Step 1 — locate a `clangd.exe` via the shared locator chain (add-003 / D8):
  *   1. User-configured `vscodeUEHelper.clangdPath`
  *   2. `where clangd` (resolves PATHEXT, App Paths)
  *   3. Manual walk of `process.env.PATH`
  *   4. Default LLVM install dirs (`%ProgramFiles%\LLVM\bin` etc.)
  *
- * Step 2 — once a clangd is found, run `clangd --version` and parse the
- * `InstalledDir: <path>` line. That path is the authoritative LLVM bin
- * directory; we prefer `clang++.exe` there (matches upstream unreal-clangd),
- * falling back to `clang.exe`.
+ * Step 2/3 — derive the clang driver from `clangd --version` InstalledDir
+ * (prefer clang++.exe, fall back to clang.exe, then a sibling scan in
+ * clangd's own directory); the logic lives in locator/clangdLocator.ts.
  *
- * Step 3 — if `clangd --version` doesn't yield InstalledDir (older builds),
- * fall back to sibling scan in clangd's own directory.
- *
- * Returns null on POSIX or when no clangd is found anywhere.
+ * Returns null when no clangd is found anywhere.
  */
 async function resolveClangExecutable(
   clangdPath?: string,
   logger?: Logger,
 ): Promise<string | null> {
-  // Step 1 — find any clangd.exe.
-  const clangdExe = await findClangdExecutable(clangdPath, logger);
-  if (!clangdExe) {
+  // Step 1 — find any clangd.exe via the unified locator chain.
+  const located = await findClangdShared({ configuredPath: clangdPath, logger });
+  if (!located) {
     return null;
   }
-  logger?.info(`[windowsSdk] found clangd.exe: ${clangdExe}`);
+  logger?.info(`[windowsSdk] found clangd.exe: ${located.path} (source: ${located.source})`);
 
-  // Step 2 — read InstalledDir from `clangd --version`.
-  const installedDir = await readInstalledDir(clangdExe, logger);
-  if (installedDir) {
-    logger?.info(`[windowsSdk] clangd --version reports InstalledDir: ${installedDir}`);
-    for (const name of ['clang++.exe', 'clang.exe']) {
-      const candidate = path.join(installedDir, name);
-      try {
-        await fs.access(candidate);
-        logger?.info(`[windowsSdk] resolved clang driver (from InstalledDir): ${candidate}`);
-        return candidate;
-      } catch {
-        /* try next */
-      }
-    }
-    logger?.warn(
-      `[windowsSdk] InstalledDir=${installedDir} has no clang++.exe / clang.exe — falling back to sibling scan`,
-    );
-  }
-
-  // Step 3 — fallback: clangd's own directory might still have clang++.exe
-  // alongside (common in slim LLVM builds).
-  const dir = path.dirname(clangdExe);
-  for (const name of ['clang++.exe', 'clang.exe', 'clangd.exe']) {
-    const candidate = path.join(dir, name);
-    try {
-      await fs.access(candidate);
-      logger?.info(`[windowsSdk] resolved clang driver (sibling fallback): ${candidate}`);
-      return candidate;
-    } catch {
-      /* try next */
-    }
-  }
-
-  return null;
+  // Step 2/3 — InstalledDir derivation + sibling fallback (single copy in locator).
+  return locateClangDriverFrom(located.path, undefined, logger);
 }
 
-/** Locate a clangd.exe via config → where → PATH walk → default LLVM dirs. */
-async function findClangdExecutable(clangdPath?: string, logger?: Logger): Promise<string | null> {
-  const exists = async (p: string): Promise<boolean> => {
-    try {
-      await fs.access(p);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // 1. User-configured path.
-  if (clangdPath && clangdPath.length > 0) {
-    if (await exists(clangdPath)) {
-      logger?.info(`[windowsSdk] using clangdPath from config: ${clangdPath}`);
-      return clangdPath;
-    }
-    logger?.warn(`[windowsSdk] clangdPath from config not found: ${clangdPath}`);
-  }
-
-  // 2. `where clangd`.
-  try {
-    const { stdout } = await execFileAsync('where', ['clangd'], {
-      windowsHide: true,
-      timeout: 5_000,
-    });
-    const first = stdout.split(/\r?\n/)[0]?.trim();
-    if (first && (await exists(first))) {
-      logger?.info(`[windowsSdk] \`where clangd\` resolved: ${first}`);
-      return first;
-    }
-  } catch {
-    /* `where` unavailable or no match */
-  }
-
-  // 3. Manual PATH walk.
-  const pathDirs = (process.env.PATH ?? '').split(path.delimiter).filter((d) => d.length > 0);
-  for (const dir of pathDirs) {
-    const candidate = path.join(dir, 'clangd.exe');
-    if (await exists(candidate)) {
-      logger?.info(`[windowsSdk] found clangd in PATH: ${candidate}`);
-      return candidate;
-    }
-  }
-
-  // 4. Default LLVM install paths.
-  const defaultRoots = [
-    path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'LLVM', 'bin'),
-    path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'LLVM', 'bin'),
-    path.join(process.env.LocalAppData ?? '', 'Programs', 'LLVM', 'bin'),
-  ];
-  for (const root of defaultRoots) {
-    const candidate = path.join(root, 'clangd.exe');
-    if (await exists(candidate)) {
-      logger?.info(`[windowsSdk] found clangd at default LLVM path: ${candidate}`);
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Run `clangd --version` and extract the `InstalledDir:` line.
- *
- * Example output:
- *   clangd version 19.1.0
- *   Target: x86_64-pc-windows-msvc
- *   Thread model: posix
- *   InstalledDir: C:\Program Files\LLVM\bin
- */
-async function readInstalledDir(clangdExe: string, logger?: Logger): Promise<string | null> {
-  try {
-    const { stdout, stderr } = await execFileAsync(clangdExe, ['--version'], {
-      windowsHide: true,
-      timeout: 5_000,
-    });
-    const output = `${stdout}\n${stderr}`;
-    const m = output.match(/^InstalledDir:\s*(.+)\s*$/m);
-    if (m) {
-      logger?.debug(`[windowsSdk] raw clangd --version output: ${output.replace(/\n/g, ' | ')}`);
-    } else {
-      logger?.warn(
-        `[windowsSdk] \`${clangdExe} --version\` did not include an InstalledDir line — output:\n${output}`,
-      );
-    }
-    return m ? (m[1]?.trim() ?? null) : null;
-  } catch (err) {
-    logger?.warn(
-      `[windowsSdk] \`${clangdExe} --version\` failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
-  }
-}
+// [add-003] 原 readInstalledDir 已迁移至 locator/clangdLocator.ts。
 
 /** Parse `clang -v` output between the two search-list markers. */
 function parseIncludePaths(stderr: string): string[] {

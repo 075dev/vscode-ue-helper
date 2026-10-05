@@ -301,4 +301,44 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
       expect(disableSpy).toHaveBeenCalledOnce();
     });
   });
+
+  describe('locator 缓存失效（add-003）', () => {
+    it('Given 三个源键任一变更 When 配置事件派发 Then locator.invalidate 被调用', () => {
+      // Given — 捕获构造时注册的 onDidChangeConfiguration 监听
+      const listeners: Array<(e: { affectsConfiguration: (k: string) => boolean }) => void> = [];
+      vi.spyOn(vscode.workspace, 'onDidChangeConfiguration').mockImplementation((listener) => {
+        listeners.push(listener as unknown as (e: {
+          affectsConfiguration: (k: string) => boolean;
+        }) => void);
+        return { dispose: vi.fn() };
+      });
+      const invalidate = vi.fn();
+      const locator = { resolveRealClangd: vi.fn(), invalidate };
+
+      new ClangdProxyManager(context, createConfigMock() as never, logger as never, {
+        locator: locator as never,
+      });
+      expect(listeners.length).toBe(1);
+      const fire = listeners[0];
+      if (!fire) {
+        throw new Error('onDidChangeConfiguration listener not captured');
+      }
+
+      // When / Then — override、插件 clangdPath、第三方 clangd.path 三键逐个触发（CRITICAL-1 回归钉）
+      for (const key of [
+        'vscodeUEHelper.clangdPath',
+        'vscodeUEHelper.clangdProxy.realClangdPath',
+        'clangd.path',
+      ]) {
+        invalidate.mockClear();
+        fire({ affectsConfiguration: (k) => k === key });
+        expect(invalidate).toHaveBeenCalledTimes(1);
+      }
+
+      // 无关键不触发
+      invalidate.mockClear();
+      fire({ affectsConfiguration: () => false });
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+  });
 });
