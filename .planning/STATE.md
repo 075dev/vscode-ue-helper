@@ -10,7 +10,7 @@ reviewed_range: 263848e..ba8a897
 event_messages_count: 4
 shipped_pr: 'https://github.com/075dev/vscode-ue-helper/pull/1'
 shipped_at: '2026-10-03'
-last_activity: add-003 shipped(PR #2,ClangdLocator 统一 clangd 路径解析)
+last_activity: v0.2.0 已发布(PR #2 合并 → CHANGELOG 收口 → tag v0.2.0 → GitHub Release 附 .vsix)
 ---
 # 项目状态
 
