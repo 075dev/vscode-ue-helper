@@ -343,3 +343,4 @@ events: 3
 |------|------|------|
 | 2026-09-28T08:08:12.386Z | 自动生成 | 由 `/ql-scan` 初始化,基线 commit `9b73e260` |
 | 2026-10-03 | add | ClangdLocator 统一 clangd 路径解析:懒探测+缓存+失效,两视图(proxy 排除 launcher / SDK 推导 clang 驱动器);realClangdResolver 与 windowsSdk 重复链路收敛,默认 LLVM 目录唯一份,proxy 链路新增 where 候选级;36 端点对外行为不变(决策 D8)(add-003) |
+| 2026-10-05 | add | 新增源文件自动重建 compile_commands(决策 D9):新设置 `vscodeUEHelper.compileCommandsAutoRefresh`(默认开)= 后台静默重建(quiet 形态:无 picker/无弹窗/跳过重启询问,2 分钟节流 + inFlight 防重入);关闭回到 10 分钟节流手动提示;`generateCompileCommands` 命令新增 quiet 附加参数(无参调用行为不变);36 端点 envelope 语义不变(add-004) |

@@ -1,11 +1,11 @@
 ---
 add: 004
 slug: auto-refresh-compile-commands
-status: building
+status: reviewed
 created_at: 2026-10-05T12:00:00+08:00
 at: chapter-01
 placement: auto(唯一重合)
-review: pending
+review: approved(第 2 轮;第 1 轮 1 major[F-1 quiet 失败无日志/虚假成功日志]已修 + F-2 注释纠正,F-3 登记不修;详见 .planning/build/review-add004.md)
 ---
 
 # add-004:新增源文件自动重建 compile_commands(配置开关)

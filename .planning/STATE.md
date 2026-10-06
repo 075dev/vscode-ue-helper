@@ -10,7 +10,7 @@ reviewed_range: 263848e..ba8a897
 event_messages_count: 4
 shipped_pr: 'https://github.com/075dev/vscode-ue-helper/pull/1'
 shipped_at: '2026-10-03'
-last_activity: v0.2.0 已发布(PR #2 合并 → CHANGELOG 收口 → tag v0.2.0 → GitHub Release 附 .vsix)
+last_activity: add-004 reviewed(新增源文件自动重建 compile_commands,内联实现,评审 approved 第 2 轮)
 ---
 # 项目状态
 
@@ -39,6 +39,7 @@ last_activity: v0.2.0 已发布(PR #2 合并 → CHANGELOG 收口 → tag v0.2.0
 - 增量: .planning/add/002-module-build.md + .planning/build/fill-report-add002.md
 - 修复: .planning/bugfix/002-mcp-not-wired.md(extension.ts 接线 activateMCP)
 - 增量: .planning/add/003-clangd-locator.md(ClangdLocator,D8)+ .planning/build/fill-report-add003.md + .planning/build/review-add003.md(approved 第 2 轮)
+- 增量: .planning/add/004-auto-refresh-compile-commands.md(自动重建,D9)+ .planning/build/fill-report-add004.md + .planning/build/review-add004.md(approved 第 2 轮)
 
 ## 已知阻塞
 - 无(交付完成;远端仓库 075dev/vscode-ue-helper 为本次交付新建,private)
