@@ -3,14 +3,14 @@ chapter_id: "chapter-01"
 title: "vscode-ue-helper"
 part: "第一篇 · 认识项目"
 phase: init
-generated_at: "2026-09-28T08:08:12.386Z"
-generated_by: "器灵工作流 v0.18.0 / ql-scan"
-ql_version: "0.18.0"
-last_mapped_commit: "9b73e260e6b6446b3caa20325e6f31cbc071b657"
+generated_at: "2026-10-06T12:25:43.190Z"
+generated_by: "器灵工作流 v0.19.0 / ql-scan"
+ql_version: "0.19.0"
+last_mapped_commit: "e1ec12e781216e13bc9d92919100471e3460a2b3"
 status: "initialized"
 docsmap_init: true
 scan_path: "."
-scanned_entries: 330
+scanned_entries: 335
 routes_detected: 0
 events_detected: 3
 commands_detected: 0
@@ -174,15 +174,15 @@ events: 3
     📄 src/clangd/formatTidyFiles.ts
     📄 src/clangd/index.ts
     📄 src/clangd/intermediateUhtCollector.ts
+    📁 src/clangd/locator/
+      📄 src/clangd/locator/clangdLocator.ts
     📄 src/clangd/modifyRspFiles.ts
     📄 src/clangd/perfLog.ts
     📄 src/clangd/perfProxy.ts
     📄 src/clangd/preparseIncludes.ts
     📁 src/clangd/proxy/
       📄 src/clangd/proxy/AGENTS.md
-      📄 src/clangd/proxy/bridge.ts
-      📄 src/clangd/proxy/cli.ts
-…(共 330 项,已截断显示前 80 项;完整清单请直接浏览目录或收窄 --scan-path)
+…(共 335 项,已截断显示前 80 项;完整清单请直接浏览目录或收窄 --scan-path)
 ```
 
 ---
@@ -195,14 +195,14 @@ events: 3
 
 | 扩展名 | 文件数 | 占比 |
 |--------|--------|------|
-| .ts | 238 | 83.8% |
+| .ts | 240 | 83.6% |
 | .md | 20 | 7.0% |
-| .json | 13 | 4.6% |
-| .cjs | 5 | 1.8% |
+| .json | 13 | 4.5% |
+| .cjs | 5 | 1.7% |
 | .mjs | 4 | 1.4% |
-| .png | 1 | 0.4% |
-| .ps1 | 1 | 0.4% |
-| .bak | 1 | 0.4% |
+| .vsix | 2 | 0.7% |
+| .png | 1 | 0.3% |
+| .ps1 | 1 | 0.3% |
 
 **框架/关键依赖(推断自 package.json):**
 
@@ -301,9 +301,9 @@ events: 3
 |------|---|
 | 来源命令 | /ql-scan |
 | 扫描路径 | . |
-| 扫描基线 commit | 9b73e260e6b6446b3caa20325e6f31cbc071b657 |
-| 扫描条目数 | 330(目录树显示 80) |
-| 生成时间 | 2026-09-28T08:08:12.386Z |
+| 扫描基线 commit | e1ec12e781216e13bc9d92919100471e3460a2b3 |
+| 扫描条目数 | 335(目录树显示 80) |
+| 生成时间 | 2026-10-06T12:25:43.190Z |
 
 ### A.2 新代码放哪(推断指引)
 
@@ -331,8 +331,8 @@ events: 3
 ### C.1 关联文档
 
 - [文档树索引](../README.md)
-- 项目状态:[../.planning/STATE.md](../../.planning/STATE.md)
-- OpenAPI 契约:[.planning/context/openapi.yaml](../../.planning/context/openapi.yaml)
+- 项目状态:[../planning/STATE.md](../planning/STATE.md)
+- OpenAPI 契约:[.qiling/planning/context/openapi.yaml](../planning/context/openapi.yaml)
 
 ### C.2 未检出清单
 
@@ -355,3 +355,4 @@ events: 3
 | 2026-09-28T08:08:12.386Z | 自动生成 | 由 `/ql-scan` 初始化,基线 commit `9b73e260` |
 | 2026-10-03 | add | ClangdLocator 统一 clangd 路径解析:懒探测+缓存+失效,两视图(proxy 排除 launcher / SDK 推导 clang 驱动器);realClangdResolver 与 windowsSdk 重复链路收敛,默认 LLVM 目录唯一份,proxy 链路新增 where 候选级;36 端点对外行为不变(决策 D8)(add-003) |
 | 2026-10-05 | add | 新增源文件自动重建 compile_commands(决策 D9):新设置 `vscodeUEHelper.compileCommandsAutoRefresh`(默认开)= 后台静默重建(quiet 形态:无 picker/无弹窗/跳过重启询问,2 分钟节流 + inFlight 防重入);关闭回到 10 分钟节流手动提示;`generateCompileCommands` 命令新增 quiet 附加参数(无参调用行为不变);36 端点 envelope 语义不变(add-004) |
+| 2026-10-06T12:25:43.190Z | 重扫 | 由 `/ql-scan` v0.19.0 重扫刷新结构统计(基线 `e1ec12e7`);4.3 设置小节与本变更日志由 `/ql-doc` 恢复 |
