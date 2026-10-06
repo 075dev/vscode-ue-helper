@@ -207,8 +207,11 @@ export async function executeGenerateCompileCommands(
     return okEnvelope({ linkPath }, t('generateCompileCommands.updated', { 0: linkPath }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // quiet(后台自动)失败不弹错误窗——日志 + envelope 即可,调用方(hint)落日志
-    if (!isQuiet) {
+    // quiet(后台自动)失败不弹错误窗,但必须落失败日志(评审 F-1:无人值守失败
+    // 只能靠日志排障);非 quiet 由错误弹窗告知
+    if (isQuiet) {
+      logger.error(`[generateCompileCommands] quiet pipeline failed: ${msg}`);
+    } else {
       void vscode.window.showErrorMessage(t('generateCompileCommands.failed', { 0: msg }));
     }
     // 管线主体是 UBT 生成(Step 1),失败最常见为 UBT 进程失败 → BUILD_FAILED

@@ -238,11 +238,12 @@ describe('CompileCommandsRefreshHint — auto 模式(add-004 / D9)', () => {
       .fn<unknown[], Promise<unknown>>()
       .mockRejectedValueOnce(new Error('command missing'))
       .mockResolvedValue(undefined);
+    const logger = noopLogger();
     const hint = new CompileCommandsRefreshHint({
       execute,
       mode: () => 'auto',
       now: () => now,
-      logger: noopLogger(),
+      logger,
     });
 
     await expect(hint.onBatch(batch(['/a.cpp']))).resolves.toBeUndefined();
@@ -250,5 +251,26 @@ describe('CompileCommandsRefreshHint — auto 模式(add-004 / D9)', () => {
     now = 130_000; // 下个节流窗 → 重试成功
     await hint.onBatch(batch(['/b.cpp']));
     expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('auto 模式管线失败(envelope ok:false)→ 失败日志而非虚假成功日志(评审 F-1)', async () => {
+    const execute = vi
+      .fn<unknown[], Promise<unknown>>()
+      .mockResolvedValue({ ok: false, error: { code: 'BUILD_FAILED' } });
+    const logger = noopLogger();
+    const hint = new CompileCommandsRefreshHint({
+      execute,
+      mode: () => 'auto',
+      logger,
+    });
+
+    await hint.onBatch(batch(['/a.cpp']));
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[compileCommandsHint] auto-refresh failed, will retry next window',
+    );
+    expect(logger.info).not.toHaveBeenCalledWith(
+      '[compileCommandsHint] auto-refresh finished (clangd will hot-reload)',
+    );
   });
 });

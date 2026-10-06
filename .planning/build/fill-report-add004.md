@@ -50,6 +50,14 @@ quiet 形态 + hint 双模式),直接主会话内联实现,验收逐条亲测留
    热重载;旧版 clangd 用户可手动 restart(配置描述已说明)。
 3. 命令注册 handler 新增可选附加参数(无参调用行为不变)。
 
+## 评审修复(commit 见 git log,复审后补登)
+
+- F-1(major):quiet 管线失败原只返 envelope 不落日志,且 hint 打虚假成功日志——已修:
+  catch 分支 quiet 时 logger.error;runAutoRefresh 检查 envelope.ok,失败打 warn、
+  成功日志仅 ok 时输出;+1 用例(envelope ok:false → warn 且无成功日志)+ 既有 quiet
+  失败用例补 logger.error 断言
+- F-2(minor):runAutoRefresh 注释纠正(catch 兜底实际在 onBatch 外层)
+
 ## 遗留
 
 - 批量加文件(如切分支)时自动重建按节流窗排队执行,不做显式合批/去重(节流 + inFlight 已覆盖主场景)

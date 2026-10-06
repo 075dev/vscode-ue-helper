@@ -179,8 +179,9 @@ export class CompileCommandsRefreshHint {
   /**
    * auto 模式：后台静默重建。inFlight 防重入——UBT 生成分钟级，
    * 执行期间的批次直接跳过（节流已记时，完成后的下个窗自然合批）。
-   * executeCommand 不 reject（envelope 走返回值），此处 catch 兜底
-   * 命令未注册等极端情况；失败不弹窗，下个节流窗自动重试。
+   * 生产 executeCommand 不 reject（envelope 走返回值），命令未注册等极端
+   * reject 由 onBatch 外层 catch 兜底；失败不弹窗、打失败日志，
+   * 下个节流窗自动重试。
    */
   private async runAutoRefresh(relevant: string[]): Promise<void> {
     if (this.inFlight) {
@@ -194,7 +195,13 @@ export class CompileCommandsRefreshHint {
       this.logger?.info(
         `[compileCommandsHint] auto-refresh triggered by ${relevant.length} new file(s)`,
       );
-      await this.executeImpl('auto');
+      const result = (await this.executeImpl('auto')) as { ok?: boolean } | undefined;
+      // 管线失败经 envelope resolve 返回(ok:false)——打失败日志而非虚假成功
+      // (评审 F-1);成功日志仅在 ok 时输出
+      if (result && typeof result === 'object' && result.ok === false) {
+        this.logger?.warn('[compileCommandsHint] auto-refresh failed, will retry next window');
+        return;
+      }
       this.logger?.info('[compileCommandsHint] auto-refresh finished (clangd will hot-reload)');
     } finally {
       this.inFlight = false;

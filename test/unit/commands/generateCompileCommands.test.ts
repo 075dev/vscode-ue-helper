@@ -336,7 +336,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       expect(env).toMatchObject({ ok: true, data: { linkPath: LINK_PATH } });
     });
 
-    it('quiet=true 管线失败 → 无错误弹窗,ok:false + BUILD_FAILED', async () => {
+    it('quiet=true 管线失败 → 无错误弹窗但落失败日志,ok:false + BUILD_FAILED', async () => {
       mockGenerateCompileCommands.mockRejectedValue(new Error('UBT exploded'));
 
       const env = await executeGenerateCompileCommands(config, logger, detection, undefined, false, {
@@ -344,6 +344,11 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       });
 
       expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+      // 评审 F-1:无人值守失败必须落日志可排障
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- vitest mock accessor
+      expect(logger.error).toHaveBeenCalledWith(
+        '[generateCompileCommands] quiet pipeline failed: UBT exploded',
+      );
       expect(env).toMatchObject({ ok: false, error: { code: 'BUILD_FAILED' } });
     });
 
