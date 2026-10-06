@@ -72,8 +72,17 @@ export function activateCommands(
     executeLaunchEditor(config, logger, detection, workspace),
   );
   track('vscodeUEHelper.liveCoding', () => executeLiveCoding(config, logger, detection, workspace));
-  track('vscodeUEHelper.generateCompileCommands', () =>
-    executeGenerateCompileCommands(config, logger, detection, workspace),
+  // [add-004 / D9] 附加参数 { quiet: true } → 后台自动重建形态(无 picker/无弹窗);
+  // 无参调用(命令面板/MCP)行为不变
+  track('vscodeUEHelper.generateCompileCommands', (quietOpts?: unknown) =>
+    executeGenerateCompileCommands(
+      config,
+      logger,
+      detection,
+      workspace,
+      false,
+      quietOpts as { quiet?: boolean } | undefined,
+    ),
   );
   track('vscodeUEHelper.diagnoseProject', () =>
     executeDiagnoseProject(logger, detection, workspace, clangdOps),

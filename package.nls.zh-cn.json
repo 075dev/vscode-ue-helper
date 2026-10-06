@@ -6,6 +6,7 @@
   "config.clangdPath.desc": "clangd 二进制路径。留空 = 自动检测。",
   "config.autoBackupWorkspace.desc": "自动备份并恢复 .code-workspace,防止 UBT 刷新覆盖。",
   "config.editorAwareBuild.desc": "构建前检测 Unreal Editor 是否运行,建议改用 Live Coding(避免 DLL 锁定错误)。",
+  "config.compileCommandsAutoRefresh.desc": "新增 C++ 文件时自动在后台重建 compile_commands.json(2 分钟节流,clangd 12+ 会热重载)。关闭后恢复手动提示模式。",
   "config.scaffold.clangFormat.desc": "创建 Unreal Clangd 项目时顺带生成基础 .clang-format(已存在不覆盖)。",
   "config.scaffold.clangTidy.desc": "创建 Unreal Clangd 项目时顺带生成基础 .clang-tidy(已存在不覆盖)。",
   "config.progressLocation.desc": "任务进度的显示位置。window = 状态栏转圈(任务结束自动消失,不弹窗);notification = 右下角弹窗。",

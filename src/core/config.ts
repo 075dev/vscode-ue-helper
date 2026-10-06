@@ -154,6 +154,15 @@ export class Config {
   }
 
   /**
+   * 新增 C++ 文件时自动后台重建 compile_commands.json（add-004 / 决策 D9），默认 true。
+   * false = 回到手动提示模式（10 分钟节流弹窗，用户点"更新"才重建）。
+   * 自动模式节流 2 分钟 + inFlight 防重入，见 compileCommandsHint.ts。
+   */
+  get compileCommandsAutoRefresh(): boolean {
+    return this.root.get<boolean>('compileCommandsAutoRefresh') ?? true;
+  }
+
+  /**
    * 任务进度的显示位置，默认 'window'（状态栏 spinner，任务结束自动消失、不弹窗）。
    * 'notification' = 右下角通知弹窗（旧行为）。
    * VS Code 没有"通知进度自动折叠"的 API，想要不打扰就切状态栏位置。

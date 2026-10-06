@@ -315,6 +315,61 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     expect(env.error).toBeUndefined();
   });
 
+  // [add-004 / D9] quiet 形态:后台自动重建——隐含 silent,全程无弹窗,envelope 语义不变
+  describe('quiet 形态(add-004 / D9 自动重建)', () => {
+    it('quiet=true → 跳过 picker、无任何弹窗、管线照常执行、ok:true + linkPath', async () => {
+      const env = await executeGenerateCompileCommands(config, logger, detection, undefined, false, {
+        quiet: true,
+      });
+
+      // 隐含 silent:无 picker
+      expect(mockPickProject).not.toHaveBeenCalled();
+      expect(mockPickEngine).not.toHaveBeenCalled();
+      // 管线照常执行
+      expect(mockGenerateCompileCommands).toHaveBeenCalledTimes(1);
+      expect(mockAddCompletionHelper).toHaveBeenCalledWith(PROJECT_PATH, LINK_PATH);
+      // 全程无 UI 弹窗(成功提示 / 重启询问 / 警告 / 错误)
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+      expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+      expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+      // envelope 语义不变
+      expect(env).toMatchObject({ ok: true, data: { linkPath: LINK_PATH } });
+    });
+
+    it('quiet=true 管线失败 → 无错误弹窗,ok:false + BUILD_FAILED', async () => {
+      mockGenerateCompileCommands.mockRejectedValue(new Error('UBT exploded'));
+
+      const env = await executeGenerateCompileCommands(config, logger, detection, undefined, false, {
+        quiet: true,
+      });
+
+      expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+      expect(env).toMatchObject({ ok: false, error: { code: 'BUILD_FAILED' } });
+    });
+
+    it('quiet=true 无项目 → 无警告弹窗,ok:false + PROJECT_NOT_DETECTED', async () => {
+      detection = {
+        ...detection,
+        ready: Promise.resolve({
+          projects: [],
+          engines: [{ path: ENGINE_PATH, version: '5.4' }],
+          workspaceFile: undefined,
+          workspaceRoot: 'C:\\UEProjects',
+          workspaceFolders: [],
+          projectFolder: null,
+          engineFolder: null,
+        }),
+      } as unknown as DetectionHandles;
+
+      const env = await executeGenerateCompileCommands(config, logger, detection, undefined, false, {
+        quiet: true,
+      });
+
+      expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+      expect(env).toMatchObject({ ok: false, error: { code: 'PROJECT_NOT_DETECTED' } });
+    });
+  });
+
   /* ================================================================ */
   /*  绿测：fillMissingCompileCommands 也使用 linkPath（保持现有行为）       */
   /* ================================================================ */

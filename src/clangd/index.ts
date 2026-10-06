@@ -276,9 +276,14 @@ export function activateClangd(
     }
     const projectDir = path.dirname(project.path);
     const watcher = new IncrementalFileWatcher();
-    // [借鉴 boocs/unreal-clangd] 新增 .h/.cpp → 节流提示刷新 compile_commands.json。
-    // hint 内部用 vscode.commands.executeCommand 间接触发，避免 clangd → commands 循环依赖。
-    const compileCommandsHint = new CompileCommandsRefreshHint({ logger });
+    // [借鉴 boocs/unreal-clangd] 新增 .h/.cpp → 刷新 compile_commands.json。
+    // [add-004 / D9] 默认 auto:节流到期后台静默重建(quiet,无弹窗);
+    // compileCommandsAutoRefresh=false 回到手动提示模式。getter 每拍现读,
+    // 配置开关变更即时生效,无需 reload。
+    const compileCommandsHint = new CompileCommandsRefreshHint({
+      logger,
+      mode: () => (config.compileCommandsAutoRefresh ? 'auto' : 'notify'),
+    });
     watcher.onBatch = (batch) => {
       // 通知 perfLog（per D-15/D-17）—— 状态栏可订阅 onMetricUpdate 实时刷新
       perfLog.recordIncrementalScan(batch.totalLatencyMs, batch.files.length);

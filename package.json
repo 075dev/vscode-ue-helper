@@ -397,6 +397,11 @@
           "default": true,
           "description": "%config.editorAwareBuild.desc%"
         },
+        "vscodeUEHelper.compileCommandsAutoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.compileCommandsAutoRefresh.desc%"
+        },
         "vscodeUEHelper.scaffold.clangFormat": {
           "type": "boolean",
           "default": true,

@@ -6,6 +6,7 @@
   "config.clangdPath.desc": "Path to clangd binary. Empty = auto-detect.",
   "config.autoBackupWorkspace.desc": "Auto-backup and restore .code-workspace against UBT refresh.",
   "config.editorAwareBuild.desc": "Before a build, detect a running Unreal Editor and suggest Live Coding instead (avoids DLL lock errors).",
+  "config.compileCommandsAutoRefresh.desc": "Automatically regenerate compile_commands.json in the background when new C++ files are added (throttled to one rebuild per 2 minutes, clangd 12+ hot-reloads it). Turn off to restore the manual prompt.",
   "config.scaffold.clangFormat.desc": "Create Unreal Clangd Project: also scaffold a base .clang-format (never overwrites an existing one).",
   "config.scaffold.clangTidy.desc": "Create Unreal Clangd Project: also scaffold a base .clang-tidy (never overwrites an existing one).",
   "config.progressLocation.desc": "Where task progress is shown. window = status bar spinner (auto-hides when done, no popup); notification = bottom-right popup.",
