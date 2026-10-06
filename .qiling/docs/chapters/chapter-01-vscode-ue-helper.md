@@ -241,6 +241,17 @@ events: 3
 | `vitest` | ^1.3.0 | dev |
 | `vsce` | ^2.15.0 | dev |
 
+### 4.3 扩展设置(增量记录)
+
+全量设置清单以 `package.json` `contributes.configuration` 为准(23 项,守护测试
+`nlsPlaceholders.test.ts` 强制中英双语描述)。本节只记录对本章端点行为有直接影响的设置:
+
+| 设置 | 默认 | 影响的端点 | 说明 |
+|------|------|-----------|------|
+| `compileCommandsAutoRefresh` | `true` | `/commands/generateCompileCommands` | add-004(决策 D9):新增 C++ 文件时自动后台重建 compile_commands.json(2 分钟节流 + inFlight 防重入,quiet 形态无任何弹窗;clangd 12+ 热重载)。`false` = 恢复手动提示模式(10 分钟节流弹窗,用户点"更新"才重建) |
+| `progressLocation` | `window` | 构建类全部端点 | 进度显示位置:`window` = 状态栏小转圈(自动消失);`notification` = 右下角弹窗(旧行为)。自动重建同样受此控制 |
+| `editorAwareBuild` | `true` | `/commands/build` | 构建前检测 Unreal Editor 是否运行,运行中建议改走 Live Coding(避免 DLL 锁定);MCP/silent 调用自动跳过 |
+
 ---
 
 ## 五、故障排查
