@@ -108,3 +108,6 @@ graphify-out/
 
 # VS Code 集成测试下载的运行时（本地缓存，勿提交）
 .vscode-test/
+
+# 器灵 ql-update 迁移自动备份(本地留存,勿提交)
+.qiling/planning-backups/

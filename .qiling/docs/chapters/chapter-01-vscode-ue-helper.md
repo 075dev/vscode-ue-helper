@@ -3,18 +3,18 @@ chapter_id: "chapter-01"
 title: "vscode-ue-helper"
 part: "第一篇 · 认识项目"
 phase: init
-generated_at: "2026-10-06T12:25:43.190Z"
-generated_by: "器灵工作流 v0.19.0 / ql-scan"
-ql_version: "0.19.0"
-last_mapped_commit: "e1ec12e781216e13bc9d92919100471e3460a2b3"
+generated_at: "2026-10-06T14:26:24.447Z"
+generated_by: "器灵工作流 v0.20.1 / ql-scan"
+ql_version: "0.20.1"
+last_mapped_commit: "cd18a09670d8398c5e65825166d9398370ce0093"
 status: "initialized"
 docsmap_init: true
 scan_path: "."
-scanned_entries: 335
+scanned_entries: 337
 routes_detected: 0
 events_detected: 3
 commands_detected: 0
-custom_extracts: 0
+custom_extracts: 36
 endpoints: 0
 events: 3
 ---
@@ -99,6 +99,54 @@ events: 3
 | `changeEmitter` | fire | `src/ui/projectExplorer.ts:51` |
 | `exit` | emit | `test/unit/core/subprocessRegistry.test.ts:88` |
 
+### 3.5 自定义提取(--patterns)
+
+**VSCode 命令注册(track 包装)**
+
+| 标识 | 证据(文件:行) |
+|------|------------------|
+| `vscodeUEHelper.showProjectInfo` | `src/commands/index.ts:59` |
+| `vscodeUEHelper.build` | `src/commands/index.ts:62` |
+| `vscodeUEHelper.rebuild` | `src/commands/index.ts:65` |
+| `vscodeUEHelper.clean` | `src/commands/index.ts:68` |
+| `vscodeUEHelper.launchEditor` | `src/commands/index.ts:71` |
+| `vscodeUEHelper.liveCoding` | `src/commands/index.ts:74` |
+| `vscodeUEHelper.generateCompileCommands` | `src/commands/index.ts:77` |
+| `vscodeUEHelper.diagnoseProject` | `src/commands/index.ts:87` |
+| `vscodeUEHelper.createProject` | `src/commands/index.ts:90` |
+| `vscodeUEHelper.installRules` | `src/commands/index.ts:93` |
+| `vscodeUEHelper.uninstall` | `src/commands/index.ts:94` |
+| `vscodeUEHelper.setSystemIncludes` | `src/commands/index.ts:95` |
+| `vscodeUEHelper.openWorkspaceFile` | `src/commands/index.ts:98` |
+| `vscodeUEHelper.openTerminalInNewWindow` | `src/commands/index.ts:99` |
+| `vscodeUEHelper.selectConfig` | `src/commands/index.ts:102` |
+| `vscodeUEHelper.selectTarget` | `src/commands/index.ts:103` |
+| `vscodeUEHelper.enableClangdProxy` | `src/commands/index.ts:104` |
+| `vscodeUEHelper.disableClangdProxy` | `src/commands/index.ts:105` |
+| `vscodeUEHelper.showClangdProxyStatus` | `src/commands/index.ts:108` |
+| `vscodeUEHelper.showControlPanel` | `src/commands/index.ts:111` |
+| `vscodeUEHelper.copyBuildCommand` | `src/commands/index.ts:114` |
+| `vscodeUEHelper.noLintCurrentLine` | `src/commands/index.ts:118` |
+| `vscodeUEHelper.noLintNextLine` | `src/commands/index.ts:121` |
+| `vscodeUEHelper.switchHeaderSource` | `src/commands/index.ts:126` |
+| `vscodeUEHelper.retryFirstTimeInit` | `src/commands/index.ts:143` |
+| `vscodeUEHelper.refreshProjectExplorer` | `src/commands/index.ts:150` |
+| `vscodeUEHelper.openProjectExplorerFile` | `src/commands/index.ts:153` |
+
+**MCP 工具(ue_ 前缀)**
+
+| 标识 | 证据(文件:行) |
+|------|------------------|
+| `ue_build` | `src/mcp/tools.ts:52` |
+| `ue_rebuild` | `src/mcp/tools.ts:76` |
+| `ue_clean` | `src/mcp/tools.ts:81` |
+| `ue_get_build_errors` | `src/mcp/tools.ts:88` |
+| `ue_launch_editor` | `src/mcp/tools.ts:95` |
+| `ue_live_coding` | `src/mcp/tools.ts:100` |
+| `ue_generate_compile_commands` | `src/mcp/tools.ts:105` |
+| `ue_show_project_info` | `src/mcp/tools.ts:110` |
+| `ue_set_system_includes` | `src/mcp/tools.ts:115` |
+
 ### 3.6 项目结构(目录树,深度 ≤ 4,忽略 node_modules/dist/build/.git 等)
 
 ```
@@ -122,10 +170,12 @@ events: 3
   📄 doc/04-developer-guide.md
   📄 doc/README.md
 📄 esbuild.config.mjs
+📄 features.json
 📄 LICENSE
 📄 package.json
 📄 package.nls.json
 📄 package.nls.zh-cn.json
+📄 patterns.json
 📄 README.md
 📁 resources/
   📄 resources/icon.png
@@ -180,9 +230,7 @@ events: 3
     📄 src/clangd/perfLog.ts
     📄 src/clangd/perfProxy.ts
     📄 src/clangd/preparseIncludes.ts
-    📁 src/clangd/proxy/
-      📄 src/clangd/proxy/AGENTS.md
-…(共 335 项,已截断显示前 80 项;完整清单请直接浏览目录或收窄 --scan-path)
+…(共 337 项,已截断显示前 80 项;完整清单请直接浏览目录或收窄 --scan-path)
 ```
 
 ---
@@ -195,9 +243,9 @@ events: 3
 
 | 扩展名 | 文件数 | 占比 |
 |--------|--------|------|
-| .ts | 240 | 83.6% |
-| .md | 20 | 7.0% |
-| .json | 13 | 4.5% |
+| .ts | 240 | 83.0% |
+| .md | 20 | 6.9% |
+| .json | 15 | 5.2% |
 | .cjs | 5 | 1.7% |
 | .mjs | 4 | 1.4% |
 | .vsix | 2 | 0.7% |
@@ -240,17 +288,6 @@ events: 3
 | `typescript` | ^5.3.3 | dev |
 | `vitest` | ^1.3.0 | dev |
 | `vsce` | ^2.15.0 | dev |
-
-### 4.3 扩展设置(增量记录)
-
-全量设置清单以 `package.json` `contributes.configuration` 为准(23 项,守护测试
-`nlsPlaceholders.test.ts` 强制中英双语描述)。本节只记录对本章端点行为有直接影响的设置:
-
-| 设置 | 默认 | 影响的端点 | 说明 |
-|------|------|-----------|------|
-| `compileCommandsAutoRefresh` | `true` | `/commands/generateCompileCommands` | add-004(决策 D9):新增 C++ 文件时自动后台重建 compile_commands.json(2 分钟节流 + inFlight 防重入,quiet 形态无任何弹窗;clangd 12+ 热重载)。`false` = 恢复手动提示模式(10 分钟节流弹窗,用户点"更新"才重建) |
-| `progressLocation` | `window` | 构建类全部端点 | 进度显示位置:`window` = 状态栏小转圈(自动消失);`notification` = 右下角弹窗(旧行为)。自动重建同样受此控制 |
-| `editorAwareBuild` | `true` | `/commands/build` | 构建前检测 Unreal Editor 是否运行,运行中建议改走 Live Coding(避免 DLL 锁定);MCP/silent 调用自动跳过 |
 
 ---
 
@@ -301,9 +338,9 @@ events: 3
 |------|---|
 | 来源命令 | /ql-scan |
 | 扫描路径 | . |
-| 扫描基线 commit | e1ec12e781216e13bc9d92919100471e3460a2b3 |
-| 扫描条目数 | 335(目录树显示 80) |
-| 生成时间 | 2026-10-06T12:25:43.190Z |
+| 扫描基线 commit | cd18a09670d8398c5e65825166d9398370ce0093 |
+| 扫描条目数 | 337(目录树显示 80) |
+| 生成时间 | 2026-10-06T14:26:24.447Z |
 
 ### A.2 新代码放哪(推断指引)
 
@@ -352,7 +389,5 @@ events: 3
 
 | 日期 | 操作 | 说明 |
 |------|------|------|
-| 2026-09-28T08:08:12.386Z | 自动生成 | 由 `/ql-scan` 初始化,基线 commit `9b73e260` |
-| 2026-10-03 | add | ClangdLocator 统一 clangd 路径解析:懒探测+缓存+失效,两视图(proxy 排除 launcher / SDK 推导 clang 驱动器);realClangdResolver 与 windowsSdk 重复链路收敛,默认 LLVM 目录唯一份,proxy 链路新增 where 候选级;36 端点对外行为不变(决策 D8)(add-003) |
-| 2026-10-05 | add | 新增源文件自动重建 compile_commands(决策 D9):新设置 `vscodeUEHelper.compileCommandsAutoRefresh`(默认开)= 后台静默重建(quiet 形态:无 picker/无弹窗/跳过重启询问,2 分钟节流 + inFlight 防重入);关闭回到 10 分钟节流手动提示;`generateCompileCommands` 命令新增 quiet 附加参数(无参调用行为不变);36 端点 envelope 语义不变(add-004) |
-| 2026-10-06T12:25:43.190Z | 重扫 | 由 `/ql-scan` v0.19.0 重扫刷新结构统计(基线 `e1ec12e7`);4.3 设置小节与本变更日志由 `/ql-doc` 恢复 |
+| 2026-10-06T14:26:24.447Z | 自动生成 | 由 `/ql-scan` 初始化,基线 commit `cd18a096` |
+| 2026-10-11 | fix(bugfix-003) | 整仓审计修复:Install Rules 写 `.github/copilot-instructions.md` 前确认已存在文件(防静默覆盖用户内容)、`ClangdOps.mutate` 串行化(防并发丢写)、proxy 关联表关闭时清理 + 死代码清理;详见 `.qiling/planning/bugfix/003-audit-fixes.md` |

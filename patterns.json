@@ -1,0 +1,4 @@
+[
+  { "name": "VSCode 命令注册(track 包装)", "regex": "track\\(\\s*['\"](vscodeUEHelper\\.[A-Za-z0-9_.]+)", "glob": "*.ts" },
+  { "name": "MCP 工具(ue_ 前缀)", "regex": "name:\\s*['\"](ue_[a-z_]+)['\"]", "glob": "tools.ts" }
+]
