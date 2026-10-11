@@ -45,11 +45,36 @@ export async function executeInstallRules(
     const cursorFile = path.join(cursorDir, 'unreal-cpp.mdc');
     await fs.writeFile(cursorFile, UE_HELPER_RULES_MDC, 'utf-8');
 
-    // Copilot: .github/copilot-instructions.md（纯 markdown，无 frontmatter）
+    // Copilot: .github/copilot-instructions.md（纯 markdown，无 frontmatter）。
+    // [审计 F1] 该路径是 GitHub Copilot 官方的用户自定义指令文件,用户可能已写入
+    // 自己的内容——存在时必须先确认,不能静默覆盖。
     const ghDir = path.join(root, '.github');
     await fs.mkdir(ghDir, { recursive: true });
     const copilotFile = path.join(ghDir, 'copilot-instructions.md');
-    await fs.writeFile(copilotFile, UE_HELPER_COPILOT_INSTRUCTIONS, 'utf-8');
+    let copilotWritten = true;
+    try {
+      await fs.access(copilotFile);
+      const choice = await vscode.window.showWarningMessage(
+        t('installRules.copilotExists'),
+        t('installRules.overwrite'),
+        t('installRules.skip'),
+      );
+      if (choice !== t('installRules.overwrite')) {
+        copilotWritten = false;
+      }
+    } catch {
+      // 文件不存在 → 直接写
+    }
+    if (copilotWritten) {
+      await fs.writeFile(copilotFile, UE_HELPER_COPILOT_INSTRUCTIONS, 'utf-8');
+    }
+
+    if (!copilotWritten) {
+      const summary = t('installRules.skippedCopilot', { 0: cursorFile });
+      void vscode.window.showInformationMessage(summary);
+      logger.info(`[installRules] wrote ${cursorFile}, skipped existing ${copilotFile}`);
+      return okEnvelope({ skipped: ['copilot-instructions.md'] }, summary);
+    }
 
     void vscode.window.showInformationMessage(
       t('installRules.installed', { 0: cursorFile, 1: copilotFile }),

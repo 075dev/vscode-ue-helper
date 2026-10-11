@@ -216,6 +216,32 @@ describe('ClangdOps.applyAddFlags (Plan B.1 收束后的统一入口)', () => {
     }
     await cleanup();
   });
+
+  it('并发 mutate 串行执行,两次修改都保留在结果里([审计 F2])', async () => {
+    const h = await setupHarness({
+      initialConfig: { CompileFlags: { Add: ['base'] } },
+    });
+    try {
+      // 无串行化时两个调用都会读到 ['base'],后写者覆盖先写者,结果只剩 ['base', 'x']
+      const [r1, r2] = await Promise.all([
+        h.ops.mutate(({ config }) => {
+          const cf = (config.CompileFlags ?? {}) as { Add?: string[] };
+          config.CompileFlags = { ...cf, Add: [...(cf.Add ?? []), 'first'] };
+        }),
+        h.ops.mutate(({ config }) => {
+          const cf = (config.CompileFlags ?? {}) as { Add?: string[] };
+          config.CompileFlags = { ...cf, Add: [...(cf.Add ?? []), 'second'] };
+        }),
+      ]);
+      expect(r1.ok).toBe(true);
+      expect(r2.ok).toBe(true);
+      const cfg = await readClangd(h);
+      const add = (cfg.CompileFlags as { Add: string[] }).Add;
+      expect(add).toEqual(['base', 'first', 'second']);
+    } finally {
+      await h.cleanup();
+    }
+  });
 });
 
 describe('ClangdOps.readText (Phase 9 SSoT 收尾)', () => {

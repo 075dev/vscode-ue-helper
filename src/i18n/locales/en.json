@@ -264,6 +264,10 @@
   "launchEditor.failed": "Failed to launch editor: {0}",
 
   "installRules.installed": "Installed AI agent rules:\n{0}\n{1}",
+  "installRules.copilotExists": ".github/copilot-instructions.md already exists. Overwriting will lose its current content. Overwrite?",
+  "installRules.overwrite": "Overwrite",
+  "installRules.skip": "Skip",
+  "installRules.skippedCopilot": "Installed Cursor rules: {0}\nSkipped Copilot instructions (file exists, not overwritten)",
 
   "uninstall.cleaned": "Cleaned: {0}",
   "uninstall.cleanedEmpty": "No generated files found to clean.",

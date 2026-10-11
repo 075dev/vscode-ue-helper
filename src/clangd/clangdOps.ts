@@ -50,6 +50,13 @@ export type ClangdMutateResult =
 export class ClangdOps implements vscode.Disposable {
   constructor(private readonly opts: ClangdOpsOptions) {}
 
+  /**
+   * [审计 F2] mutate 串行化队列:mutate 是 read-modify-write,两次并发调用
+   * (控制面板连点两个开关)会在彼此写回前读到同一份旧内容,后写者覆盖先写者。
+   * 所有 mutate 排队执行,保证单事务语义。
+   */
+  private mutateQueue: Promise<unknown> = Promise.resolve();
+
   /** 是否已 dispose（幂等标记，ClangdOps 自身无内部资源） */
   private _disposed = false;
 
@@ -176,6 +183,18 @@ export class ClangdOps implements vscode.Disposable {
    * ```
    */
   async mutate(mutator: (ctx: ClangdMutatorContext) => void): Promise<ClangdMutateResult> {
+    // 排队执行:前一个 mutate(含写回)完成后才开始下一次读
+    const run = this.mutateQueue.then(
+      () => this.runMutate(mutator),
+      // 前一个失败不阻塞后续:吞掉 rejection,本轮重新读文件
+      () => this.runMutate(mutator),
+    );
+    // 队列本身永不 reject(错误由 runMutate 捕获并转为结果),失败也已被上一行吸收
+    this.mutateQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async runMutate(mutator: (ctx: ClangdMutatorContext) => void): Promise<ClangdMutateResult> {
     const target = this.workspace.clangdConfigPath;
     if (!target) {
       return { ok: false, reason: 'no-config-path' };

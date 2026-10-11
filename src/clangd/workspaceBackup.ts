@@ -5,7 +5,6 @@
  * .vscode/launch.json),不保留用户自定义。本模块:
  *   1. UBT 跑前快照 workspace
  *   2. UBT 跑完后恢复用户自定义
- *   3. 监听文件系统变化,需要时重新恢复
  *
  * 模式参考 unreal-clangd 的 src/workspaceBackup.ts。
  *
@@ -20,14 +19,11 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import * as vscode from 'vscode';
 
 const BACKUP_DIR = '.vscode';
 const BACKUP_FILE = '.code-workspace.backup';
 
 export class WorkspaceBackup {
-  private watcher: vscode.FileSystemWatcher | undefined;
-
   constructor(private readonly projectPath: string) {}
 
   /**
@@ -69,26 +65,5 @@ export class WorkspaceBackup {
     } catch {
       // Backup doesn't exist or unreadable — leave current state alone.
     }
-  }
-
-  /**
-   * Start watching the workspace file and re-restore on change.
-   * The watcher fires after UBT clobbers the file, so we always
-   * restore to the last known good state.
-   */
-  startWatching(): vscode.Disposable {
-    const dir = path.dirname(this.projectPath);
-    const pattern = new vscode.RelativePattern(dir, '*.code-workspace');
-    this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-    const onChange = async (): Promise<void> => {
-      await this.restore();
-    };
-    this.watcher.onDidChange(onChange);
-    this.watcher.onDidCreate(onChange);
-
-    return new vscode.Disposable(() => {
-      this.watcher?.dispose();
-    });
   }
 }

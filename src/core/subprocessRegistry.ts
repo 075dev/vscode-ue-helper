@@ -215,14 +215,12 @@ export class SubprocessRegistry implements Disposable {
           return;
         }
         // 强杀日志:label + pid 便于诊断
-        const stderrChunks: Buffer[] = [];
         try {
-          const proc = execFile('taskkill', ['/F', '/PID', String(pid)], (err) => {
+          execFile('taskkill', ['/F', '/PID', String(pid)], (err) => {
             if (err) {
               // best-effort:进程可能已自然退出
             }
           });
-          proc.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
         } catch {
           /* taskkill 启动失败,继续 */
         }

@@ -264,6 +264,10 @@
   "launchEditor.failed": "启动编辑器失败：{0} / Failed to launch editor: {0}",
 
   "installRules.installed": "已安装 AI agent 规则：\n{0}\n{1} / Installed AI agent rules:\n{0}\n{1}",
+  "installRules.copilotExists": "已存在 .github/copilot-instructions.md。覆盖将丢失该文件的现有内容，是否覆盖？ / .github/copilot-instructions.md already exists. Overwriting will lose its current content. Overwrite?",
+  "installRules.overwrite": "覆盖 / Overwrite",
+  "installRules.skip": "跳过 / Skip",
+  "installRules.skippedCopilot": "已安装 Cursor 规则：{0}\n已跳过 Copilot 指令（文件已存在，未覆盖）/ Installed Cursor rules: {0}\nSkipped Copilot instructions (file exists, not overwritten)",
 
   "uninstall.cleaned": "已清理：{0} / Cleaned: {0}",
   "uninstall.cleanedEmpty": "未找到可清理的生成文件。 / No generated files found to clean.",

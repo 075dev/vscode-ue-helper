@@ -19,9 +19,12 @@ import type { WorkspaceState } from '@core/workspace';
 vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn(() => Promise.resolve(undefined)),
   writeFile: vi.fn(() => Promise.resolve(undefined)),
+  // 默认目标文件不存在(access reject)→ 不触发覆盖确认
+  access: vi.fn(() => Promise.reject(new Error('ENOENT'))),
 }));
 
 import { executeInstallRules } from '@commands/installRules';
+import { t } from '@i18n';
 
 function createLoggerMock(): Logger {
   return {
@@ -101,5 +104,45 @@ describe('executeInstallRules', () => {
     expect(
       vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
     ).not.toHaveBeenCalled();
+  });
+
+  it('copilot 文件已存在且用户未选覆盖 → 只写 cursor 文件,不覆盖现有内容', async () => {
+    vi.mocked(fs.access).mockResolvedValueOnce(undefined);
+    // 用户取消 / 选跳过(showWarningMessage 返回 undefined)
+    (vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      undefined,
+    );
+
+    const env = await executeInstallRules(logger, createWorkspaceMock('C:\\UEProjects\\MyGame'));
+
+    // 只有 cursor 的 mdc 被写入;copilot-instructions.md 保持原样
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.stringContaining('unreal-cpp.mdc'),
+      expect.any(String),
+      'utf-8',
+    );
+    expect(env.ok).toBe(true);
+    expect(env.data).toEqual({ skipped: ['copilot-instructions.md'] });
+    expect(
+      vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalled();
+  });
+
+  it('copilot 文件已存在且用户选覆盖 → 两个文件都写入', async () => {
+    vi.mocked(fs.access).mockResolvedValueOnce(undefined);
+    (vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      t('installRules.overwrite'),
+    );
+
+    const env = await executeInstallRules(logger, createWorkspaceMock('C:\\UEProjects\\MyGame'));
+
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.stringContaining('copilot-instructions.md'),
+      expect.any(String),
+      'utf-8',
+    );
+    expect(env.ok).toBe(true);
+    expect(env.data).toBeUndefined();
   });
 });

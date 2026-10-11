@@ -480,18 +480,8 @@ export class LspBridge {
       return this.localizeHoverResult(msg);
     }
 
-    if (method === 'textDocument/completion') {
-      return this.localizeCompletionResult(msg);
-    }
-
-    if (method === 'textDocument/signatureHelp') {
-      return this.localizeSignatureHelpResult(msg);
-    }
-
-    if (method === 'textDocument/inlayHint') {
-      return this.localizeInlayHintResult(msg);
-    }
-
+    // completion / signatureHelp / inlayHint 的本地化尚未实现(原 no-op 占位已删,
+    // [审计 F6] 需要时再加,避免空壳分发)。
     return msg;
   }
 
@@ -690,33 +680,6 @@ export class LspBridge {
   }
 
   /**
-   * 本地化 textDocument/completion 响应。
-   *
-   * TODO: 后续实现 Completion 项 label/detail 汉化。
-   */
-  private localizeCompletionResult(msg: JsonRpcMessage): JsonRpcMessage {
-    return msg;
-  }
-
-  /**
-   * 本地化 textDocument/signatureHelp 响应。
-   *
-   * TODO: 后续实现 SignatureHelp 参数名/标签汉化。
-   */
-  private localizeSignatureHelpResult(msg: JsonRpcMessage): JsonRpcMessage {
-    return msg;
-  }
-
-  /**
-   * 本地化 textDocument/inlayHint 响应。
-   *
-   * TODO: 后续实现 InlayHint 类型名/标签汉化。
-   */
-  private localizeInlayHintResult(msg: JsonRpcMessage): JsonRpcMessage {
-    return msg;
-  }
-
-  /**
    * 向客户端发送消息。
    */
   private sendToClient(msg: JsonRpcMessage): void {
@@ -760,9 +723,12 @@ export class LspBridge {
    * 关闭桥接。
    *
    * 先刷新待处理 didClose，再关闭传输层。
+   * [审计 F3] 清空请求关联表:连接关闭后,崩溃/取消导致的在途请求条目
+   * 永远等不到响应,不清会一直滞留。
    */
   close(): void {
     this.flush();
+    this.correlation.clear();
     this.transport.close();
   }
 

@@ -25,7 +25,6 @@ import { ControlPanelProvider } from '@ui/controlPanel';
 import { activateMCP } from '@mcp/index';
 
 let logger: Logger;
-const disposables: vscode.Disposable[] = [];
 
 export function activate(context: vscode.ExtensionContext): Promise<void> {
   initI18n();
@@ -154,13 +153,7 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
 }
 
 export function deactivate(): void {
+  // 资源释放全部走 context.subscriptions(VS Code 自动倒序 dispose);
+  // 此处仅留日志。
   logger?.info('Deactivating VSCodeUEHelper...');
-  while (disposables.length) {
-    const d = disposables.pop();
-    try {
-      d?.dispose();
-    } catch {
-      /* ignore */
-    }
-  }
 }
