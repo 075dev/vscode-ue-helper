@@ -127,6 +127,10 @@ async function runCreateProjectPipeline(
 
   // compile_commands.json 生成路径，step 2 赋值，step 4 使用
   let jsonPath = '';
+  // [MAJOR-2 残留] helper 目录里的 DB 路径 —— **clangd 实际读取的那个文件**。
+  // step 2 由 linkToWorkspaceRoot 赋值；step 4 必须写它（而不是项目本地副本），
+  // 否则 symlink 失败回退成独立副本时，helper 条目对 clangd 静默不可见。
+  let linkPath = '';
   // 仅用于日志信息（createCompletionFiles 内部已有自己的路径派生）
   // [Phase 11 SSoT] 走 WorkspaceState.clangdHelperDir；fallback 留给测试兼容
   const customDir =
@@ -289,7 +293,6 @@ async function runCreateProjectPipeline(
           path.join(projectDir, '.vscode', 'vscodeuehelper', 'compile_commands.json');
         const isFallbackPath = path.resolve(jsonPath) === path.resolve(expectedFallbackPath);
 
-        let linkPath: string;
         if (isFallbackPath) {
           logger.info(
             `[createProject] step 2 fallback path detected, skipping linkToWorkspaceRoot: ` +
@@ -455,7 +458,12 @@ async function runCreateProjectPipeline(
         increment: 0,
       });
       try {
-        const added = await addCompletionHelperToCompileCommands(project.path, jsonPath);
+        // [MAJOR-2 残留] 写 **linkPath**（helper 目录里 clangd 实际读的那个文件），
+        // 而不是 jsonPath（项目本地副本）—— symlink 失败回退成独立副本时，
+        // 两者是各写各的文件，写 jsonPath 会让 helper 条目对 clangd 静默不可见。
+        // addCompletionHelperToCompileCommands 内部会再 resolve 一次真实目标，
+        // 保证「读的文件」与「写的文件」是同一个。
+        const added = await addCompletionHelperToCompileCommands(project.path, linkPath);
         results.push({
           step: 'Add to compile_commands.json',
           ok: true,

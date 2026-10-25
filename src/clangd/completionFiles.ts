@@ -42,6 +42,13 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { EOL } from 'node:os';
 import { FILENAME_UE_CLANGD_COMPAT, getUeClangdCompatContent } from '@clangd/ueClangdCompat';
+// [D14] DB 读写原语（原子写 + 紧凑序列化）
+import {
+  readCompileCommands,
+  resolveCompileCommandsWriteTarget,
+  writeCompileCommandsAtomic,
+  type CompileCommandEntry,
+} from '@clangd/compileCommands/dbFile';
 
 // ---- 文件名常量 ----
 
@@ -517,45 +524,89 @@ export async function createCompletionFiles(
 // ---- compile_commands.json 集成 ----
 
 /**
- * 把 completionHelper.cpp 作为新条目添加到 compile_commands.json 中。
+ * [D14] 把 completionHelper.cpp 作为新条目追加到条目数组末尾（**不写盘**）。
+ *
+ * 纯函数 —— 让调用方能把「补齐缺失条目」与「注入 helper 条目」合并成
+ * **一次**原子写（同一次刷新里原来写两遍）。
+ *
+ * @returns 新数组（不改原数组）；helper 条目已存在时返回原数组
  */
-export async function addCompletionHelperToCompileCommands(
-  projectPath: string,
-  ccJsonPath?: string,
-): Promise<boolean> {
-  const projectDir = path.dirname(projectPath);
-  const ccPath = ccJsonPath ?? path.join(projectDir, 'compile_commands.json');
-  const helperPath = getCompletionHelperPath(projectPath);
-
-  let entries: Array<Record<string, unknown>>;
-
-  try {
-    const text = await fs.readFile(ccPath, 'utf-8');
-    entries = JSON.parse(text) as Array<Record<string, unknown>>;
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return false;
-    }
-  } catch {
-    return false;
-  }
-
+export function buildCompletionHelperEntry(
+  entries: CompileCommandEntry[],
+  helperPath: string,
+): CompileCommandEntry[] {
   const normalizedHelper = helperPath.replace(/\\/g, '/');
   if (entries.some((e) => String(e.file ?? '').replace(/\\/g, '/') === normalizedHelper)) {
-    return true;
+    return entries;
   }
 
-  const template = { ...entries[0] };
+  const first = entries[0];
+  if (!first) {
+    return entries;
+  }
+  const template: CompileCommandEntry = { ...first };
   template.file = helperPath;
 
   if (typeof template.command === 'string') {
-    const oldFile = entries[0]?.file as string | undefined;
+    const oldFile = first.file;
     if (oldFile) {
       template.command = template.command.replace(oldFile, helperPath);
     }
   }
 
-  entries.push(template);
+  return [...entries, template];
+}
 
-  await fs.writeFile(ccPath, JSON.stringify(entries, null, 2), 'utf-8');
+/**
+ * 把 completionHelper.cpp 作为新条目添加到 compile_commands.json 中。
+ *
+ * [D14] 写盘走 `writeCompileCommandsAtomic`（temp + rename 原子替换 + 紧凑序列化）；
+ * 旧的 `writeFile` 覆盖中途失败会留下半截 JSON —— clangd 读到坏文件整个
+ * 编译数据库就失效了。
+ *
+ * [MAJOR-2 残留] 写入目标必须是 **clangd 实际读取的那个文件**，且读与写必须是
+ * **同一个文件**：
+ *
+ * 调用方传进来的路径有两种形态（helper 目录里的 `compile_commands.json`）：
+ *   · 符号链接（Windows 开了开发者模式）→ 指向项目本地副本
+ *   · 独立副本（symlink 失败后的 copy 回退，**Windows 默认状态**）
+ *
+ * 此前本函数直接读写传入的路径，而调用方 `createProject` 传的是**项目本地副本**，
+ * clangd 读的却是 helper 目录 → copy 退化场景下 helper 条目对 clangd
+ * **完全不可见**，静默失效、无任何报错。
+ *
+ * 现在：先 `resolveCompileCommandsWriteTarget` 解析真实目标，再**对同一个文件**
+ * 读 + 写 —— 读 A 写 B 同样会分叉。
+ *
+ * [O1] `ccJsonPath` **必填**，没有默认分支：默认路径曾经是项目本地副本
+ * `<projectDir>/compile_commands.json`，与上面那条不变量相悖 —— 将来若有调用方
+ * 漏传参，就会静默写到 clangd 读不到的那份。必填参数让这类漏传在编译期就红。
+ *
+ * @param projectPath `.uproject` 路径（推导 helper 文件位置）
+ * @param ccJsonPath **clangd 实际读取的那个文件**（helper 目录里的那份）
+ */
+export async function addCompletionHelperToCompileCommands(
+  projectPath: string,
+  ccJsonPath: string,
+): Promise<boolean> {
+  const ccPath = ccJsonPath;
+  const helperPath = getCompletionHelperPath(projectPath);
+
+  // [MAJOR-2 残留] 解析真实写入目标：符号链接 → 它指向的文件；独立副本 → 它自己。
+  const writeTarget = await resolveCompileCommandsWriteTarget(ccPath);
+
+  // 读与写必须是同一个文件 —— 读传入路径、写解析目标同样会分叉。
+  const entries = await readCompileCommands(writeTarget);
+  if (!entries || entries.length === 0) {
+    return false;
+  }
+
+  const next = buildCompletionHelperEntry(entries, helperPath);
+  if (next === entries) {
+    // helper 条目已存在，无需写盘
+    return true;
+  }
+
+  await writeCompileCommandsAtomic(writeTarget, next);
   return true;
 }

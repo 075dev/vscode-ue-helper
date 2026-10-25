@@ -37,6 +37,7 @@ npm run typecheck       # tsc --noEmit，必须零错误
 npm run lint            # ESLint src test
 npm run format:check    # Prettier（仅校验；CI/release 不强制）
 npm run test:unit       # Vitest（vitest run 单次；测试组织见 §4）
+npm run test:e2e        # VS Code EDH 真机 e2e（需 mocha；细节见 §4「端到端测试」）
 # npm test == npm run test:unit：test 脚本是 test:unit 的别名（package.json#scripts.test = "npm run test:unit"），不存在 test:integration 入口
 
 # ===== 性能 / 调试辅助 =====
@@ -104,6 +105,24 @@ npx vitest run --coverage
 - 一个文件 / 类 / 关键函数 = 一个 test 文件
 - 测试文件名 `<source>.test.ts`
 - 不依赖 vscode（用 mock 代替）
+
+### 端到端测试（真实 VS Code 窗口）
+
+`test/e2e/` 用 `@vscode/test-electron` 拉起真实的 Extension Development Host（EDH），加载 `out/extension.js` 真产物，验证扩展能激活、命令全部注册。
+
+```bash
+# 首次需要 mocha —— suite/index.js 自管 mocha runner，按约定不进 devDependencies
+npm install --no-save --no-package-lock mocha@10
+
+npm run test:e2e        # = build + tsc -p tsconfig.e2e.json + node .tsc-e2e/runTests.js
+```
+
+**两个必须知道的坑**：
+
+1. **clangd 扩展依赖**：`package.json#extensionDependencies` 声明了 `llvm-vs-code-extensions.vscode-clangd`。EDH 默认使用空扩展目录，依赖不存在时 VS Code 会**拒绝激活本扩展**，于是「命令全部注册」断言必然失败（实测 3 个用例全红，扩展完全没激活）。`runTests.ts` 会自动把用户已装的 clangd 扩展复制到 `.vscode-test/extensions-e2e/` 并用 `--extensions-dir` 挂上；换机器跑需要先在 VS Code 里装 clangd 扩展，否则会报明确的缺依赖错误。
+2. **产物隔离**：e2e 编译产物在 `.tsc-e2e/`（已 gitignore），VS Code 运行时在 `.vscode-test/`（同样已忽略）。首次运行会下载 VS Code stable 二进制，耗时较长。
+
+预期输出：`4 passing` —— 扩展激活不抛异常 / 28 个命令全部注册 / 200ms 时 `isActive=true` / 200ms 时命令数 ≥ 28。
 
 ## 5. 调试扩展
 
@@ -212,7 +231,7 @@ src/<module>/
 └── *.ts                # 实现文件
 ```
 
-如果模块内有子模块（如 `src/build/domain/`），按 DDD 或功能再切分。
+如果模块内有子模块（如 `src/clangd/proxy/`），按职责或功能再切分。
 
 ## 9. 修改 .clangd / compile_commands 行为
 
@@ -283,7 +302,7 @@ npm run publish    # 需要 vsce 已登录 publisher: 'vscode-ue-helper'
 ## 12. 关键约定回顾
 
 - **产品边界（宪法 I）**：Windows 10/11 + UE 5.2+ + MSVC + Windows SDK 是唯一受支持环境；`package.json#platforms = ["win32"]`；非 Windows 路径 / 文档 / 测试需宪法修订才能引入
-- **21 个命令**：完整列表见 `package.json#contributes.commands` 与 [doc/02-modules.md §6](../02-modules.md#6-srccommands--21-个-vs-code-命令)；新增命令按宪法 II 通过 `WorkspaceState` / `ClangdOps` 派生状态，遵守 §6.4 步流程
+- **28 个命令**：完整列表见 `package.json#contributes.commands` 与 [doc/02-modules.md §6](../02-modules.md#6-srccommands--28-个-vs-code-命令)；新增命令按宪法 II 通过 `WorkspaceState` / `ClangdOps` 派生状态，遵守 §6.4 步流程
 - **TypeScript strict 全开**（`strict` / `noUncheckedIndexedAccess` / `noUnusedLocals/Parameters` / `noImplicitReturns` / `noFallthroughCasesInSwitch`）
 - **路径别名**（`@core/*` 等），**禁止**相对导入
 - **i18n**：所有用户可见字符串走 `t('key', params)`

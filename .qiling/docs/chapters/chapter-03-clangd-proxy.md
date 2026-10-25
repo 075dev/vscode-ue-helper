@@ -115,6 +115,7 @@ events: 0
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
 | bugfix-003 | 2026-10-11 | `bridge.close()` 清空请求关联表(消除取消/崩溃导致的在途请求条目无界增长);删除 completion/signatureHelp/inlayHint 三个 no-op 本地化占位函数 | `.qiling/planning/bugfix/003-audit-fixes.md` |
+| 审计修复（19 条） | 2026-10-25 | 请求关联 key 加 client / server 命名空间,消除客户端与服务端同 id 时的响应串扰;未知 CLI 参数从「整进程退出」降级为 warning 并忽略 | `src/clangd/proxy/messages.ts`、`src/clangd/proxy/bridge.ts`、`src/clangd/proxy/cliArgs.ts`、`src/clangd/proxy/cli.ts` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 

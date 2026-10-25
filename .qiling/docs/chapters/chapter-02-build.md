@@ -179,7 +179,7 @@ events: 0
 
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
-| | | | |
+| 审计修复（19 条） | 2026-10-25 | 构建快照早退收口（每次构建带唯一 `buildId`，早退路径补写失败快照）；TaskProvider 接线真实 UBT 命令；启动编辑器去掉 `cmd /c start` 改直接 spawn；构建与 Live Coding 共用并发锁；`Set System Includes` 的 silent 模式不再弹窗 | `src/commands/build.ts`、`src/build/taskProvider.ts`、`src/build/launchEditor.ts`、`src/build/lock.ts`、`src/commands/setSystemIncludes.ts` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 

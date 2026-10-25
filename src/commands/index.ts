@@ -27,6 +27,7 @@ import { executeEnableClangdProxy } from './enableClangdProxy';
 import { executeDisableClangdProxy } from './disableClangdProxy';
 import { executeShowClangdProxyStatus } from './showClangdProxyStatus';
 import { executeDiagnoseProject } from './diagnoseProject';
+import { executeClearClangdIndex } from './clearClangdIndex';
 import { executeShowControlPanel } from './showControlPanel';
 import { executeRefreshProjectExplorer } from './refreshProjectExplorer';
 import { executeOpenProjectExplorerFile } from './openProjectExplorerFile';
@@ -87,6 +88,9 @@ export function activateCommands(
   track('vscodeUEHelper.diagnoseProject', () =>
     executeDiagnoseProject(logger, detection, workspace, clangdOps),
   );
+  // [借鉴 Incanta/vscode-cpp-unreal 的 "Clear clangd Index"] 诊断 → 修复闭环:
+  // diagnoseProject 只报告问题,本命令提供可执行的补救动作(清理 clangd 索引缓存)。
+  track('vscodeUEHelper.clearClangdIndex', () => executeClearClangdIndex(logger, workspace));
   track('vscodeUEHelper.createProject', () =>
     executeCreateProject(config, logger, detection, clangdOps, workspace),
   );

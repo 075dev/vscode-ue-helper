@@ -30,6 +30,13 @@ logger.info('[detection] workspaceFile = ...'); // 模块内进一步细分加 [
 - **一次性构造**：插件共享一个 Logger 实例（在 `extension.ts` 创建），模块内部**禁止**自己 `new`。
 - 满足宪法 §III observable logs 要求：每个日志行带模块前缀 + 上下文。
 
+**console 输出开关**：`setConsoleEnabled(enabled)` / `isConsoleEnabled()`。
+
+- 语义：**只影响 `console.*` 输出，不影响 OutputChannel** —— 关闭后日志仍然写进 Output 面板，用户照常能在「VSCodeUEHelper」输出面板看到全部日志。
+- `info` / `warn` / `error` 三路统一受控（`debug` 本来就不写 console）。虽然 `warn` / `error` 走 stderr、与 stdout 不冲突，开关语义仍是「只写 OutputChannel，不写 console」。
+- 用途：MCP stdio 传输把 JSON-RPC 帧写到 `process.stdout`，而 `console.log` 也写 stdout —— 任何一行 info 日志都会插进帧流，让 MCP 客户端解析失败。调用方（`src/mcp/index.ts`）在 MCP 激活时关闭它，并在 dispose 与启动失败路径恢复 `true`。
+- Logger 是**全局共享单例**，这个开关是全局状态 —— 打开前先确认当前宿主是不是 MCP 进程。
+
 ## Config 双真相陷阱 [Pitfall #10]
 
 `Config.update(key, value, target=Workspace)` 签名返回 `Promise<void>`（详见 `src/core/config.ts`）。它内部已调 `this.refreshRoot()`，所以**当前实例**能读新值；但**不要**按"返回新 Config 实例"使用：
@@ -43,6 +50,8 @@ console.log(freshConfig.completionMode); // TypeError
 await config.update('platform', 'Win64');
 console.log(config.platform); // 已是新值
 ```
+
+**`update` 写盘校验按值比较**：写盘后会 `inspect` 回读并与传入值比较 —— 标量用 `===`，数组 / 对象用 `JSON.stringify` 序列化后比较。**不要**改成引用比较（`!==`）：VS Code 返回的是它自己内部的对象，与调用方传进去的永远不是同一引用，会让每次写数组（如 `clangd.userAddFlags`）都误报一条 "Possible causes: target scope mismatch..." 告警，而写入其实完全成功。校验不通过时只 `console.warn` 提示，不抛错。
 
 **`completionMode` 设置已完全删除**（H4-B 决策 + Plan B 收束，见 REMEDIATION-PLAN §十二）。`Config` getter 永远返回 `'slow'` 字面量；新代码**禁止**读 `config.completionMode` 决策分支，UI 也已移除相关 toggle 状态栏按钮（详见 `src/clangd/AGENTS.md` 与 `src/ui/AGENTS.md`）。
 
@@ -61,7 +70,7 @@ workspace.workspaceRoot; // .code-workspace 的 dirname
 workspace.clangdConfigPath; // 项目根 .clangd
 workspace.clangdHelperDir; // .vscode/vscodeuehelper/
 workspace.compileCommandsPath; // compile_commands.json 路径
-// ... 6 个补全文件路径（macroHelperPath / addCompletionsPath / addMacroCompletionsPath ...）
+// ... 4 个补全文件路径（macroHelperPath / ueClangdCompatPath / addCompletionsPath / addMacroCompletionsPath）
 
 // 用户选择（Phase 9 新增，持久化于 workspaceContext.memento）
 workspace.selectedProject; // string | null

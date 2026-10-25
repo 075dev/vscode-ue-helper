@@ -2,7 +2,7 @@
  * controlPanel.test.ts —— ControlPanelProvider 单元测试
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
 import { ControlPanelProvider } from '@ui/controlPanel';
 import { getControlPanelHtml } from '@ui/controlPanel.html';
@@ -16,6 +16,7 @@ import {
   CONFIG_KEY_MAP,
 } from '@ui/controlPanelMessages';
 import { initI18n } from '@i18n';
+import type { ClangdOps } from '@clangd/clangdOps';
 
 type MockWebviewView = vscode.WebviewView & {
   webview: vscode.Webview & {
@@ -262,6 +263,34 @@ function createDeps() {
   };
 }
 
+/**
+ * [D5] mock ClangdOps —— 统一入口 `writeClangdAddFlags` 会读
+ * `clangdOps.workspace` 采集 ctx（compatHeaderPath / macroHelperPath /
+ * projectFile），所以 mock 必须提供最小 workspace，否则采集阶段就抛错。
+ */
+type ApplyAddFlagsMock = Mock<
+  [readonly string[]],
+  Promise<{ ok: boolean; reason?: string }>
+>;
+
+function mockClangdOps(
+  applyAddFlags: ApplyAddFlagsMock,
+  workspaceOverrides?: {
+    ueClangdCompatPath?: string;
+    macroHelperPath?: string;
+    projectFile?: string;
+  },
+): ClangdOps {
+  return {
+    applyAddFlags,
+    workspace: {
+      ueClangdCompatPath: workspaceOverrides?.ueClangdCompatPath,
+      macroHelperPath: workspaceOverrides?.macroHelperPath,
+      projectFile: workspaceOverrides?.projectFile,
+    },
+  } as unknown as ClangdOps;
+}
+
 async function drain(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 1));
 }
@@ -486,10 +515,11 @@ describe('ControlPanelProvider', () => {
     );
   });
 
-  it('resolveWebviewView sets up HTML', () => {
+  it('resolveWebviewView sets up HTML', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    // [D6] resolveWebviewView 现在返回 Promise（先 await 标题信息再赋 .html）
+    await ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -498,10 +528,70 @@ describe('ControlPanelProvider', () => {
     expect(mockView.webview.onDidReceiveMessage).toHaveBeenCalled();
   });
 
+  // ============ [D6] 首屏 projectName + panelReady 重推 ============
+
+  it('[D6] 首屏 HTML 已含非空 projectName(不再渲染 no-project 空状态)', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+
+    await ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+
+    // HTML 里带上了真实项目名
+    expect(mockView.webview.html).toContain('TestProject');
+    // body 上不再有 no-project class（否则整个界面被 CSS 藏掉）
+    expect(mockView.webview.html).not.toContain('class="no-project"');
+  });
+
+  it('[D6] 收到 panelReady 后扩展侧重推 title / panelState / proxyConfig / status', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    await ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    mockView.webview.postMessage.mockClear();
+
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    listener({ type: 'panelReady' });
+    await drain();
+
+    const pushedTypes = mockView.webview.postMessage.mock.calls.map(
+      (c: unknown[]) => (c[0] as { type?: string })?.type,
+    );
+    expect(pushedTypes).toContain('updateTitle');
+    expect(pushedTypes).toContain('panelState');
+    expect(pushedTypes).toContain('proxyConfigValues');
+    expect(pushedTypes).toContain('statusValues');
+  });
+
+  it('[D6] postMessage 投递失败时记 warn(不再静默丢消息)', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    mockView.webview.postMessage.mockResolvedValueOnce(false);
+    await ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    await drain();
+
+    const warnCalls = asMockLogger(deps.logger).warn.mock.calls.map((c: unknown[]) =>
+      String(c[0]),
+    );
+    expect(warnCalls.some((line) => line.includes('postMessage dropped'))).toBe(true);
+  });
+
   it('handles executeCommand', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -520,7 +610,7 @@ describe('ControlPanelProvider', () => {
   it('sends commandResult on success', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -539,7 +629,7 @@ describe('ControlPanelProvider', () => {
   it('handles getConfig', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -556,7 +646,7 @@ describe('ControlPanelProvider', () => {
   it('handles getProxyConfig', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -573,7 +663,7 @@ describe('ControlPanelProvider', () => {
   it('handles saveConfig batch updates', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -605,7 +695,7 @@ describe('ControlPanelProvider', () => {
   it('saveConfig 后同步推送 statusValues 反映新值', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -637,7 +727,7 @@ describe('ControlPanelProvider', () => {
   it('handles saveProxyConfig batch updates', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -671,7 +761,7 @@ describe('ControlPanelProvider', () => {
   it('saveProxyConfig 后同步推送 statusValues 反映刚写入的 proxy 配置', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -710,7 +800,7 @@ describe('ControlPanelProvider', () => {
   it('handles getStatus', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -739,7 +829,7 @@ describe('ControlPanelProvider', () => {
     ControlPanelProvider.register(deps);
     // 模拟 enable 命令路径：settingsManager 已写入 launcher，但 Config.clangdProxyEnabled=false
     (deps.clangd.proxyManager as unknown as { _setActive: (v: boolean) => void })._setActive(true);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -765,7 +855,7 @@ describe('ControlPanelProvider', () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
     (deps.clangd.proxyManager as unknown as { _setActive: (v: boolean) => void })._setActive(true);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -790,7 +880,7 @@ describe('ControlPanelProvider', () => {
   it('config.onDidChange 触发后自动推送 proxyConfigValues + statusValues 到 webview', async () => {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -852,7 +942,7 @@ describe('ControlPanelProvider', () => {
   function setupResolvedProvider() {
     const deps = createDeps();
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -920,10 +1010,12 @@ describe('ControlPanelProvider', () => {
 
   it('handleMessage: saveAddFlags 在 clangdOps 注入 + applyAddFlags ok 时返回 success', async () => {
     const deps = createDeps();
-    const applyAddFlags = vi.fn().mockResolvedValue({ ok: true });
-    deps.clangdOps = { applyAddFlags } as unknown as import('@clangd/clangdOps').ClangdOps;
+    const applyAddFlags: ApplyAddFlagsMock = vi
+      .fn<[readonly string[]], Promise<{ ok: boolean; reason?: string }>>()
+      .mockResolvedValue({ ok: true });
+    deps.clangdOps = mockClangdOps(applyAddFlags);
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -942,12 +1034,69 @@ describe('ControlPanelProvider', () => {
     });
   });
 
+  it('[D5] saveAddFlags 保留 system-include-windows（webview 无对应 checkbox,不能被丢掉）', async () => {
+    const deps = createDeps();
+    const applyAddFlags: ApplyAddFlagsMock = vi
+      .fn<[readonly string[]], Promise<{ ok: boolean; reason?: string }>>()
+      .mockResolvedValue({ ok: true });
+    deps.clangdOps = mockClangdOps(applyAddFlags);
+    // 用户之前跑过 Set System Includes → userAddFlags 里有 system-include-windows
+    (deps.config as unknown as { userAddFlags: string[] }).userAddFlags = [
+      'system-include-windows',
+    ];
+    ControlPanelProvider.register(deps);
+    void ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    // webview 只回传勾选框里的 id（glossary 里没有 system-include-windows）
+    listener({ type: 'saveAddFlags', selectedIds: ['compat-header'] });
+    await drain();
+
+    expect(deps.config._updateCalls).toContainEqual([
+      'clangd.userAddFlags',
+      ['compat-header', 'system-include-windows'],
+    ]);
+  });
+
+  it('[D5] saveAddFlags 走统一入口 —— compat-header 能渲染出 /FI（ctx 不再为空）', async () => {
+    const deps = createDeps();
+    const applyAddFlags: ApplyAddFlagsMock = vi
+      .fn<[readonly string[]], Promise<{ ok: boolean; reason?: string }>>()
+      .mockResolvedValue({ ok: true });
+    deps.clangdOps = mockClangdOps(applyAddFlags, {
+      ueClangdCompatPath: 'D:\\proj\\.vscode\\vscodeuehelper\\ueClangdCompat.h',
+    });
+    ControlPanelProvider.register(deps);
+    void ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+    listener({ type: 'saveAddFlags', selectedIds: ['compat-header'] });
+    await drain();
+
+    // 旧实现 ctx 为空 → compat-header 渲染出 0 个 flag（勾选静默失效）
+    expect(applyAddFlags).toHaveBeenCalledWith([
+      '/FID:\\proj\\.vscode\\vscodeuehelper\\ueClangdCompat.h',
+    ]);
+  });
+
   it('handleMessage: saveAddFlags 在 applyAddFlags 返回失败时上报 firstError', async () => {
     const deps = createDeps();
-    const applyAddFlags = vi.fn().mockResolvedValue({ ok: false, reason: 'disk full' });
-    deps.clangdOps = { applyAddFlags } as unknown as import('@clangd/clangdOps').ClangdOps;
+    const applyAddFlags: ApplyAddFlagsMock = vi
+      .fn<[readonly string[]], Promise<{ ok: boolean; reason?: string }>>()
+      .mockResolvedValue({ ok: false, reason: 'disk full' });
+    deps.clangdOps = mockClangdOps(applyAddFlags);
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -967,10 +1116,12 @@ describe('ControlPanelProvider', () => {
 
   it('handleMessage: saveAddFlags 在 applyAddFlags 抛异常时记 error 并返回 failure', async () => {
     const deps = createDeps();
-    const applyAddFlags = vi.fn().mockRejectedValue(new Error('boom'));
-    deps.clangdOps = { applyAddFlags } as unknown as import('@clangd/clangdOps').ClangdOps;
+    const applyAddFlags: ApplyAddFlagsMock = vi
+      .fn<[readonly string[]], Promise<{ ok: boolean; reason?: string }>>()
+      .mockRejectedValue(new Error('boom'));
+    deps.clangdOps = mockClangdOps(applyAddFlags);
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -1158,7 +1309,7 @@ describe('ControlPanelProvider', () => {
       engineFolder: null,
     });
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -1244,7 +1395,7 @@ describe('ControlPanelProvider', () => {
       deps.detection as unknown as { ready: Promise<unknown> }
     ).ready = Promise.reject(new Error('scan failed'));
     ControlPanelProvider.register(deps);
-    ControlPanelProvider.getInstance().resolveWebviewView(
+    void ControlPanelProvider.getInstance().resolveWebviewView(
       mockView,
       {} as unknown as vscode.WebviewViewResolveContext,
       {} as unknown as vscode.CancellationToken,
@@ -1255,5 +1406,124 @@ describe('ControlPanelProvider', () => {
     );
     expect(call).toBeDefined();
     expect(call![0]).toMatchObject({ type: 'panelState', hasProject: false });
+  });
+
+  // ===== [D18] webview 消息校验加固 =====
+
+  it('[D18] 原型链上的属性名不是合法命令（constructor 被拒）', async () => {
+    const { listener } = await setupWithDetection([{ name: 'P', path: '/p/P.uproject' }], []);
+    // 对象字面量继承 Object.prototype —— 'constructor' / 'toString' 会被
+    // COMMAND_MAP['constructor'] 命中（返回继承来的函数，truthy）→ 绕过白名单。
+    listener({ type: 'executeCommand', command: 'constructor' });
+    await drain();
+
+    // 没有执行任何命令
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      expect.stringContaining('Object'),
+    );
+    const rejected = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) =>
+        (c[0] as { type?: string; success?: boolean })?.type === 'commandResult' &&
+        (c[0] as { success?: boolean })?.success === false,
+    );
+    expect(rejected).toBeDefined();
+  });
+
+  it('[D18] toString 同样不是合法命令', async () => {
+    const { listener } = await setupWithDetection([{ name: 'P', path: '/p/P.uproject' }], []);
+    listener({ type: 'executeCommand', command: 'toString' });
+    await drain();
+
+    const rejected = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) =>
+        (c[0] as { type?: string; success?: boolean })?.type === 'commandResult' &&
+        (c[0] as { success?: boolean })?.success === false,
+    );
+    expect(rejected).toBeDefined();
+  });
+
+  it('[D18] updateConfig 拒绝非字符串路径值，不写 settings', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    void ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    await drain();
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+
+    listener({
+      type: 'updateConfig',
+      key: 'clangdProxyRealClangdPath',
+      value: { a: 1 },
+    });
+    await drain();
+
+    // 配置没有被写入
+    expect(deps.config._updateCalls).toHaveLength(0);
+    const shown = mockView.webview.postMessage.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === 'showError',
+    );
+    expect(shown).toBeDefined();
+  });
+
+  it('[D18] updateConfig 拒绝非布尔值给布尔字段', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    void ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    await drain();
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+
+    listener({ type: 'updateConfig', key: 'autoBackupWorkspace', value: 'yes' });
+    await drain();
+
+    expect(deps.config._updateCalls).toHaveLength(0);
+  });
+
+  it('[D18] updateConfig 拒绝枚举外的取值', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    void ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    await drain();
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+
+    listener({ type: 'updateConfig', key: 'configuration', value: 'NotAConfig' });
+    await drain();
+
+    expect(deps.config._updateCalls).toHaveLength(0);
+  });
+
+  it('[D18] updateConfig 接受合法值并正常写入', async () => {
+    const deps = createDeps();
+    ControlPanelProvider.register(deps);
+    void ControlPanelProvider.getInstance().resolveWebviewView(
+      mockView,
+      {} as unknown as vscode.WebviewViewResolveContext,
+      {} as unknown as vscode.CancellationToken,
+    );
+    await drain();
+    const listener = mockView.webview.onDidReceiveMessage.mock.calls[0]![0] as (
+      msg: unknown,
+    ) => void;
+
+    listener({ type: 'updateConfig', key: 'configuration', value: 'Shipping' });
+    await drain();
+
+    expect(deps.config._updateCalls).toEqual([['configuration', 'Shipping']]);
   });
 });

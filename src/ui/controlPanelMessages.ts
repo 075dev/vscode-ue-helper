@@ -119,7 +119,12 @@ export type PanelMessage =
   | { type: 'addFlagValues'; values: AddFlagValues }
   | { type: 'addFlagSaveResult'; result: SaveResult };
 
-export const COMMAND_MAP: Record<string, string> = {
+/**
+ * [D18] 按钮 id → 命令 ID 映射的原始定义。
+ *
+ * 单独抽出来是为了让 COMMAND_MAP 能包一层 null 原型对象（见下）。
+ */
+const COMMAND_MAP_RAW = {
   build: 'vscodeUEHelper.build',
   rebuild: 'vscodeUEHelper.rebuild',
   clean: 'vscodeUEHelper.clean',
@@ -135,6 +140,21 @@ export const COMMAND_MAP: Record<string, string> = {
   installRules: 'vscodeUEHelper.installRules',
   uninstall: 'vscodeUEHelper.uninstall',
 } as const;
+
+/**
+ * [D18] 按钮 id → 命令 ID 映射。
+ *
+ * 用 **null 原型对象**（`Object.create(null)`）而不是对象字面量：
+ * 对象字面量继承 `Object.prototype`，所以 `COMMAND_MAP['constructor']` /
+ * `['toString']` 会返回继承来的函数（truthy）→ 绕过"未知命令"分支。
+ * 伪造一条 `{type:'executeCommand', command:'constructor'}` 就会让扩展去
+ * 执行 `Object` 构造函数，用户看到 "command function Object() { [native code] }
+ * not found"。webview 消息可以被伪造，白名单必须是封闭集合。
+ */
+export const COMMAND_MAP: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  COMMAND_MAP_RAW,
+);
 
 /**
  * 按钮适用档位 —— 按当前工作区状态决定面板按钮是否可用：
@@ -220,9 +240,15 @@ export const BUTTON_GROUPS: ButtonGroup[] = [
 /**
  * 按钮适用档位查表（按钮 id → requirement）。
  * 扩展侧 executeCommand 兜底校验与 webview 渲染共用同一份定义，避免两处漂移。
+ *
+ * [D18] 同样用 null 原型对象 —— 否则 `COMMAND_REQUIREMENT['constructor']`
+ * 会命中 Object.prototype 上的继承属性，把未知按钮当成"需要引擎"。
  */
-export const COMMAND_REQUIREMENT: Record<string, ButtonRequirement> = Object.fromEntries(
-  BUTTON_GROUPS.flatMap((group) => group.buttons.map((btn) => [btn.id, btn.requirement])),
+export const COMMAND_REQUIREMENT: Record<string, ButtonRequirement> = Object.assign(
+  Object.create(null) as Record<string, ButtonRequirement>,
+  Object.fromEntries(
+    BUTTON_GROUPS.flatMap((group) => group.buttons.map((btn) => [btn.id, btn.requirement])),
+  ),
 );
 
 export interface SelectOption {
@@ -320,3 +346,78 @@ export const CONFIG_KEY_MAP: Record<string, string> = {
   localizationEnabled: 'clangdProxy.localization.enabled',
   localizationMode: 'clangdProxy.localization.mode',
 };
+
+// ===== [D18] 配置值类型校验 =====
+
+/**
+ * [D18] 配置字段 → 值类型。
+ *
+ * 显式列出，不靠字段名猜（`'Max'|'Ttl'|'Sec'` 那套字符串匹配会漏）。
+ */
+export type ConfigValueKind = 'boolean' | 'number' | 'select' | 'string';
+
+const CONFIG_VALUE_KINDS: Record<string, ConfigValueKind> = {
+  configuration: 'select',
+  target: 'select',
+  useMCP: 'select',
+  lspLoggingLevel: 'select',
+  autoBackupWorkspace: 'boolean',
+  clangdProxyEnabled: 'boolean',
+  clangdProxyKeepaliveMax: 'number',
+  clangdProxyKeepaliveTtlSec: 'number',
+  clangdProxyRealClangdPath: 'string',
+  clangdProxyLogPath: 'string',
+  localizationEnabled: 'boolean',
+  localizationMode: 'select',
+};
+
+/** 配置值校验结果 */
+export type ConfigValueCheck = { ok: true } | { ok: false; reason: string };
+
+/** 值的类型名（用于错误文案） */
+function describeValueType(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  return typeof value;
+}
+
+/**
+ * [D18] 校验 webview 传来的配置值。
+ *
+ * 背景:webview 消息可以被伪造,而 `updateConfig` / `updateProxyConfig` 的
+ * `value` 是 `unknown` —— 直接写进 settings.json 后,后续消费方
+ * （如 `path.join(对象)`）会抛 TypeError,故障点离原因很远。
+ * 这里按目标字段的类型逐类校验,不匹配即拒绝并回推错误。
+ */
+export function validateConfigValue(key: string, value: unknown): ConfigValueCheck {
+  const kind = CONFIG_VALUE_KINDS[key];
+  if (!kind) {
+    return { ok: false, reason: `Unknown config key: ${key}` };
+  }
+
+  switch (kind) {
+    case 'boolean':
+      return typeof value === 'boolean'
+        ? { ok: true }
+        : { ok: false, reason: `Expected boolean, got ${describeValueType(value)}` };
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value)
+        ? { ok: true }
+        : { ok: false, reason: `Expected finite number, got ${describeValueType(value)}` };
+    case 'select': {
+      const options = { ...CONFIG_SELECTS, ...PROXY_SELECTS }[key] ?? [];
+      const allowed = options.map((o) => o.value);
+      return typeof value === 'string' && allowed.includes(value)
+        ? { ok: true }
+        : { ok: false, reason: `Expected one of: ${allowed.join(', ')}` };
+    }
+    case 'string':
+      return typeof value === 'string'
+        ? { ok: true }
+        : { ok: false, reason: `Expected string, got ${describeValueType(value)}` };
+  }
+}

@@ -131,7 +131,7 @@ events: 0
 
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
-| | | | |
+| 审计修复（19 条） | 2026-10-25 | 失败响应补 MCP 标准字段 `isError:true`（此前 AI 代理的错误分支永不触发），成功/失败响应统一由一个内部构造器产出；Logger 增加「只写 OutputChannel、不写 console」开关，MCP 激活期间关闭，避免日志插进 JSON-RPC 帧流；README 如实标注 MCP server 当前仍跑在扩展宿主进程内、外部客户端尚不能直连 | `src/mcp/tools.ts`、`src/mcp/server.ts`、`src/mcp/index.ts`、`src/core/logger.ts`、`.qiling/planning/context/openapi.yaml` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 

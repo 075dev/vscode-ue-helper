@@ -22,11 +22,13 @@ import {
   discoverSystemIncludes,
   listMsvcVersions,
   listSdkVersions,
+  readMsvcVersion,
   renderClangdFlags,
   readRecommendedSdkVersion,
   selectSdkVersion,
 } from '@clangd/windowsSdk';
-import { resolveFlags } from '@clangd/flagGlossary';
+// [D5] .clangd Add 的统一写入入口（ctx 五项统一采集）
+import { writeClangdAddFlags } from '@clangd/clangdFlagRenderer';
 import type { DetectionHandles } from '@detection';
 import { resolveProjectOrPick, persistSelection } from '@commands/_resolve';
 import { t } from '@i18n';
@@ -80,14 +82,11 @@ async function runSetSystemIncludes(
   clangdOps?: ClangdOps,
   silent: boolean = false,
 ): Promise<Envelope<undefined>> {
-  // applyAddFlags 失败时不提前返回(保持现有控制流:成功提示仍会弹出),
-  // 失败信息暂存,最终随 envelope 返回。
-  let failure: Envelope<undefined> | undefined;
-
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve（仅 project,engine 路径直接读缓存）
   const project = await resolveProjectOrPick({ detection, workspace, silent });
   if (!project) {
-    // 未检测到/未选择 .uproject(resolveProjectOrPick 已弹 warning,UI 行为保持)
+    // 未检测到/未选择 .uproject(非 silent 时 resolveProjectOrPick 会弹 warning;
+    // silent 路径不弹 —— 见 @commands/_resolve 的 [D15 收口])
     return errEnvelope(EC_PROJECT_NOT_DETECTED, t('cmd.noUprojectSelected'));
   }
   await persistSelection(workspace, detection, project, undefined);
@@ -102,31 +101,36 @@ async function runSetSystemIncludes(
   const detected = await discoverSystemIncludes(config.clangdPath, logger);
   if (!detected) {
     logger.warn('[setSystemIncludes] no clang/clangd found on PATH or default LLVM location');
-    const choice = await vscode.window.showErrorMessage(
-      'Could not detect MSVC / Windows SDK — no clangd (or clang.exe / clang++.exe) found.\n\n' +
-        'Searched:\n' +
-        '  • vscodeUEHelper.clangdPath setting\n' +
-        '  • PATH (via `where` and a manual walk)\n' +
-        '  • C:\\Program Files\\LLVM\\bin\n' +
-        '  • C:\\Program Files (x86)\\LLVM\\bin\n' +
-        '  • %LocalAppData%\\Programs\\LLVM\\bin\n\n' +
-        'Install LLVM (clangd) and restart VS Code, or set the clangdPath setting manually.',
-      { modal: true },
-      'Open LLVM download page',
-      'How to install clangd',
-    );
-    if (choice === 'Open LLVM download page') {
-      await vscode.env.openExternal(
-        vscode.Uri.parse('https://github.com/llvm/llvm-project/releases'),
+    // [D15] silent(MCP/AI 代理)路径不弹任何窗 —— 弹窗等人点会让工具调用悬空。
+    // 直接返回错误信封,agent 能读到失败原因。
+    if (!silent) {
+      const choice = await vscode.window.showErrorMessage(
+        'Could not detect MSVC / Windows SDK — no clangd (or clang.exe / clang++.exe) found.\n\n' +
+          'Searched:\n' +
+          '  • vscodeUEHelper.clangdPath setting\n' +
+          '  • PATH (via `where` and a manual walk)\n' +
+          '  • C:\\Program Files\\LLVM\\bin\n' +
+          '  • C:\\Program Files (x86)\\LLVM\\bin\n' +
+          '  • %LocalAppData%\\Programs\\LLVM\\bin\n\n' +
+          'Install LLVM (clangd) and restart VS Code, or set the clangdPath setting manually.',
+        // [D15] 模态弹窗会阻塞整个 VS Code 窗口 —— 改为非模态
+        { modal: false },
+        'Open LLVM download page',
+        'How to install clangd',
       );
-    } else if (choice === 'How to install clangd') {
-      await vscode.env.openExternal(
-        vscode.Uri.parse(
-          'https://github.com/llvm/llvm-project/releases' +
-            ' (download the latest LLVM-XX.X.X-win64.exe installer; on the install ' +
-            "wizard, tick 'Add LLVM to the system environment PATH').",
-        ),
-      );
+      if (choice === 'Open LLVM download page') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://github.com/llvm/llvm-project/releases'),
+        );
+      } else if (choice === 'How to install clangd') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://github.com/llvm/llvm-project/releases' +
+              ' (download the latest LLVM-XX.X.X-win64.exe installer; on the install ' +
+              "wizard, tick 'Add LLVM to the system environment PATH').",
+          ),
+        );
+      }
     }
     // [envelope 对齐] clangd/clang 可执行文件探测失败 → CLANGD_NOT_AVAILABLE(映射表直配)
     return errEnvelope(
@@ -140,6 +144,25 @@ async function runSetSystemIncludes(
 
   const msvcParent = path.dirname(detected.msvcRoot);
   const sdkParent = path.dirname(detected.sdkRoot);
+
+  // [D15] silent(MCP/AI 代理)路径:不列版本、不弹 QuickPick ——
+  // 直接采用自动检测到的 msvcRoot / sdkRoot。agent 无法回答交互式选择框,
+  // 弹框只会让工具调用悬着等人点。
+  if (silent) {
+    logger.info(
+      `[setSystemIncludes] silent mode: use detected MSVC=${detected.msvcRoot} SDK=${detected.sdkRoot}`,
+    );
+    return await applySystemIncludes({
+      config,
+      logger,
+      clangdOps,
+      msvcRoot: detected.msvcRoot,
+      sdkRoot: detected.sdkRoot,
+      msvcLabel: path.basename(detected.msvcRoot),
+      sdkLabel: path.basename(detected.sdkRoot),
+      silent: true,
+    });
+  }
 
   const msvcVersions = await listMsvcVersions(msvcParent);
   const sdkVersions = await listSdkVersions(sdkParent);
@@ -208,18 +231,64 @@ async function runSetSystemIncludes(
   }
   const sdkRoot = path.join(sdkParent, sdkChoice.label);
 
+  return await applySystemIncludes({
+    config,
+    logger,
+    clangdOps,
+    msvcRoot,
+    sdkRoot,
+    msvcLabel: msvcChoice.label,
+    sdkLabel: sdkChoice.label,
+    silent: false,
+  });
+}
+
+/**
+ * 把选定的 MSVC / SDK 写入 .clangd（统一写入入口 + 设置项持久化）。
+ *
+ * [D15] silent(MCP/AI 代理)路径复用本函数但**不弹任何窗** ——
+ * 交互式路径末尾的 "System includes set" 提示在 agent 场景下只是噪音,
+ * 且会让 MCP 工具调用悬着等待 UI 关闭。
+ */
+async function applySystemIncludes(params: {
+  config: Config;
+  logger: Logger;
+  clangdOps?: ClangdOps;
+  msvcRoot: string;
+  sdkRoot: string;
+  msvcLabel: string;
+  sdkLabel: string;
+  silent: boolean;
+}): Promise<Envelope<undefined>> {
+  const { config, logger, clangdOps, msvcRoot, sdkRoot, msvcLabel, sdkLabel, silent } = params;
+
+  // [MAJOR-3] fms 版本必须对应**本次选中的** msvcRoot（探测到的那个可能是另一个版本）。
+  //
+  // 此前有两个来源：渲染 `.clangd` 用的是探测值 `detected.fmsCompatibilityVersion`，
+  // 持久化设置项用的是按选中 msvcRoot 重读的 `selectedFmsVersion` —— 两者可能不同。
+  // 后果：`.clangd` 里的 `-fms-compatibility-version=` 与 `/imsvc<选中的 msvc>` 指向
+  // 不同版本的 MSVC（`_MSC_VER` 与实际头文件冲突）；且之后任何一次 `.clangd` 重写
+  // （面板保存 / 配置变更触发）会写入另一个值 → 同一份 `.clangd` 内容前后不一致。
+  //
+  // 现在只有一个来源：按选中的 msvcRoot 读一次，渲染与持久化**共用**这个值。
+  const selectedFmsVersion = await readMsvcVersion(msvcRoot, logger);
+
+  // applyAddFlags 失败时不提前返回(保持现有控制流:成功提示仍会弹出),
+  // 失败信息暂存,最终随 envelope 返回。
+  let failure: Envelope<undefined> | undefined;
+
   // Render flags and splice into .clangd.
   // ⚠️ 注意：不需要再加 /std: 了，renderClangdFlags 已经包含。
   // Plan Add 收束：不再做"过滤前缀 + 保留"操作。
   const systemFlags = await renderClangdFlags({
     msvcRoot,
     sdkRoot,
-    fmsCompatibilityVersion: detected.fmsCompatibilityVersion,
+    fmsCompatibilityVersion: selectedFmsVersion,
   });
 
   // [Plan D 激活] 读取 userAddFlags（如果没有则视为空数组），把 systemFlags 作为
   // `system-include-windows` 整体 push 进 ids。整个 userAddFlags + system-include-windows
-  // 通过 flagGlossary.resolveFlags + applyAddFlags 一次性写入 .clangd（force-write 语义）。
+  // 通过统一写入入口一次性写入 .clangd（force-write 语义）。
   // [Plan UX 决策] 用户选择"总是同步"：即运行命令后 userAddFlags 一定会增加 system-include-windows id。
   const currentUserAdd = config.userAddFlags ?? [];
   const nextUserAdd = currentUserAdd.includes('system-include-windows')
@@ -231,22 +300,33 @@ async function runSetSystemIncludes(
       await clangdOps.writeFull({});
     }
 
-    // 整体 force-write：用 flagGlossary + userAddFlags 决定 Add 内容。
-    // resolveFlags 已知 system-include-windows id 会展开 ctx.systemIncludeFlags。
-    const addFlags = resolveFlags(nextUserAdd, {
-      systemIncludeFlags: systemFlags,
-    });
+    // [D5] 持久化 MSVC / SDK 路径 —— 统一入口靠它们重建 system-include-windows
+    // 的 flag 组。没有这一步，之后任何一次 .clangd 重写（面板保存 / 配置变更）
+    // 都会把 /imsvc 全部丢掉 → clangd 找不到系统头 → 满屏 false-positive。
+    //
+    // fms 版本已在上方按选中的 msvcRoot 读出（[MAJOR-3]）—— 渲染 .clangd 与
+    // 持久化设置项共用同一个值。
+    await config.update('clangd.msvcRoot', msvcRoot);
+    await config.update('clangd.sdkRoot', sdkRoot);
+    await config.update('clangd.fmsCompatibilityVersion', selectedFmsVersion ?? '');
 
-    const result = await clangdOps.applyAddFlags(addFlags);
+    // 整体 force-write：走统一入口（ctx 由 collectClangdFlagContext 采集）。
+    // systemIncludeFlags 用本次刚渲染出的值覆盖 —— 用户选的就是这个版本，
+    // 不依赖设置项持久化是否成功。
+    const result = await writeClangdAddFlags(
+      { clangdOps, config, logger },
+      nextUserAdd,
+      { systemIncludeFlags: systemFlags },
+    );
     if (result.ok) {
       // 同步回设置 —— 用户已决策"总是同步"。
       await config.update('clangd.userAddFlags', nextUserAdd);
       logger.info(
-        `[setSystemIncludes] force-wrote ${addFlags.length} flags to .clangd via applyAddFlags, ` +
+        `[setSystemIncludes] force-wrote ${systemFlags.length} system flags to .clangd via unified entry, ` +
           `userAddFlags now has ${nextUserAdd.length} ids`,
       );
     } else {
-      logger.error(`[setSystemIncludes] applyAddFlags failed: ${result.reason}`);
+      logger.error(`[setSystemIncludes] writeClangdAddFlags failed: ${result.reason}`);
       // [envelope 对齐] 保持现有控制流:失败不提前返回(下方 "System includes set" 提示
       // 历史上仍会弹出,spec-as-is 原样保留),仅把失败登记进返回 envelope(缺口登记见报告)。
       failure = errEnvelope(
@@ -262,9 +342,12 @@ async function runSetSystemIncludes(
     );
   }
 
-  void vscode.window.showInformationMessage(
-    `System includes set:\nMSVC ${msvcChoice.label}\nSDK ${sdkChoice.label}`,
-  );
+  // [D15] silent 路径不弹提示框(agent 无人在看;弹窗只会让 MCP 调用悬着)
+  if (!silent) {
+    void vscode.window.showInformationMessage(
+      `System includes set:\nMSVC ${msvcLabel}\nSDK ${sdkLabel}`,
+    );
+  }
 
   // [envelope 对齐] 成功摘要复用上方提示的文案语义(英文原样,同现有未本地化文案,
   // i18n 接线登记为填充阶段工作);applyAddFlags 失败时返回暂存的失败 envelope。
@@ -272,7 +355,7 @@ async function runSetSystemIncludes(
     failure ??
     okEnvelope(
       undefined,
-      `System includes set: MSVC ${msvcChoice.label}, SDK ${sdkChoice.label}`,
+      `System includes set: MSVC ${msvcLabel}, SDK ${sdkLabel}`,
     )
   );
 }

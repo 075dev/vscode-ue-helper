@@ -57,18 +57,26 @@ export async function activateMCP(
   logger.info(`[mcp] detected host=${host}, starting server`);
   // [Phase 11 SSoT] 先注入 context,callTool 才能 dispatch 到 executeXxx
   setMCPContext({ config, logger, detection, workspace, clangdOps });
+  // [D7] 关闭 console 输出 —— MCP stdio 传输把 JSON-RPC 帧写到 process.stdout,
+  // 而 logger.info → console.log 也写 stdout,任何一行日志都会插进帧流,
+  // 让 MCP 客户端解析失败。关闭后日志只进 OutputChannel(用户仍可在
+  // "VSCodeUEHelper" 输出面板看到全部日志)。
+  logger.setConsoleEnabled(false);
   const server = new MCPServer(logger);
   try {
     await server.start();
     context.subscriptions.push({
       dispose: () => {
         setMCPContext(null);
+        // 恢复 console 输出 —— MCP 停止后扩展宿主仍可能有日志要走 console
+        logger.setConsoleEnabled(true);
         void server.stop();
       },
     });
     return { server, host };
   } catch (err) {
     logger.error('[mcp] failed to start:', err);
+    logger.setConsoleEnabled(true);
     setMCPContext(null);
     return { server: undefined, host };
   }

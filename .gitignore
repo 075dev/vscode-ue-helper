@@ -11,6 +11,7 @@ dist/
 # Test output
 coverage/
 *.lcov
+.tsc-e2e/
 
 # IDE / Editor
 .vscode/

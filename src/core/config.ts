@@ -286,6 +286,42 @@ export class Config {
     }
     return raw.filter((v): v is string => typeof v === 'string');
   }
+
+  // ===== [D5] 系统头路径持久化 =====
+
+  /**
+   * 用户选定的 MSVC 版本根目录（如 `...\VC\Tools\MSVC\14.39.33519`）。
+   *
+   * 由 `setSystemIncludes` 命令在用户选定版本后写入；`clangdFlagRenderer`
+   * 用它 + `clangdSdkRoot` 重建 `system-include-windows` 的 flag 组。
+   *
+   * 未配置（用户没跑过该命令）→ undefined → 系统头 flag 组为空。
+   */
+  get clangdMsvcRoot(): string | undefined {
+    const v = this.root.get<string>('clangd.msvcRoot');
+    return v && v.length > 0 ? v : undefined;
+  }
+
+  /**
+   * 用户选定的 Windows SDK Include 根目录（如 `...\Windows Kits\10\Include\10.0.22621.0`）。
+   *
+   * @see clangdMsvcRoot
+   */
+  get clangdSdkRoot(): string | undefined {
+    const v = this.root.get<string>('clangd.sdkRoot');
+    return v && v.length > 0 ? v : undefined;
+  }
+
+  /**
+   * MSVC 编译器版本（用于 `-fms-compatibility-version=`）。
+   *
+   * 与 msvcRoot / sdkRoot 一起持久化，避免每次重写 `.clangd` 都重新跑一次
+   * `cl.exe` 去探测版本。
+   */
+  get clangdFmsCompatibilityVersion(): string | undefined {
+    const v = this.root.get<string>('clangd.fmsCompatibilityVersion');
+    return v && v.length > 0 ? v : undefined;
+  }
   // ===== 写入 / 监听 =====
 
   /**
@@ -317,7 +353,17 @@ export class Config {
         inspected.workspaceValue ??
         inspected.globalValue ??
         inspected.defaultValue;
-      if (resolvedAfter !== value) {
+      // [D19] 值比较 —— 原来的引用比较（!==）对数组/对象**永远成立**：
+      // VS Code 返回的是它自己内部的对象，与调用方传进去的不是同一引用。
+      // 结果是每次写数组（比如 setSystemIncludes 写 clangd.userAddFlags）
+      // 都往控制台扔一条 "Possible causes: target scope mismatch, no folder
+      // focused, or workspace state not initialized" 的误导性告警，
+      // 而写入其实完全成功。数组/对象用序列化比较，标量用 ===。
+      const sameValue =
+        typeof resolvedAfter === 'object' || typeof value === 'object'
+          ? JSON.stringify(resolvedAfter) === JSON.stringify(value)
+          : resolvedAfter === value;
+      if (!sameValue) {
         // 不抛错 —— 上层调用方已经 await 通了；但提示一下避免再踩坑。
         // eslint-disable-next-line no-console
         console.warn(

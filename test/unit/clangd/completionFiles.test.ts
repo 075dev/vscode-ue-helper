@@ -11,6 +11,8 @@ import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   createCompletionFiles,
+  addCompletionHelperToCompileCommands,
+  getCompletionHelperPath,
   getAddMacroCompletionsContent,
   FILENAME_ADD_MACRO_COMPLETIONS,
   MANAGED_BEGIN_MARKER,
@@ -454,5 +456,139 @@ describe('parseManagedRegions', () => {
     expect(result.hasManagedMarkers).toBe(true);
     expect(result.managedContent).toContain('only managed');
     expect(result.userContent.trim()).toBe('');
+  });
+});
+
+// ================================================================
+// [MAJOR-2 残留] addCompletionHelperToCompileCommands 的写入目标
+//
+// clangd 读的是 helper 目录（.vscode/vscodeuehelper）里的 compile_commands.json，
+// 它有两种形态：
+//   · 符号链接（Windows 开了开发者模式）→ 指向项目本地副本
+//   · 独立副本（symlink 失败后的 copy 回退，**Windows 默认状态**）
+//
+// 此前本函数直接读写传入路径，而调用方 createProject 传的是项目本地副本 →
+// copy 退化场景下 helper 条目对 clangd 完全不可见，静默失效。
+// 现在写入前解析真实目标，且「读的文件」与「写的文件」是同一个。
+// ================================================================
+
+describe('addCompletionHelperToCompileCommands —— 写入目标解析 [MAJOR-2 残留]', () => {
+  let tmpDir: string;
+  let projectPath: string;
+  /** helper 目录里的 DB 路径 —— clangd 的 CompilationDatabase 实际位置 */
+  let helperDbPath: string;
+  /** 项目本地副本 —— UBT 生成的原始产物 */
+  let localDbPath: string;
+  let sourceFile: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(tmpdir(), 'cf-write-target-'));
+    projectPath = path.join(tmpDir, 'MyGame.uproject');
+    await fs.writeFile(projectPath, '{}', 'utf-8');
+
+    helperDbPath = path.join(tmpDir, '.vscode', 'vscodeuehelper', 'compile_commands.json');
+    localDbPath = path.join(tmpDir, 'compile_commands.json');
+
+    sourceFile = path.join(tmpDir, 'Source', 'MyGame', 'Private', 'MyActor.cpp');
+    await fs.mkdir(path.dirname(sourceFile), { recursive: true });
+    await fs.writeFile(sourceFile, '// source', 'utf-8');
+    await fs.mkdir(path.dirname(helperDbPath), { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeEntries(filePath: string): Promise<void> {
+    await fs.writeFile(
+      filePath,
+      JSON.stringify([
+        { directory: tmpDir, file: sourceFile, command: `clang-cl.exe /c ${sourceFile}` },
+      ]),
+      'utf-8',
+    );
+  }
+
+  async function readFiles(filePath: string): Promise<string[]> {
+    const parsed = JSON.parse(await fs.readFile(filePath, 'utf-8')) as readonly {
+      file: string;
+    }[];
+    return parsed.map((entry) => entry.file);
+  }
+
+  it('独立副本形态（copy 回退）:helper 条目写进 helper 目录那份,项目本地副本不受影响', async () => {
+    // Given: symlink 失败回退的 copy 形态 —— 两份是各写各的文件
+    await writeEntries(localDbPath);
+    await writeEntries(helperDbPath);
+
+    // When
+    const added = await addCompletionHelperToCompileCommands(projectPath, helperDbPath);
+
+    // Then: helper 条目落在 clangd 实际读的那份
+    expect(added).toBe(true);
+    const helperFiles = await readFiles(helperDbPath);
+    expect(helperFiles).toContain(getCompletionHelperPath(projectPath));
+
+    // 项目本地副本**不含** helper 条目 —— 两份不再互相污染
+    const localFiles = await readFiles(localDbPath);
+    expect(localFiles).not.toContain(getCompletionHelperPath(projectPath));
+  });
+
+  it('符号链接形态:helper 条目写进链接指向的项目本地副本,链接仍然有效', async () => {
+    // Given: 符号链接形态（Windows 开了开发者模式）
+    await writeEntries(localDbPath);
+    await fs.symlink(localDbPath, helperDbPath, 'file');
+
+    // When
+    const added = await addCompletionHelperToCompileCommands(projectPath, helperDbPath);
+
+    // Then: 写进链接指向的文件 —— clangd 透过链接读到的就是它
+    expect(added).toBe(true);
+    const localFiles = await readFiles(localDbPath);
+    expect(localFiles).toContain(getCompletionHelperPath(projectPath));
+
+    // 链接没被 rename 换成普通文件（否则两边就此分叉）
+    const stat = await fs.lstat(helperDbPath);
+    expect(stat.isSymbolicLink()).toBe(true);
+  });
+
+  it('DB 不存在时返回 false,不创建文件', async () => {
+    const added = await addCompletionHelperToCompileCommands(projectPath, helperDbPath);
+
+    expect(added).toBe(false);
+    await expect(fs.stat(helperDbPath)).rejects.toThrow();
+  });
+
+  it('悬空符号链接:目标不存在 → 不写盘,链接保持为链接(不被换成普通文件)', async () => {
+    // Given: 链接指向一个已被删除的目标（悬空）
+    await fs.symlink(localDbPath, helperDbPath, 'file');
+    await fs.rm(localDbPath, { force: true });
+
+    // When
+    const added = await addCompletionHelperToCompileCommands(projectPath, helperDbPath);
+
+    // Then: 目标不存在 → 读不到条目 → 不写；链接原样保留
+    // （若改成「回落到链接路径本身」，rename 会把符号链接换成普通文件，链接语义丢失）
+    expect(added).toBe(false);
+
+    const stat = await fs.lstat(helperDbPath);
+    expect(stat.isSymbolicLink()).toBe(true);
+  });
+
+  it('helper 条目已存在时不重复写盘', async () => {
+    await writeEntries(localDbPath);
+    await writeEntries(helperDbPath);
+
+    expect(await addCompletionHelperToCompileCommands(projectPath, helperDbPath)).toBe(true);
+    const firstStat = await fs.stat(helperDbPath);
+
+    // 第二次：helper 条目已在 → 不写
+    expect(await addCompletionHelperToCompileCommands(projectPath, helperDbPath)).toBe(true);
+    const secondStat = await fs.stat(helperDbPath);
+
+    expect(secondStat.mtimeMs).toBe(firstStat.mtimeMs);
+    expect((await readFiles(helperDbPath)).filter((f) => f.endsWith('completionHelper.cpp'))).toHaveLength(
+      1,
+    );
   });
 });

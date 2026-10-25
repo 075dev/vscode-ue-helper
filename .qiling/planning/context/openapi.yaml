@@ -365,6 +365,12 @@ paths:
         与 dispatch 类不同,本工具同步返回进程内 lastBuild 快照:
         MSVC/UBT 诊断(文件/行/列/错误码/消息)、错误/警告计数、含错文件清单。
         会话内尚无构建时返回 hasResult=false。
+
+        [D8] 早退收口:构建命令的**每一个**早退分支(没选到项目 / 没选到引擎 /
+        并发守卫 / 用户取消)现在都会补写一条**失败快照**,所以本工具读到的
+        永远是"最近一次构建尝试"的结果,而不是上一次成功构建的旧结果。
+        为此快照新增 buildId(每次构建唯一)与 startedAtIso;
+        hasResult=false 时给出 reason 说明为什么没有结果。
       responses:
         '200':
           description: 快照读取成功(含 hasResult=false 的空态)
@@ -376,6 +382,21 @@ paths:
                 properties:
                   ok: { type: boolean, const: true }
                   hasResult: { type: boolean }
+                  buildId:
+                    type: string
+                    description: |
+                      最近一次构建尝试的唯一标识。agent 可用它判断读到的结果
+                      是否属于自己刚触发的那次构建(早退分支也会产生 buildId)。
+                  reason:
+                    type: string
+                    enum:
+                      - 'no-build'
+                      - 'build-in-progress'
+                    description: |
+                      hasResult=false 时的原因说明。取值:
+                      `no-build`(本会话从未构建过)/
+                      `build-in-progress`(构建尚未结束,稍后重试)。
+                      枚举值受约束 —— agent 可据此决定"重新触发构建"还是"轮询等待"。
                   build: { $ref: '#/components/schemas/BuildSummary' }
 
   /mcp/tools/ue_launch_editor:
@@ -417,6 +438,52 @@ paths:
       summary: 配置系统包含路径
       responses:
         '200': { $ref: '#/components/responses/MCPDispatched' }
+
+  /mcp/tools/ue_status:
+    post:
+      tags: [MCPTools]
+      operationId: ue_status
+      summary: 查询引擎版本 + 构建配置 + UE 版本能力矩阵(同步)
+      description: |
+        [借鉴 unreal-engine-mcp 的 ue_status] 同步返回进程内已有的检测结果:
+        当前项目/引擎、构建配置(configuration/target/platform),以及 UE 版本能力矩阵
+        (最低支持版本、该版本可用的插件依赖能力、Epic 为该版本锁定的 clangd/LLVM 版本)。
+
+        与 dispatch 类工具不同:本工具不触发任何子进程,返回的是**快照式结论**。
+        能力缺失时以 `supported: false` + `detail` 明确说明,而不是抛代理无法理解的错误。
+
+        无版本来源(未检测到引擎)时 major/minor 为 null,capabilities 全部标记为不可判定。
+      responses:
+        '200':
+          description: 状态查询成功(含未检测到引擎的空态)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, capabilities]
+                properties:
+                  ok: { type: boolean, const: true }
+                  project:
+                    nullable: true
+                    description: 检测到的项目(未检测到时为 null)
+                    type: object
+                    properties:
+                      name: { type: string }
+                      path: { type: string }
+                  engine:
+                    nullable: true
+                    description: 检测到的引擎(未检测到时为 null)
+                    type: object
+                    properties:
+                      version: { type: string }
+                      path: { type: string }
+                  build:
+                    type: object
+                    properties:
+                      configuration: { type: string }
+                      target: { type: string }
+                      platform: { type: string }
+                  capabilities: { $ref: '#/components/schemas/UeCapabilityReport' }
 
 # ============================================================
 # 复用结构
@@ -479,6 +546,14 @@ components:
         module:
           type: string
           description: 快照对应的单模块过滤(UBT -Module=,add-002);全 target 构建时缺省
+        buildId:
+          type: string
+          description: |
+            [D8] 本次构建的唯一标识(每次构建尝试一个)。早退分支也产生 buildId,
+            agent 可据此判断快照属于哪一次尝试。
+        startedAtIso:
+          type: string
+          description: '[D8] 构建开始时刻(ISO 8601)'
         exitCode: { type: integer }
         errorCount: { type: integer }
         warningCount: { type: integer }
@@ -512,8 +587,45 @@ components:
           type: array
           items: { type: string }
 
+    UeCapabilityReport:
+      type: object
+      description: UE 版本 × 能力矩阵(ue_status / 诊断共用,与 src/core/ueCapabilities.ts 对齐)
+      required:
+        [version, major, minor, minimumSupported, supported, recommendedClangd, capabilities]
+      properties:
+        version:
+          type: string
+          nullable: true
+          description: 原始版本串(可能带 UE 前缀 / 三段式);未检测到时为 null
+        major: { type: integer, nullable: true }
+        minor: { type: integer, nullable: true }
+        minimumSupported:
+          type: string
+          description: 本插件声明的最低支持 UE 版本(当前为 5.2)
+        supported:
+          type: boolean
+          description: 当前版本是否满足最低支持要求
+        recommendedClangd:
+          type: string
+          nullable: true
+          description: Epic 为该 UE 版本锁定的 clangd/LLVM 版本;无可靠来源时为 null(不臆造)
+        capabilities:
+          type: array
+          items:
+            type: object
+            required: [id, title, supported, since, detail]
+            properties:
+              id: { type: string, description: 稳定标识 }
+              title: { type: string }
+              supported: { type: boolean }
+              since: { type: string, description: 引入该能力的最低 UE 版本 }
+              detail: { type: string, description: 面向用户的说明 }
+
     MCPDispatch:
       type: object
+      description: |
+        MCP dispatch 类工具的**成功**响应载荷(契约 MCPDispatched 的一支)。
+        失败载荷见 MCPFailure。
       required: [ok, dispatched]
       properties:
         ok: { type: boolean, const: true }
@@ -525,6 +637,27 @@ components:
         note:
           type: string
           description: 固定为 fire-and-forget 提示;真实进度经 logger 流出
+
+    MCPFailure:
+      type: object
+      description: |
+        [D17] MCP 工具调用**失败**时的响应载荷。
+        旧实现只有 `{ok:false, error:{code,message}}`,且 MCP 传输层的
+        `CallToolResult.isError` 从不置位 —— Cursor / Claude Code 的错误分支
+        形同虚设,失败在 agent 侧不可见。
+        现在载荷带 `isError:true`,且 MCP 传输层同步置 `isError:true`
+        (两端一致,只读文本的 agent 与看协议头的宿主都能识别失败)。
+      required: [ok, error, isError]
+      properties:
+        ok: { type: boolean, const: false }
+        error: { $ref: '#/components/schemas/Error' }
+        isError:
+          type: boolean
+          const: true
+          description: |
+            [D17] MCP 协议标准字段。失败时置 true,让 Cursor / Claude Code 的
+            错误分支真正触发(旧实现从不置位,错误分支形同虚设)。
+            成功载荷(MCPDispatch)中不出现该字段。
 
   responses:
     Ok:
@@ -548,10 +681,15 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Envelope' }
     MCPDispatched:
-      description: dispatch 确认(fire-and-forget,不等待完成)
+      description: |
+        dispatch 确认(fire-and-forget,不等待完成)。
+        [D17] 成功载荷为 MCPDispatch;失败载荷为 MCPFailure(带 isError:true)。
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/MCPDispatch' }
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/MCPDispatch'
+              - $ref: '#/components/schemas/MCPFailure'
 
 # ============================================================
 # Clarifications(用户显式指令,2026-09-19)

@@ -178,7 +178,11 @@ describe('diagnoseProject', () => {
     try {
       const report = await diagnoseProject(fixture.projectPath);
       expect(report.overallStatus).toBe('ok');
-      expect(report.checks.every((check) => check.status === 'pass')).toBe(true);
+      // [UE 版本能力矩阵] 未注入 workspace 时拿不到引擎版本 → 该两项为 skip(非失败)。
+      // skip 表示「无法判定」而不是「不通过」,故不计入失败项。
+      expect(
+        report.checks.every((check) => check.status === 'pass' || check.status === 'skip'),
+      ).toBe(true);
     } finally {
       await removeFixture(fixture);
     }

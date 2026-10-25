@@ -22,10 +22,14 @@ import { type Config } from '@core/config';
 import {
   generateCompileCommands,
   linkToWorkspaceRoot,
-  addCompletionHelperToCompileCommands,
+  buildCompletionHelperEntry,
+  computeMissingEntries,
   createCompletionFiles,
+  getCompletionHelperPath,
   startModifyResponseFiles,
-  fillMissingCompileCommands,
+  readCompileCommands,
+  writeCompileCommandsAtomic,
+  resolveCompileCommandsWriteTarget,
 } from '@clangd';
 import { pickProject, pickEngine } from '@ui/quickPicks';
 import { resolveProgressLocation } from '@ui/notifications';
@@ -147,27 +151,41 @@ export async function executeGenerateCompileCommands(
           logger,
         });
 
-        // Step 2: symlink/copy 到项目根
+        // Step 2: symlink/copy 到 helper 目录
+        // [D4] symlink 指向**项目本地副本**（jsonPath）—— 写操作落在项目内，
+        //        不再顺着 symlink 写回引擎根的共享 DB。
         progress.report({ message: 'Linking to workspace root...', increment: 20 });
         const linkPath = await linkToWorkspaceRoot(jsonPath, project.path, logger);
-
-        // Step 2.5: 🔧 补全缺失的 compile_commands 条目（新文件、头文件等）
-        progress.report({ message: 'Filling missing entries...', increment: 10 });
-        await fillMissingCompileCommands(linkPath, project.path, logger);
 
         // Step 3: 创建补全文件（确保最新）
         progress.report({ message: 'Refreshing completion files...', increment: 30 });
         await createCompletionFiles(project.path);
 
-        // Step 4: 将 completionHelper.cpp 加入 compile_commands.json
-        progress.report({
-          message: 'Adding completion helper...',
-          increment: 20,
-        });
-        const helperAdded = await addCompletionHelperToCompileCommands(project.path, linkPath);
-        if (!helperAdded) {
-          throw new Error(`Unable to add completion helper entry to ${linkPath}`);
+        // Step 4: [D14] 补齐缺失条目 + 注入 completionHelper —— 合并成**一次**原子写
+        //
+        // 旧实现分两步：fillMissing 写一次、addCompletionHelper 再写一次 ——
+        //   ① 同一次刷新里写两遍，两次之间 clangd 可能读到中间态；
+        //   ② 两处都是 `writeFile` 直接覆盖，中途失败会留下**半截 JSON**，
+        //      clangd 读到坏文件整个编译数据库就失效了。
+        // 现在：先算好（补齐 + helper 注入），最后统一原子写一次。
+        progress.report({ message: 'Filling missing entries...', increment: 20 });
+        const dbEntries = await readCompileCommands(linkPath);
+        if (!dbEntries || dbEntries.length === 0) {
+          throw new Error(`Unable to read compile_commands.json at ${linkPath}`);
         }
+        const filled = await computeMissingEntries(dbEntries, project.path, logger);
+        const helperPath = getCompletionHelperPath(project.path);
+        const finalEntries = buildCompletionHelperEntry(filled.entries, helperPath);
+        // [MAJOR-2] 写入目标必须是 **clangd 实际读取的那个文件**。
+        //
+        // helper 目录里的 compile_commands.json 有两种形态：
+        //   · 符号链接（Windows 开了开发者模式）→ 指向项目本地副本
+        //   · 独立副本（symlink 失败后的 copy 回退，**Windows 默认状态**）→ 与副本各写各的
+        // 之前固定写 jsonPath，在 copy 退化场景下 clangd 读到的仍是旧内容 ——
+        // D1 补齐的条目与 completionHelper 条目对它完全不可见，且无任何报错。
+        // 现在先解析真实目标：符号链接 → 解析到它指向的文件；独立副本 → 就是它自己。
+        const writeTarget = await resolveCompileCommandsWriteTarget(linkPath);
+        await writeCompileCommandsAtomic(writeTarget, finalEntries);
 
         progress.report({ increment: 20 });
 

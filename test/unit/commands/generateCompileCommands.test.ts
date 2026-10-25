@@ -20,39 +20,68 @@ import type { Logger } from '@core/logger';
 import type { Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import {
-  addCompletionHelperToCompileCommands as realAddCompletionHelperToCompileCommands,
   createCompletionFiles as realCreateCompletionFiles,
   getCompletionHelperPath,
 } from '@clangd/completionFiles';
+import type { CompileCommandEntry } from '@clangd/compileCommands/dbFile';
 
 // ---- Mock @clangd 模块（barrel export） ----
 
-const mockAddCompletionHelper = vi.fn<
-  [projectPath: string, ccJsonPath: string | undefined],
-  Promise<boolean>
->();
 const mockGenerateCompileCommands = vi.fn<[], Promise<string>>();
 const mockLinkToWorkspaceRoot = vi.fn<[], Promise<string>>();
-const mockFillMissing = vi.fn<
-  [jsonPath: string, projectPath: string, logger?: Logger],
-  Promise<undefined>
->();
 const mockCreateCompletionFiles = vi.fn<[projectPath: string], Promise<readonly unknown[]>>();
 const mockStartModifyRsp = vi.fn<
   [projectPath: string, logger?: Logger],
   Promise<{ replaced: number; unchanged: number }>
 >();
+// [D14] 管线改成「先算好，最后统一原子写一次」——读 / 算 / 写三段各自可 mock
+const mockReadCompileCommands = vi.fn<
+  [jsonPath: string],
+  Promise<CompileCommandEntry[] | undefined>
+>();
+const mockComputeMissingEntries = vi.fn<
+  [entries: CompileCommandEntry[], projectPath: string, logger?: Logger],
+  Promise<{ result: { added: string[]; missing: string[]; scanned: number; roots: string[] }; entries: CompileCommandEntry[] }>
+>();
+const mockBuildHelperEntry = vi.fn<
+  [entries: CompileCommandEntry[], helperPath: string],
+  CompileCommandEntry[]
+>();
+const mockWriteCompileCommandsAtomic = vi.fn<
+  [jsonPath: string, entries: readonly CompileCommandEntry[]],
+  Promise<void>
+>();
 
 vi.mock('@clangd', () => ({
   generateCompileCommands: () => mockGenerateCompileCommands(),
   linkToWorkspaceRoot: () => mockLinkToWorkspaceRoot(),
-  addCompletionHelperToCompileCommands: (projectPath: string, ccJsonPath?: string) =>
-    mockAddCompletionHelper(projectPath, ccJsonPath),
   createCompletionFiles: (projectPath: string) => mockCreateCompletionFiles(projectPath),
-  fillMissingCompileCommands: (jsonPath: string, projectPath: string, logger?: Logger) =>
-    mockFillMissing(jsonPath, projectPath, logger),
   startModifyResponseFiles: (projectPath: string, logger?: Logger) =>
     mockStartModifyRsp(projectPath, logger),
+  readCompileCommands: (jsonPath: string) => mockReadCompileCommands(jsonPath),
+  computeMissingEntries: (
+    entries: CompileCommandEntry[],
+    projectPath: string,
+    logger?: Logger,
+  ) => mockComputeMissingEntries(entries, projectPath, logger),
+  buildCompletionHelperEntry: (entries: CompileCommandEntry[], helperPath: string) =>
+    mockBuildHelperEntry(entries, helperPath),
+  writeCompileCommandsAtomic: (jsonPath: string, entries: readonly CompileCommandEntry[]) =>
+    mockWriteCompileCommandsAtomic(jsonPath, entries),
+  // [MAJOR-2] 写入目标解析 —— 用真实文件系统语义（符号链接 → 它指向的文件）
+  resolveCompileCommandsWriteTarget: async (linkPath: string) => {
+    const stat = await fs.lstat(linkPath).catch(() => null);
+    if (stat?.isSymbolicLink()) {
+      const raw = await fs.readlink(linkPath);
+      return path.isAbsolute(raw) ? raw : path.resolve(path.dirname(linkPath), raw);
+    }
+    return linkPath;
+  },
+  getCompletionHelperPath: (projectPath: string) =>
+    `C:\\UEProjects\\MyGame\\.vscode\\vscodeuehelper\\completionHelper.cpp`.replace(
+      'C:\\UEProjects\\MyGame',
+      projectPath.replace(/\.uproject$/, ''),
+    ),
 }));
 
 // ---- Mock @ui/quickPicks 模块 ----
@@ -134,10 +163,23 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     // ---- 配置 mock 行为 ----
     mockGenerateCompileCommands.mockResolvedValue(JSON_PATH);
     mockLinkToWorkspaceRoot.mockResolvedValue(LINK_PATH);
-    mockAddCompletionHelper.mockResolvedValue(true);
-    mockFillMissing.mockResolvedValue(undefined);
     mockCreateCompletionFiles.mockResolvedValue([]);
     mockStartModifyRsp.mockResolvedValue({ replaced: 0, unchanged: 0 });
+    // [D14] 默认：DB 有一条已有条目，补齐不新增，helper 条目追加
+    mockReadCompileCommands.mockResolvedValue([
+      { directory: 'C:\\UEProjects\\MyGame', file: 'C:\\UEProjects\\MyGame\\Source\\A.cpp' },
+    ]);
+    mockComputeMissingEntries.mockImplementation((entries) =>
+      Promise.resolve({
+        result: { added: [], missing: [], scanned: 0, roots: [] },
+        entries,
+      }),
+    );
+    mockBuildHelperEntry.mockImplementation((entries) => [
+      ...entries,
+      { directory: 'C:\\UEProjects\\MyGame', file: 'C:\\helper\\completionHelper.cpp' },
+    ]);
+    mockWriteCompileCommandsAtomic.mockResolvedValue(undefined);
 
     // QuickPick 默认返回第一条（不弹窗）
     mockPickProject.mockResolvedValue({
@@ -152,42 +194,48 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   });
 
   /* ================================================================ */
-  /*  红测：当前代码调用 addCompletionHelperToCompileCommands 未传 linkPath */
+  /*  [D14] 补齐缺失条目 + 注入 completionHelper 合并成一次原子写        */
   /* ================================================================ */
-  it('RED: addCompletionHelperToCompileCommands 未被传入 linkPath 作为第二个参数（测试应失败直到修复）', async () => {
+  it('[D14][MAJOR-2] 读的是 linkPath,写的是解析出的真实目标,且只写一次', async () => {
     await executeGenerateCompileCommands(config, logger, detection);
 
-    // 断言 addCompletionHelperToCompileCommands 被调用
-    expect(mockAddCompletionHelper).toHaveBeenCalled();
-
-    // 断言调用参数：应该有 2 个参数 (project.path, linkPath)
-    const firstCall = mockAddCompletionHelper.mock.calls[0];
-    expect(firstCall).toStrictEqual([PROJECT_PATH, LINK_PATH]);
+    // 读：linkPath（clangd 的 CompilationDatabase 实际位置）
+    expect(mockReadCompileCommands).toHaveBeenCalledWith(LINK_PATH);
+    // 写：**解析出的真实目标** —— linkPath 是符号链接时写它指向的文件，
+    // 是独立副本（symlink 失败后的 copy 回退）时写它自己。
+    // 两种形态下 clangd 读到的都是最新内容（此前固定写 jsonPath，
+    // 在 copy 退化场景下 clangd 读到的仍是旧内容，且无任何报错）。
+    expect(mockWriteCompileCommandsAtomic).toHaveBeenCalledTimes(1);
+    expect(mockWriteCompileCommandsAtomic.mock.calls[0]?.[0]).toBe(LINK_PATH);
   });
 
   /* ================================================================ */
-  /*  绿测：addCompletionHelperToCompileCommands 正确收到 linkPath         */
+  /*  绿测：helper 条目与补齐条目合并进同一次写                            */
   /* ================================================================ */
-  it('addCompletionHelperToCompileCommands 收到 project.path 和 linkPath 两个参数', async () => {
+  it('[D14] helper 条目与补齐后的条目合并进同一次写', async () => {
     await executeGenerateCompileCommands(config, logger, detection);
 
-    expect(mockAddCompletionHelper).toHaveBeenCalledTimes(1);
-    expect(mockAddCompletionHelper).toHaveBeenCalledWith(PROJECT_PATH, LINK_PATH);
+    expect(mockComputeMissingEntries).toHaveBeenCalledTimes(1);
+    expect(mockBuildHelperEntry).toHaveBeenCalledTimes(1);
+    // 写盘拿到的就是 buildCompletionHelperEntry 的返回值
+    const written = mockWriteCompileCommandsAtomic.mock.calls[0]?.[1];
+    expect(written).toHaveLength(2);
+    expect(written?.[1]?.file).toContain('completionHelper.cpp');
   });
 
   /* ================================================================ */
-  /*  绿测：linkToWorkspaceRoot 返回值被正确传递给 helper 函数              */
+  /*  绿测：linkToWorkspaceRoot 的返回值被用于读取 DB                     */
   /* ================================================================ */
-  it('linkToWorkspaceRoot 的返回值被用于 addCompletionHelperToCompileCommands', async () => {
+  it('linkToWorkspaceRoot 的返回值被用于读取 compile_commands.json', async () => {
     const customLinkPath = 'C:\\UEProjects\\MyGame\\custom\\compile_commands.json';
     mockLinkToWorkspaceRoot.mockResolvedValue(customLinkPath);
 
     await executeGenerateCompileCommands(config, logger, detection);
 
-    expect(mockAddCompletionHelper).toHaveBeenCalledWith(PROJECT_PATH, customLinkPath);
+    expect(mockReadCompileCommands).toHaveBeenCalledWith(customLinkPath);
   });
 
-  it('实际更新 .vscode/vscodeuehelper/compile_commands.json 并把缺失 root compile_commands 报为失败', async () => {
+  it('实际更新项目本地副本 compile_commands.json 且不新建项目根 compile_commands', async () => {
     // Given: 只有 linkPath 指向的 compile_commands 存在，项目根 compile_commands.json 不存在。
     const tempDir = await fs.mkdtemp(path.join(tmpdir(), 'generate-cc-command-'));
     const projectPath = path.join(tempDir, 'MyGame.uproject');
@@ -197,6 +245,8 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       'vscodeuehelper',
       'compile_commands.json',
     );
+    /** [D4] 项目本地副本 —— 管线最终写这里 */
+    const localCopyPath = path.join(tempDir, 'compile_commands.json');
 
     try {
       await fs.writeFile(projectPath, '{}', 'utf-8');
@@ -204,29 +254,40 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       const sourceFile = path.join(tempDir, 'Source', 'MyGame', 'Private', 'MyActor.cpp');
       await fs.mkdir(path.dirname(sourceFile), { recursive: true });
       await fs.writeFile(sourceFile, '// Given: template source file', 'utf-8');
-      await fs.writeFile(
-        linkedCompileCommandsPath,
-        JSON.stringify(
-          [
-            {
-              directory: tempDir,
-              file: sourceFile,
-              command: `clang-cl.exe /c ${sourceFile}`,
-            },
-          ],
-          null,
-          2,
-        ),
-        'utf-8',
-      );
+      const existingEntry = {
+        directory: tempDir,
+        file: sourceFile,
+        command: `clang-cl.exe /c ${sourceFile}`,
+      };
+      await fs.writeFile(linkedCompileCommandsPath, JSON.stringify([existingEntry]), 'utf-8');
       await realCreateCompletionFiles(projectPath);
 
-      mockGenerateCompileCommands.mockResolvedValue(
-        path.join(tempDir, 'Engine', 'compile_commands.json'),
-      );
+      mockGenerateCompileCommands.mockResolvedValue(localCopyPath);
       mockLinkToWorkspaceRoot.mockResolvedValue(linkedCompileCommandsPath);
-      mockAddCompletionHelper.mockImplementation(realAddCompletionHelperToCompileCommands);
-      mockFillMissing.mockResolvedValue(undefined);
+      // [D14] 用真实实现读 + 算 + 写
+      mockReadCompileCommands.mockImplementation(async (p: string) => {
+        const text = await fs.readFile(p, 'utf-8');
+        return JSON.parse(text) as CompileCommandEntry[];
+      });
+      mockComputeMissingEntries.mockImplementation((entries) =>
+        Promise.resolve({
+          result: { added: [], missing: [], scanned: 1, roots: [] },
+          entries,
+        }),
+      );
+      mockBuildHelperEntry.mockImplementation((entries) => [
+        ...entries,
+        {
+          directory: tempDir,
+          file: getCompletionHelperPath(projectPath),
+          command: `clang-cl.exe /c ${getCompletionHelperPath(projectPath)}`,
+        },
+      ]);
+      mockWriteCompileCommandsAtomic.mockImplementation(
+        async (p: string, entries: readonly CompileCommandEntry[]) => {
+          await fs.writeFile(p, JSON.stringify(entries), 'utf-8');
+        },
+      );
       mockCreateCompletionFiles.mockImplementation(async () =>
         realCreateCompletionFiles(projectPath),
       );
@@ -271,18 +332,21 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       // When: 执行命令管线。
       await executeGenerateCompileCommands(config, logger, detection);
 
-      // Then: helper entry 写入 linked compile_commands，而不是缺失的项目根文件。
+      // Then: helper entry 落在 **clangd 实际读取的那份**（linkPath）。
+      //
+      // [MAJOR-2] 旧实现固定写「项目本地副本」，在 symlink→copy 退化（Windows 默认）
+      // 时 clangd 读到的是 helper 目录里的独立副本 → 补齐的条目对它完全不可见，
+      // 且全程无报错。现在写入目标解析到真实文件，这里 linkPath 是普通文件 →
+      // 写的就是它自己。
       const linkedText = await fs.readFile(linkedCompileCommandsPath, 'utf-8');
       const linkedEntries = JSON.parse(linkedText) as readonly { readonly file: string }[];
       const helperPath = getCompletionHelperPath(projectPath);
       expect(linkedEntries.some((entry) => entry.file === helperPath)).toBe(true);
 
-      const rootCompileCommandsPath = path.join(tempDir, 'compile_commands.json');
-      const rootExists = await fs.access(rootCompileCommandsPath).then(
-        () => true,
-        () => false,
-      );
-      expect(rootExists).toBe(false);
+      // 写入只发生一次，且目标就是 clangd 读的那份（不再单独写项目本地副本）
+      expect(mockWriteCompileCommandsAtomic).toHaveBeenCalledTimes(1);
+      expect(mockWriteCompileCommandsAtomic.mock.calls[0]![0]).toBe(linkedCompileCommandsPath);
+
       expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
         `compile_commands.json updated at ${linkedCompileCommandsPath}`,
@@ -292,13 +356,13 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     }
   });
 
-  it('helper 写入失败时显示错误而不报告 compile_commands 更新成功', async () => {
-    mockAddCompletionHelper.mockResolvedValue(false);
+  it('写盘失败时显示错误而不报告 compile_commands 更新成功', async () => {
+    mockWriteCompileCommandsAtomic.mockRejectedValue(new Error('disk full'));
 
     const env = await executeGenerateCompileCommands(config, logger, detection);
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      `Failed to generate compile_commands.json: Unable to add completion helper entry to ${LINK_PATH}`,
+      expect.stringContaining('Failed to generate compile_commands.json'),
     );
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalledWith(
       `compile_commands.json updated at ${LINK_PATH}`,
@@ -327,7 +391,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
       expect(mockPickEngine).not.toHaveBeenCalled();
       // 管线照常执行
       expect(mockGenerateCompileCommands).toHaveBeenCalledTimes(1);
-      expect(mockAddCompletionHelper).toHaveBeenCalledWith(PROJECT_PATH, LINK_PATH);
+      expect(mockWriteCompileCommandsAtomic).toHaveBeenCalledTimes(1);
       // 全程无 UI 弹窗(成功提示 / 重启询问 / 警告 / 错误)
       expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
       expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
@@ -376,14 +440,14 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
   });
 
   /* ================================================================ */
-  /*  绿测：fillMissingCompileCommands 也使用 linkPath（保持现有行为）       */
+  /*  绿测：[D14] 补齐条目也基于 linkPath 读到的内容                       */
   /* ================================================================ */
-  it('fillMissingCompileCommands 也接收 linkPath（确保 fill 不受影响）', async () => {
+  it('[D14] 补齐缺失条目基于 linkPath 读到的内容计算', async () => {
     await executeGenerateCompileCommands(config, logger, detection);
 
-    // fillMissingCompileCommands 应被调用且第一个参数为 linkPath
-    expect(mockFillMissing).toHaveBeenCalled();
-    expect(mockFillMissing.mock.calls[0]?.[0]).toBe(LINK_PATH);
+    expect(mockReadCompileCommands).toHaveBeenCalledWith(LINK_PATH);
+    expect(mockComputeMissingEntries).toHaveBeenCalledTimes(1);
+    expect(mockComputeMissingEntries.mock.calls[0]?.[1]).toBe(PROJECT_PATH);
   });
 
   // [F2-18/E5] 多项目时取消 QuickPick → 直接返回,不再静默落到 projects[0] 执行
@@ -409,7 +473,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
 
     expect(mockGenerateCompileCommands).not.toHaveBeenCalled();
     expect(mockLinkToWorkspaceRoot).not.toHaveBeenCalled();
-    expect(mockAddCompletionHelper).not.toHaveBeenCalled();
+    expect(mockWriteCompileCommandsAtomic).not.toHaveBeenCalled();
     // [Wave2] 多项目 + 用户取消 QuickPick → OPERATION_CANCELLED
     expect(env).toMatchObject({ ok: false, error: { code: 'OPERATION_CANCELLED' } });
   });
@@ -421,7 +485,7 @@ describe('executeGenerateCompileCommands (linkPath 传递)', () => {
     await executeGenerateCompileCommands(config, logger, detection);
 
     expect(mockGenerateCompileCommands).toHaveBeenCalled();
-    expect(mockAddCompletionHelper).toHaveBeenCalled();
+    expect(mockWriteCompileCommandsAtomic).toHaveBeenCalled();
   });
 
   // [Wave2 envelope 对齐] 检测不到任何项目 → PROJECT_NOT_DETECTED

@@ -12,6 +12,10 @@ import {
   getLastBuildSnapshot,
   resetLastBuildSnapshot,
   summarizeBuildErrorsForAgent,
+  newBuildId,
+  markBuildInProgress,
+  clearBuildInProgress,
+  getInProgressBuildId,
   MAX_AGENT_DIAGNOSTICS,
   type LastBuildSnapshot,
 } from '@build/lastBuild';
@@ -23,6 +27,8 @@ function diag(severity: ParsedDiagnostic['severity'], file: string, line = 1): P
 
 function snapshot(overrides: Partial<LastBuildSnapshot> = {}): LastBuildSnapshot {
   return {
+    buildId: 'build-test-0001',
+    startedAtIso: '2026-09-12T00:00:00.000Z',
     mode: 'build',
     ok: true,
     cancelled: false,
@@ -55,6 +61,61 @@ describe('lastBuild 快照存取', () => {
     rememberBuildSnapshot(snapshot());
     resetLastBuildSnapshot();
     expect(getLastBuildSnapshot()).toBeNull();
+  });
+});
+
+// ============================================================
+// [D8] buildId / startedAtIso / 进行中标记
+// ============================================================
+
+describe('lastBuild [D8] buildId 与进行中标记', () => {
+  beforeEach(() => {
+    resetLastBuildSnapshot();
+  });
+
+  it('newBuildId 每次调用都不同', () => {
+    const a = newBuildId();
+    const b = newBuildId();
+    expect(a).toBeTruthy();
+    expect(b).toBeTruthy();
+    expect(a).not.toBe(b);
+  });
+
+  it('快照读写保留 buildId 与 startedAtIso', () => {
+    rememberBuildSnapshot(
+      snapshot({ buildId: 'b-1', startedAtIso: '2026-10-25T00:00:00.000Z' }),
+    );
+    const snap = getLastBuildSnapshot();
+    expect(snap?.buildId).toBe('b-1');
+    expect(snap?.startedAtIso).toBe('2026-10-25T00:00:00.000Z');
+  });
+
+  it('摘要透出 buildId 与 startedAtIso', () => {
+    const summary = summarizeBuildErrorsForAgent(
+      snapshot({ buildId: 'b-2', startedAtIso: '2026-10-25T01:00:00.000Z' }),
+    );
+    expect(summary.buildId).toBe('b-2');
+    expect(summary.startedAtIso).toBe('2026-10-25T01:00:00.000Z');
+  });
+
+  it('markBuildInProgress / clearBuildInProgress 标记与清除', () => {
+    expect(getInProgressBuildId()).toBeNull();
+    markBuildInProgress('b-3');
+    expect(getInProgressBuildId()).toBe('b-3');
+    clearBuildInProgress('b-3');
+    expect(getInProgressBuildId()).toBeNull();
+  });
+
+  it('clearBuildInProgress 只清自己的 id(旧构建收尾不抹掉新构建标记)', () => {
+    markBuildInProgress('new');
+    clearBuildInProgress('old');
+    expect(getInProgressBuildId()).toBe('new');
+  });
+
+  it('reset 同时清掉进行中标记', () => {
+    markBuildInProgress('b-4');
+    resetLastBuildSnapshot();
+    expect(getInProgressBuildId()).toBeNull();
   });
 });
 

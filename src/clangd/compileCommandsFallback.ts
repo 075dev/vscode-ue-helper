@@ -25,6 +25,8 @@ import { type Logger, sharedLogger } from '@core/logger';
 import type { WorkspaceState } from '@core/workspace';
 import { getUeClangdCompatPath, getUeClangdCompatContent } from './ueClangdCompat';
 import { collectIntermediateUhtDirs } from './intermediateUhtCollector';
+// [D14] DB 写盘原语（temp + rename 原子替换 + 紧凑序列化）—— 与主 DB 路径同一套
+import { writeCompileCommandsAtomic } from './compileCommands/dbFile';
 
 /** fallback DB 写入位置（与 linkToWorkspaceRoot 目标一致：.vscode/vscodeuehelper/） */
 const FALLBACK_CC_DIR_REL = path.join('.vscode', 'vscodeuehelper');
@@ -651,13 +653,21 @@ export async function generateFallbackCompileCommands(
   }));
 
   // 5. 原子写入（temp + rename）
+  //
+  // [D14] 走 `writeCompileCommandsAtomic` —— 与主 DB 路径同一套写盘原语：
+  //   · temp + rename 原子替换（中途失败不会留下半截 JSON，clangd 读到坏文件
+  //     整个编译数据库就失效）
+  //   · 紧凑序列化：旧的 `JSON.stringify(entries, null, 2)` 带缩进，
+  //     fallback DB 的条目数 = 全部源文件数（UE 工程常见上千个），
+  //     每条 command 又是几百上千字符 —— 带缩进会把体积放大数倍。
+  //
+  // 写入目标就是 clangd 的 CompilationDatabase 实际位置（helper 目录），
+  // fallback 的语义正是「让 clangd 读到这份降级 DB」，因此**不解析符号链接**。
   const ccDir = path.join(projectDir, FALLBACK_CC_DIR_REL);
   await fs.mkdir(ccDir, { recursive: true });
   const ccPath = path.join(ccDir, CC_FILENAME);
-  const tmpPath = `${ccPath}.tmp`;
   try {
-    await fs.writeFile(tmpPath, JSON.stringify(entries, null, 2), 'utf-8');
-    await fs.rename(tmpPath, ccPath);
+    await writeCompileCommandsAtomic(ccPath, entries);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error(`[fallback] failed to write fallback DB: ${msg}`);

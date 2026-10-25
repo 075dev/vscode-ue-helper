@@ -13,6 +13,7 @@ import {
   REQUIRED_FORCED_INCLUDE_SUFFIXES,
 } from './types';
 import { stripQuotes, normalizePath, pathExists } from './io';
+import { buildUeCapabilityReport } from '@core/ueCapabilities';
 
 // ---- 状态计算 ----
 
@@ -149,4 +150,80 @@ export function checkPreparsePlaceholders(addFlags: readonly string[]): Diagnost
     severity: 'info',
     message: 'preparse headers 无未解析占位符',
   };
+}
+
+/**
+ * UE 版本 + 能力矩阵检查
+ *
+ * [借鉴 unreal-engine-mcp 的 ue_status / 版本兼容表、boocs/unreal-clangd 的
+ *  「不同 UE 版本要求不同 LLVM 版本」说明]
+ *
+ * 产出两项检查:
+ * - `ueVersion`:引擎版本是否满足最低支持要求 + 推荐的 clangd 版本
+ * - `ueCapabilities`:该版本下本插件依赖的能力可用情况
+ *
+ * 版本未知时返回 skip(不是 fail)—— 没检测到引擎不等于引擎版本不兼容。
+ */
+export function checkUeVersionAndCapabilities(
+  engineVersion: string | null | undefined,
+): readonly DiagnosticCheck[] {
+  const report = buildUeCapabilityReport(engineVersion);
+
+  if (report.major === null || report.minor === null) {
+    return [
+      {
+        name: 'ueVersion',
+        status: 'skip',
+        severity: 'info',
+        message: '未检测到 UE 引擎版本，跳过版本能力检查',
+      },
+      {
+        name: 'ueCapabilities',
+        status: 'skip',
+        severity: 'info',
+        message: 'UE 引擎版本未知，无法判定能力可用性',
+      },
+    ];
+  }
+
+  const versionText = `UE ${report.major}.${report.minor}`;
+  const clangdText =
+    report.recommendedClangd === null
+      ? 'clangd 版本请查 Epic 官方 Hardware and Software Specifications 页面'
+      : `建议 clangd ${report.recommendedClangd}`;
+
+  const versionCheck: DiagnosticCheck = report.supported
+    ? {
+        name: 'ueVersion',
+        status: 'pass',
+        severity: 'info',
+        message: `${versionText} 满足最低支持版本 ${report.minimumSupported}`,
+        detail: clangdText,
+      }
+    : {
+        name: 'ueVersion',
+        status: 'fail',
+        severity: 'warning',
+        message: `${versionText} 低于本插件最低支持版本 ${report.minimumSupported}`,
+        detail: clangdText,
+      };
+
+  const unsupported = report.capabilities.filter((cap) => !cap.supported);
+  const capabilityCheck: DiagnosticCheck =
+    unsupported.length === 0
+      ? {
+          name: 'ueCapabilities',
+          status: 'pass',
+          severity: 'info',
+          message: `${versionText} 下 ${report.capabilities.length} 项依赖能力全部可用`,
+        }
+      : {
+          name: 'ueCapabilities',
+          status: 'warn',
+          severity: 'warning',
+          message: `${versionText} 下有 ${unsupported.length} 项依赖能力不可用`,
+          detail: unsupported.map((cap) => `${cap.title} (自 UE ${cap.since} 起支持)`).join('; '),
+        };
+
+  return [versionCheck, capabilityCheck];
 }

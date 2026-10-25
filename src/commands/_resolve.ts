@@ -62,7 +62,11 @@ export async function resolveProjectOrPick(opts: ResolveOpts): Promise<ProjectIn
     project = await (opts.pickProjectFn ?? pickProject)(projects);
   }
   if (!project) {
-    void vscode.window.showWarningMessage(t(opts.warningKey ?? 'cmd.noUprojectSelected'));
+    // [D15 收口] silent(MCP/AI 代理)路径**不弹任何窗** —— agent 无法关闭通知，
+    // 弹窗对它只是噪音；失败原因由命令层的错误信封承载。
+    if (!silent) {
+      void vscode.window.showWarningMessage(t(opts.warningKey ?? 'cmd.noUprojectSelected'));
+    }
     return undefined;
   }
   return project;
@@ -83,7 +87,10 @@ export async function resolveEngineOrPick(opts: ResolveOpts): Promise<EngineInst
     engine = await (opts.pickEngineFn ?? pickEngine)(engines);
   }
   if (!engine) {
-    void vscode.window.showWarningMessage(t(opts.warningKey ?? 'cmd.noUnrealEngineSelected'));
+    // [D15 收口] 同上 —— silent 路径不弹窗
+    if (!silent) {
+      void vscode.window.showWarningMessage(t(opts.warningKey ?? 'cmd.noUnrealEngineSelected'));
+    }
     return undefined;
   }
   return engine;

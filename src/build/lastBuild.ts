@@ -9,10 +9,30 @@
  * `ue_get_build_errors` 直接读内存快照即可跨模块共享状态。
  */
 
+import { randomUUID } from 'node:crypto';
 import type { ParsedDiagnostic } from '@core/types/diagnostic';
+
+/**
+ * [D8] 生成一次构建尝试的唯一标识。
+ *
+ * 用 randomUUID 而非计数器 —— 进程内计数器在 MCP 宿主重启后会从 1 重新开始,
+ * agent 可能拿着上一次会话的 buildId 来比对,产生误判。
+ */
+export function newBuildId(): string {
+  return randomUUID();
+}
 
 /** 最近一次构建的快照 */
 export interface LastBuildSnapshot {
+  /**
+   * [D8] 本次构建尝试的唯一标识(每次尝试一个,早退分支也产生)。
+   *
+   * 作用:让 agent 能判断"我读到的结果是不是自己刚触发的那次构建"。
+   * 没有它时,构建早退(没选到项目/引擎)会让 agent 读到上一次成功构建的旧快照。
+   */
+  buildId: string;
+  /** [D8] 构建开始时刻(ISO 8601) */
+  startedAtIso: string;
   /** 构建模式 */
   mode: 'build' | 'rebuild' | 'clean';
   /** [add-002] 单模块过滤(UBT -Module=);全 target 构建时缺省 */
@@ -35,6 +55,15 @@ export interface LastBuildSnapshot {
 
 let _last: LastBuildSnapshot | null = null;
 
+/**
+ * [D8] 正在进行的构建 id。
+ *
+ * MCP 是 fire-and-forget:agent 调 ue_build 后立刻调 ue_get_build_errors,
+ * 此时构建往往还没跑完。此时若直接返回上一轮的快照,agent 会把旧结果当新的读。
+ * 这里记录"有构建在跑",让 MCP 层返回 reason='build-in-progress'。
+ */
+let _inProgressBuildId: string | null = null;
+
 /** 记录/覆盖最近一次构建快照（build 命令层调用） */
 export function rememberBuildSnapshot(snapshot: LastBuildSnapshot): void {
   _last = snapshot;
@@ -45,15 +74,43 @@ export function getLastBuildSnapshot(): LastBuildSnapshot | null {
   return _last;
 }
 
+/**
+ * [D8] 标记一次构建开始（build 命令层在拿到锁后调用）。
+ * @param buildId 本次构建的唯一标识
+ */
+export function markBuildInProgress(buildId: string): void {
+  _inProgressBuildId = buildId;
+}
+
+/**
+ * [D8] 标记构建结束。buildId 不匹配时不清理 —— 防止旧构建的收尾把新构建的标记抹掉。
+ * @param buildId 本次构建的唯一标识
+ */
+export function clearBuildInProgress(buildId: string): void {
+  if (_inProgressBuildId === buildId) {
+    _inProgressBuildId = null;
+  }
+}
+
+/** [D8] 当前是否有构建在进行中；有则返回其 buildId */
+export function getInProgressBuildId(): string | null {
+  return _inProgressBuildId;
+}
+
 /** 测试 / 卸载时清空快照 */
 export function resetLastBuildSnapshot(): void {
   _last = null;
+  _inProgressBuildId = null;
 }
 
 /** 返回给 AI 代理的诊断条数上限 —— UE 全量构建可能产出上千条，截断保上下文 */
 export const MAX_AGENT_DIAGNOSTICS = 100;
 
 export interface BuildErrorsSummary {
+  /** [D8] 本次构建尝试的唯一标识 */
+  buildId: string;
+  /** [D8] 构建开始时刻(ISO 8601) */
+  startedAtIso: string;
   mode: LastBuildSnapshot['mode'];
   /** [add-002] 单模块过滤(UBT -Module=);全 target 构建时缺省 */
   module?: string;
@@ -95,6 +152,8 @@ export function summarizeBuildErrorsForAgent(
   }
   const truncated = snapshot.diagnostics.length > MAX_AGENT_DIAGNOSTICS;
   const summary: BuildErrorsSummary = {
+    buildId: snapshot.buildId,
+    startedAtIso: snapshot.startedAtIso,
     mode: snapshot.mode,
     ok: snapshot.ok,
     cancelled: snapshot.cancelled,

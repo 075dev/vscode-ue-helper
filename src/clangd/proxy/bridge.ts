@@ -409,13 +409,22 @@ export class LspBridge {
    * 通知：如果是 publishDiagnostics，应用本地化；否则透传。
    */
   private processServerMessage(msg: JsonRpcMessage): void {
-    // 响应/错误响应：查找关联并调用钩子
+    // [D10] 响应/错误响应 vs 服务端请求 —— 必须靠 method 字段区分。
+    //
+    // LSP 的 request id 在两个方向各自独立编号。clangd 发给客户端的
+    // workspace/configuration / client/registerCapability /
+    // window/workDoneProgress/create 都是**带 id 的服务端请求**。
+    // 旧实现只看"有没有 id"就当响应处理 → 查表命中客户端同号的关联 →
+    // 把客户端待响应的关联删掉 → 真正的 hover 响应到达时找不到原 method →
+    // 汉化被静默丢弃（且日志里看不出异常）。
+    //
+    // 判定规则：有 method 的是请求，没有 method 的才是响应。
     const id = getId(msg);
-    if (id !== undefined) {
-      const method = this.correlation.lookup(id);
+    if (id !== undefined && getMethod(msg) === undefined) {
+      const method = this.correlation.lookup(id, 'client');
       this.hooks?.onServerResponse?.(msg, method);
       // 响应只消费一次关联
-      this.correlation.remove(id);
+      this.correlation.remove(id, 'client');
 
       // 根据原始请求 method 应用本地化
       const localized = this.applyLocalizationToResponse(msg, method);

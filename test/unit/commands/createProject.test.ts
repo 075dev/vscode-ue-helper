@@ -120,7 +120,10 @@ const {
     mockLinkToWorkspaceRoot: vi.fn<[], Promise<string>>(),
     mockFillMissing: vi.fn<[], Promise<undefined>>(),
     mockCreateCompletionFiles: vi.fn<[], Promise<readonly unknown[]>>(),
-    mockAddCompletionHelper: vi.fn<[], Promise<boolean>>(),
+    mockAddCompletionHelper: vi.fn<
+      [projectPath: string, ccJsonPath?: string],
+      Promise<boolean>
+    >(),
     mockStartModifyRsp: vi.fn<[], Promise<{ replaced: number; unchanged: number }>>(),
     mockStartCreateRspMatchers: vi.fn<[], Promise<readonly unknown[]>>(),
     mockRunUhtCodegen: vi.fn<
@@ -134,7 +137,8 @@ const {
 vi.mock('@clangd', () => ({
   generateCompileCommands: () => mockGenerateCompileCommands(),
   linkToWorkspaceRoot: () => mockLinkToWorkspaceRoot(),
-  addCompletionHelperToCompileCommands: () => mockAddCompletionHelper(),
+  addCompletionHelperToCompileCommands: (projectPath: string, ccJsonPath?: string) =>
+    mockAddCompletionHelper(projectPath, ccJsonPath),
   createCompletionFiles: () => mockCreateCompletionFiles(),
   fillMissingCompileCommands: () => mockFillMissing(),
   startModifyResponseFiles: () => mockStartModifyRsp(),
@@ -279,6 +283,10 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
     expect(mockAddCompletionHelper).toHaveBeenCalledOnce();
     expect(mockStartModifyRsp).toHaveBeenCalledOnce();
     expect(mockStartCreateRspMatchers).toHaveBeenCalledOnce();
+
+    // ---- 断言 5: [MAJOR-2 残留] helper 条目写的是 **linkPath** ----
+    // fallback 路径下 linkPath === jsonPath（两者是同一个文件）。
+    expect(mockAddCompletionHelper).toHaveBeenCalledWith(projectPath, fallbackJsonPath);
   });
 
   // 防回归:不在 fallback 路径时,linkToWorkspaceRoot 应被调
@@ -361,6 +369,12 @@ describe('executeCreateProject fallback 路径短路 linkToWorkspaceRoot', () =>
 
     // linkToWorkspaceRoot 在 UBT 主路径必须被调(对照 case 1 验证 fallback 短路语义)
     expect(mockLinkToWorkspaceRoot).toHaveBeenCalledOnce();
+
+    // [MAJOR-2 残留] helper 条目必须写 **linkPath**（helper 目录里 clangd 实际读的
+    // 那个文件），而不是 jsonPath（UBT 输出的项目本地副本）——
+    // symlink 失败回退成独立副本（Windows 默认状态）时两者是各写各的文件，
+    // 写 jsonPath 会让 completionHelper 条目对 clangd 静默不可见。
+    expect(mockAddCompletionHelper).toHaveBeenCalledWith(projectPath, linkedPath);
   });
 });
 

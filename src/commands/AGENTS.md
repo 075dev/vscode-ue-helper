@@ -5,7 +5,7 @@
 
 ## 模块概述
 
-**22 个 VS Code 命令处理器**（`package.json#contributes.commands` 中实际暴露的命令数；`src/commands/index.ts` 的 `track` 计数器以单点数字报告），用户交互的主入口点。所有命令绑定到 `vscodeUEHelper.*` 命名空间。
+**28 个 VS Code 命令处理器**（`package.json#contributes.commands` 中实际暴露的命令数；`src/commands/index.ts` 的 `track` 计数器以单点数字报告），用户交互的主入口点。所有命令绑定到 `vscodeUEHelper.*` 命名空间。
 
 ## 命令列表
 
@@ -67,7 +67,7 @@ const track = (label: string, fn: (...args: unknown[]) => unknown): void => {
   registerCommand(context, label, fn);
 };
 track('vscodeUEHelper.build', () => executeBuild('build', config, logger, detection, workspace));
-// ... 21 处 track(...) 调用
+// ... 28 处 track(...) 调用
 logger.info(`[commands] registered ${commandCount} commands`);
 ```
 
@@ -107,6 +107,15 @@ try {
 - `.clangd` 写入一律走 `clangdOps.writeFull` / `mutate`，不在命令层拼路径写文件。
 - 命令 handler 与 MCP `callTool` 共用同一份 `executeXxx`（命令 handler 不再做自动选择快捷路径，唯一例外是 `silent` 参数短路 auto-pick / picker）。
 
+### 构建命令的快照与并发语义
+
+`executeBuild`（`build` / `rebuild` / `clean` 三条命令共用同一入口）每次尝试生成一个唯一 `buildId`（`newBuildId()`，`node:crypto` 的 `randomUUID`）与 `startedAtIso`，两者都写进构建快照。
+
+- **早退也写快照**：没选到项目 / 没选到引擎 / 并发守卫拒绝 / 用户取消 / 「编辑器运行中 → 转发 Live Coding」这些路径都会补写一条失败快照（`ok: false` + `error` 说明原因）。不写的话 MCP 端 `ue_get_build_errors` 读到的是上一次的旧结果，agent 会误判「这次编译通过了」。
+- **进行中标记**：加锁后 `markBuildInProgress(buildId)`；MCP 读错误时该标记非空就返回 `reason='build-in-progress'` 而不是旧快照。结束时 `clearBuildInProgress(buildId)` —— buildId 不匹配时不清（防止旧构建的收尾抹掉新构建的标记）。
+- **并发锁**：`tryLockBuild()` / `unlockBuild()`（`@build/lock`），build 与 Live Coding 共用一把锁 —— 两条路径都是 spawn UBT，并发会交叉写 `Intermediate/Build/` 下的 `.generated.h`。抢锁失败 → 快速拒绝（`cmd.buildInFlight` + `EC_OPERATION_CANCELLED`），不排队。build 的「转发 Live Coding」路径用 `alreadyLocked=true` 复用外层已持有的锁。
+- 快照写入点唯一：`src/commands/build.ts`；读取点：`ue_get_build_errors`（`src/mcp/tools.ts`）→ `getLastBuildSnapshot()` / `getInProgressBuildId()`。
+
 ## 新增命令步骤（5 步 + 1 铁律）
 
 1. **`package.json#contributes.commands`**：添加命令定义（含 `title` / `title@zh` / `category`）。
@@ -115,7 +124,7 @@ try {
 4. **国际化**：`src/i18n/locales/{en,zh}.json` 加用户可见字符串（**en 与 zh 同步**）。
 5. **MCP 暴露（如需）**：`src/mcp/tools.ts` 在 `MCP_TOOLS` 增加 `{ name, description, inputSchema }` 并在 `callTool` 增加 dispatch（silent = true）。
 
-**铁律** —— `package.json#activationEvents` **必须**同步追加 `onCommand:vscodeUEHelper.newCommand`。漏声明时命令被点击会显示 "Extension 'VSCodeUEHelper' is activating…" 提示并按需懒激活，体验降级。22 个命令的 `onCommand` 已在 2026-09-08 闭环补齐，新增命令必须沿用此模式（与"新增命令 5 步"等价的硬约束）。
+**铁律** —— `package.json#activationEvents` **必须**同步追加 `onCommand:vscodeUEHelper.newCommand`。漏声明时命令被点击会显示 "Extension 'VSCodeUEHelper' is activating…" 提示并按需懒激活，体验降级。28 个命令的 `onCommand` 已在 2026-09-08 闭环补齐，新增命令必须沿用此模式（与"新增命令 5 步"等价的硬约束）。
 
 第 5 步可选，但**新增命令默认应同时考虑 MCP 可达性**（宪法 §V：避免维护两套并行路径）。
 

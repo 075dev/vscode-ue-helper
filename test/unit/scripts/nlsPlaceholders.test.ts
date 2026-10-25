@@ -93,7 +93,7 @@ describe('package.json nls 占位符', () => {
     expect(existsSync(resolve(root, 'package.nls.zh-cn.json'))).toBe(true);
   });
 
-  it('23 个设置项全部有中文描述', () => {
+  it('26 个设置项全部有中文描述', () => {
     const props = (
       pkg as {
         contributes: {
@@ -104,8 +104,9 @@ describe('package.json nls 占位符', () => {
       }
     ).contributes.configuration.properties;
     const keys = Object.keys(props);
-    // add-004 新增 compileCommandsAutoRefresh 后为 23;新增设置项时同步更新
-    expect(keys).toHaveLength(23);
+    // add-004 新增 compileCommandsAutoRefresh 后为 23;[D5] 新增 msvcRoot / sdkRoot /
+    // fmsCompatibilityVersion 后为 26;新增设置项时同步更新
+    expect(keys).toHaveLength(26);
     for (const full of keys) {
       const short = full.replace(/^vscodeUEHelper\./, '');
       expect(`config.${short}.desc` in nlsZh, `${short} 缺中文描述`).toBe(true);

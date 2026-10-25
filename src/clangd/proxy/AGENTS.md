@@ -23,14 +23,14 @@
 
 | 文件                                       | 职责                                                                                   |
 | ------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `cli.ts`                                   | 进程入口，解析 argv，构造 `LspBridge` + `ProcessBridge`                                |
-| `cliArgs.ts`                               | `--project-dir` / `--engine-root` / `--ubt-path` / `--build-target` 等参数             |
+| `cli.ts`                                   | 进程入口，解析 argv，构造 `LspBridge` + `ProcessBridge`。参数 warning 写 stderr 后继续运行 |
+| `cliArgs.ts`                               | `--project-dir` / `--engine-root` / `--ubt-path` / `--build-target` 等参数。**未知参数降级为 warning 并忽略**，不致命退出      |
 | `bridge.ts`                                | `LspBridge`：上层 LSP 客户端消息到真实 clangd 子进程的转发。**stdout 仅 LSP 协议帧**   |
 | `processBridge.ts`                         | `ProcessBridge`：`ServerTransport` 实现，spawn 真实 clangd 二进制                      |
 | `framing.ts`                               | LSP `Content-Length` 帧解析（HTTP-like 头 + JSON body）                                |
-| `messages.ts`                              | JSON-RPC 消息分类（`initialize` / `textDocument` / `publishDiagnostics`）              |
+| `messages.ts`                              | JSON-RPC 消息分类（`initialize` / `textDocument` / `publishDiagnostics`）+ `RequestCorrelation` 关联表（client / server 命名空间） |
 | `keepalive.ts`                             | `didClose` 状态机（避免 off-doc 时 hover 死锁）                                        |
-| `localization.ts`                          | UE 词典汉化（completion / signature / inlay 类型名）。**当前未生效（6 处 TODO 占位）** |
+| `localization.ts`                          | UE 词典汉化（completion / signature / inlay 类型名）。**当前未生效（3 处 TODO 占位）** |
 | `genericTranslator.ts`                     | 通用翻译器，文档查找兜底                                                               |
 | `ueDocLookup.ts`                           | UE 文档注释查找（依赖 `scripts/extract-ue-docs.ts` 输出）                              |
 | `ueDiagnosticWatcher.ts`                   | [Phase 8 D-05/D-06] 拦截 clangd 诊断，被动触发 UBT 重建                                |
@@ -52,12 +52,26 @@
 - 消息路由：`bridge.ts` 透传大多数消息，仅在需要增强（汉化 / UE 宏补全 / 被动重建）时拦截。
 - **硬约束**：proxy 进程的 `stdout` 上**只**写 LSP 协议帧（`encodeMessage` → `process.stdout.write`）；所有调试 / 诊断 / 通知 / 日志必须走 `process.stderr` 或独立文件 log（满足宪法 §III）。
 
+## 参数解析与请求关联
+
+### 未知参数不致命（`cliArgs.ts` → `parseArgs`）
+
+- `parseArgs` 返回 `{ options, errors, warnings }` 三段：**只有 `errors` 非空才致命退出**；未知参数进 `warnings` —— 记一条警告后**忽略并继续运行**。
+- launcher 是 `node "...\clangdProxy.js" %*`，参数原样过 `cmd.exe` —— 含空格的路径（`C:\Program Files\LLVM\bin\clangd.exe`、`D:\Program Files\Epic Games\UE_5.4\...`）会被 cmd 拆成两段，后一段就成了「未知参数」。把它当致命错误 → 代理 `exit(2)` → clangd 扩展拿不到语言服务器 → 整个工程没有 IntelliSense，且 `clangd.restartAfterCrash` 默认开 → 无限重启循环。
+- warning 写 **stderr**（`[clangd-proxy] WARNING: ...`），**不写 stdout** —— stdout 是 LSP 帧流，污染它会打断协议解析。
+
+### 请求关联按方向命名空间隔离（`messages.ts` → `RequestCorrelation`）
+
+- LSP 的 request id 在两个方向上**各自独立编号**：客户端请求（hover / definition）与服务端请求（`workspace/configuration` / `client/registerCapability` / `window/workDoneProgress/create`）都可能用 id=1。
+- 关联表的 key 改为 `${namespace}:${id}`，命名空间取 `'client'` / `'server'`；`record` / `lookup` / `remove` 都接受命名空间参数（默认 `'client'`）→ 同号请求不再互相覆盖。
+- `bridge.ts` 判定响应与请求的依据是**有没有 `method` 字段**：**有 `method` 的是请求**（服务端请求），**没有 `method` 的才是响应**。只有响应才查关联表并消费关联 —— 否则服务端请求会把客户端待响应的关联删掉，导致真正的响应到达时找不到原 method，汉化被静默丢弃。
+
 ## stdout / stderr 分工
 
 | 通道                                      | 允许写入                                                                                                 |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `stdout`                                  | `Content-Length: …` + LSP JSON-RPC 帧（仅此而已）                                                        |
-| `stderr`                                  | 诊断 / 启动 / 关闭 / keepalive 状态机日志（带 `[proxy]` / `[proxy/bridge]` / `[proxy/diagnostic]` 前缀） |
+| `stderr`                                  | 诊断 / 启动 / 关闭 / keepalive 状态机日志（带 `[proxy]` / `[proxy/bridge]` / `[proxy/diagnostic]` / `[clangd-proxy]` 前缀） |
 | 独立文件 log（`proxyLogPath` 设置）       | 长寿命 perf / 诊断上下文，方便 `proxyLogTailer.ts` 在 UI 中展示                                          |
 | `proxyLogChannel`（主进程 OutputChannel） | 由主进程通过文件 tail 收集，不在本子进程内 push                                                          |
 
@@ -77,10 +91,11 @@
 
 ## 测试入口
 
-`test/unit/clangd/proxy/*` —— 17 个测试文件，最大单测套件。
+`test/unit/clangd/proxy/*` —— 19 个测试文件，最大单测套件。
 
-- `e2eHarness.test.ts`（584 行） + `e2eCliRestartLoop.test.ts` —— e2e flow 验证主战场。
+- `e2eHarness.test.ts`（807 行） + `e2eCliRestartLoop.test.ts` —— e2e flow 验证主战场。
 - `cliStdio.test.ts`、`cliEntrypoint.test.ts` —— 进程入口测试。
+- `bridgeIdNamespace.test.ts` —— 请求关联的 client / server 命名空间隔离。
 
 ### stdout / stderr 测试断言
 
@@ -92,12 +107,12 @@
 
 ## 当前已知问题（占位 / 未排期）
 
-1. **6 个汉化 TODO 未落地**（`localization.ts × 3` + `bridge.ts × 3`） —— 后续实现是空头承诺，未排进任何 phase。规划时不要假设汉化已上线。
+1. **3 个汉化 TODO 未落地**（`localization.ts × 3`） —— 后续实现是空头承诺，未排进任何 phase。规划时不要假设汉化已上线。
 2. **`child_process` 未全局 mock** —— 测试用 `vi.mock('child_process', ...)` 测试侧处理。
 3. e2e 测试依赖真实 clangd 二进制存在（`realClangdResolver` 路径），CI 环境需预安装。
 
 ## 跨模块约束（宪法 §II / §V）
 
 - **Proxy 只做协议边界工作** —— LSP 转发、汉化、诊断观察、被动重建触发与 generated-header 通知都留在 proxy；扩展主进程负责 VS Code UI、设置和命令编排。
-- **不在 proxy 内写 `.clangd`** —— `settingsManager.ts` 只对 `clangd.path` 做最小必要备份 / 恢复；`.clangd` 写入由扩展主进程走 `ClangdOps`（满足宪法 §III atomic writes）。
+- **不在 proxy 内写 `.clangd`** —— `settingsManager.ts` 只对 `clangd.path` 做最小必要备份 / 恢复；`.clangd` 写入由扩展主进程走 `ClangdOps` / `clangdFlagRenderer.writeClangdAddFlags`（满足宪法 §III atomic writes）。
 - **依赖最小化** —— 新增 npm 依赖要经过宪法 §V 评审（concrete use + tradeoff + explicit review）。当前 `framing` / `messages` / `keepalive` 全部手写，不引第三方 LSP 库。

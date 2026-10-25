@@ -138,6 +138,7 @@ events: 0
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
 | bugfix-003 | 2026-10-11 | `ClangdOps.mutate` 经队列串行化,修复并发调用(控制面板连点开关)后写覆盖先写的丢配置问题;回归测试锁定(stash 验证旧代码下真实失败) | `.qiling/planning/bugfix/003-audit-fixes.md` |
+| 审计修复（19 条） | 2026-10-25 | `.clangd` 改为多文档安全读写(保留注释);系统头路径持久化到设置项并由唯一渲染入口重建 flag 组;编译数据库候选顺序改为「项目本地 → helper 目录 → 引擎根」;补齐条目同步替换命令行源文件路径;新增源文件不再被指纹快路径吞掉;数据库改为一次原子写(紧凑格式);工作区备份按原文件名恢复并纳入 `launch.json` | `src/clangd/clangdYaml.ts`、`src/clangd/clangdFlagRenderer.ts`、`src/clangd/clangdOps.ts`、`src/clangd/compileCommands.ts`、`src/clangd/compileCommands/fillMissing.ts`、`src/clangd/compileCommands/dbFile.ts`、`src/clangd/workspaceBackup.ts` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 

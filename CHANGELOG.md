@@ -5,6 +5,38 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **UE 版本 × 能力矩阵**（借鉴 [unreal-engine-mcp](https://github.com/FFZackFair92/unreal-engine-mcp) 的 `ue_status` / 版本兼容表，与 [boocs/unreal-clangd](https://github.com/boocs/unreal-clangd) 的「不同 UE 版本要求不同 LLVM 版本」说明）：新增 `src/core/ueCapabilities.ts`，把「不同 UE 版本行为不同」从散落注释收敛为可查询、可单测的矩阵——最低支持版本（5.2+）、UBT 响应文件（.rsp，5.1+）、UHT 反射头生成、**Epic 为该版本锁定的 clangd/LLVM 版本**。`Diagnose Clangd Project` 新增 `ueVersion` / `ueCapabilities` 两项检查；版本未知标记 `skip`（无法判定 ≠ 不通过），无可靠版本来源时**不臆造** clangd 版本号，改指引查 Epic 官方文档。
+- **MCP 工具 `ue_status`**（第 10 个工具）：同步返回检测到的项目/引擎、当前构建 configuration/target/platform，以及 UE 版本能力矩阵——让 AI 代理在动手前就知道「这个引擎版本该配哪个 clangd、哪些能力可用」，而不是撞上 cryptic error。工具名沿用社区事实标准，提高代理按名字发现的命中率。OpenAPI 契约同步新增 `/mcp/tools/ue_status` 端点与 `UeCapabilityReport` schema。
+- **清理 clangd 索引缓存命令** `vscodeUEHelper.clearClangdIndex`（借鉴 [Incanta/vscode-cpp-unreal](https://github.com/Incanta/vscode-cpp-unreal) 的 `Clear clangd Index`）：clangd 索引损坏或与引擎版本不匹配后，跳转/补全会集体失灵，重建索引是唯一出路。新增 `src/clangd/clangdIndexCache.ts` 定位 clangd profile 下的 `index/` 目录（`%LOCALAPPDATA%\clangd\index` / `~/.cache/clangd/index` / `<projectDir>\.cache\clangd\index`），先报体积与文件数、用户确认后再删除，随后可一键重启 clangd —— 把 `Diagnose` 从「只报告」补成「可修复」闭环。不存在就如实报告「未找到」，不猜路径、不空删。
+- **clangd 系统头路径持久化到设置项**（新增 `vscodeUEHelper.clangd.msvcRoot` / `clangd.sdkRoot` / `clangd.fmsCompatibilityVersion`）：此前 `Set System Includes` 探测到的 MSVC / Windows SDK 路径只存在于 `.clangd` 的 flag 文本里，任何一次重写 `.clangd`（切项目、换配置、面板保存自定义 flag）都会让它和实际选择脱节。现在路径与 fms 版本写入设置项，`.clangd` 的系统 flag 组（`/imsvc` / `-fms-compatibility-version`）由**唯一渲染入口** `writeClangdAddFlags` 统一重建；面板保存自定义 flag 改为**并集**合并，不再把 `system-include-windows` 覆盖掉；设置变更时自动重写 `.clangd`。**fms 兼容版本只有一个来源**：按**本次选中的** MSVC 读出，渲染 `.clangd` 与持久化设置项共用同一个值 —— 此前渲染用探测值、持久化用选中值，用户选了与探测结果不同的 MSVC 版本时，`-fms-compatibility-version` 会与 `/imsvc` 指向不同版本的 MSVC（`_MSC_VER` 与实际头文件冲突），且之后任何一次重写会写入另一个值，同一份 `.clangd` 内容前后不一致。
+
+### Fixed
+
+- **用户可见文案引导用户设置一个不存在的配置项**：`quickPicks.noEngines` 写的是「未检测到 Unreal Engine 安装。请手动设置 `vscodeUEHelper.engineRoot`」——但 `engineRoot` **从来不是**本插件的设置项（`package.json` 的 `contributes.configuration` 里没有这个键，`engineRoot` 只是内部参数名）。更糟的是 `showInfo.enginesFoundEmpty` 的**英文**文案同样是「config vscodeUEHelper.engineRoot」，而中文文案早就写对了（「在 .code-workspace 的 folders[] 中未声明」）——英文用户被误导，中文用户没有。引擎路径的唯一真相源是 `.code-workspace` 的 `folders[]`，已把两处文案改为指向该真相源并指明正确动作（在 UE 中重新生成项目文件 / 核对 `folders[]`），同时对齐了控制面板的 `panel.noProject.desc` / `panel.disabled.noProject` / `panel.disabled.noEngine` / `panel.cmdBlocked.noProject` —— 原文案说「当前工作区没有 .uproject 文件」，会让用户以为打开项目目录就够了，而实际前提是打开 UE 生成的 `.code-workspace`。
+- **新增回归守卫 `test/unit/i18n/settingReferences.test.ts`**：i18n 文案里出现的每个 `vscodeUEHelper.<key>` 都必须是 `package.json` 里真实存在的设置项；文案不得出现 `engineRoot`；en/zh 键集合必须完全一致。已用注入法验证该守卫确实能抓到上述 bug（而非空转通过）。
+- **`npm run lint` 此前就带 3 个 error**（`test/unit/ui/notifications.test.ts` 的 `require-await` 违规，与本次改动无关）——仓库宣称的 `npm run lint` 检查此前无法通过，已一并修正。
+
+**本轮（19 条全仓库审计修复）分组说明：** 完整缺陷清单、落点与验收证据见 `.qiling/planning/bugfix/004-audit-19-defects.md`。
+
+- **构建早退不写快照，AI 代理读到的是上一次的旧结果**：没选到项目 / 没选到引擎 / 并发守卫这三条早退路径都不写构建快照，`ue_get_build_errors` 因此把**上一次**构建的残留当成当前结果返回。现在每次构建带唯一 `buildId` + `startedAtIso`；本次调用若没写过快照（用户取消、转发 Live Coding 等路径一并覆盖），统一补写一条失败快照。构建进行中时明确返回 `hasResult:false` + `reason:'build-in-progress'`，不再返回陈旧快照；从未构建过时返回 `reason:'no-build'`。另外 MCP 的 `dispatch` 此前只 catch rejection，命令层 resolve 出来的错误信封连日志都没有 —— 现在 resolve 出的错误信封也会记 error 日志。
+- **`Ctrl+Shift+B` 拿不到真正的 UBT 构建任务**：Task provider 此前只返回空壳任务。现在接入 `WorkspaceState`（项目 / 引擎），用 `resolveUBTPath` + `resolveUBTTarget` + `buildUBTCommand` 解析出真实命令行（`<engineRoot>/Engine/Build/BatchFiles/Build.bat` + target + configuration + platform），以 VS Code 构建任务执行；工作区尚未就绪时任务列表为空（表现为「没有可用的构建任务」，不报错）。**并且修掉了含空格路径下必然失败的问题**：UE 默认装在 `C:\Program Files\Epic Games\UE_5.x`，而 VS Code 的 Task 进程（`ProcessExecution`）会由 Node 对参数做 Windows 转义、内部引号被转义成 `\"`，叠加 `cmd.exe /c` 「引号总数恰好两个才整对保留」的规则 → 引擎路径与项目路径两个含空格参数会把路径截断，任务报 "The network path was not found."。现在整条 UBT 命令放进环境变量、命令行只留一个不含空格与引号的变量引用，展开后就是 `"<Build.bat>" <UBT 参数…>` 标准形态（实测六种形态，只有「环境变量」与「临时 .bat 包装」能跑通）。
+- **工程路径含空格或 `&` 时启动不了编辑器**：`launchEditor` 此前走 `cmd /c start`，路径里的 `&` / 引号会被命令行当成元字符解析，编辑器起不来或起错实例。现在直接 `spawn` 可执行文件 + 参数数组（不经过 shell），并监听 `'error'` 事件把启动失败转成可捕获的错误。
+- **构建与 Live Coding 可以同时跑，抢同一批文件**：新增 `src/build/lock.ts` 共享锁（`isBuildLocked` / `tryLockBuild` / `unlockBuild`），两条路径互斥，构建进行中再触发 Live Coding 会被挡下。
+- **`.clangd` 写成多文档 YAML 后整个文件读不了、改不了**：`.clangd` 支持用 `---` 分隔多个 YAML 文档（clangd 按目录深度叠加配置），而旧实现用单文档 API 解析，遇到第二个文档直接抛 "Source contains multiple documents" —— `readConfig` 永远返回 `null`、`mutate` 直接返回 `parse-failed`，用户手写的其他配置块完全无法编辑。现在走 `src/clangd/clangdYaml.ts`（`parseClangdDocs` / `mergeConfigIntoDoc` / `renderClangdDocs`）逐文档解析：主文档承载 `CompileFlags`、其余文档原样保留写回，合并用递归 `map.set`，注释不再丢失。
+- **新增源文件进不了编译数据库，补出来的条目还指向旧文件**：配置指纹不含任何 `.cpp/.h`，新增源文件不改指纹 → 快路径命中 → UBT 根本不启动。现在快路径命中后追加一次探针，确认确有新增源文件就强制走 UBT；同时补齐条目在克隆时同步替换命令行里的源文件路径（`arguments` 优先，回退到 `command` 末元素），clangd 才能拿到新文件的定义。
+- **编译数据库在工程目录里找不到，一次刷新还被写两遍**：候选搜索顺序原先偏向引擎根，工程目录里的本地副本反而找不到；现在顺序为「项目本地副本 → helper 目录 → 引擎根 …」，本地副本即 `<projectDir>/compile_commands.json`（helper 目录里的同名文件是指向它的符号链接）。原先两处各自 `JSON.parse` 整份文件再整体覆盖写、无 temp+rename，一次刷新写两遍，且带缩进的序列化把几 MB 的 DB 放大数倍 —— 现在合并为**一次原子写**（temp + rename），序列化改紧凑格式。**写入目标改为「clangd 实际读取的那个文件」**：helper 目录里的 `compile_commands.json` 在 Windows 未开开发者模式时是 `fs.symlink` 失败后的**独立副本**（默认状态），此前固定写项目本地副本 → clangd 读到的一直是旧内容，补齐的条目与注入的 completionHelper 条目对它完全不可见且无任何报错；现在写入前先解析真实目标（符号链接 → 它指向的文件；独立副本 → 它自己），两种形态下 clangd 都能读到最新内容，符号链接也不会被 `rename` 换成普通文件。**全部 DB 写入点收敛为 4 处并逐处登记**（`src/clangd/AGENTS.md` 有一张对照表）：前 3 处（生成命令 / 补齐缺失条目 / 注入 completionHelper）都写「clangd 实际读取的那个文件」且**读与写是同一个文件**；第 4 处是 UBT 失败时的降级 stub DB，它的写入目标**本身就是** clangd 的读路径，因此故意不解析符号链接，但它同样改用统一的原子写原语（此前带缩进序列化，条目数 = 全部源文件数时体积放大数倍）。
+- **MCP 通道的 stdout 被日志污染**：MCP 的 stdio 传输把 JSON-RPC 帧写进 `process.stdout`，而 `logger.info` 也走 stdout —— 任何一行 info 日志都会插进协议帧流。现在 Logger 增加「只写 OutputChannel、不写 console」的开关，MCP 激活时关闭、退出与启动失败时恢复。同时在 README 如实标注当前限制：MCP server 仍运行在扩展宿主进程内，外部客户端尚不能直连（独立进程化的前置条件是解耦 detection / commands 层的 vscode 依赖）。
+- **代理收到一个未知参数就整进程退出**：参数解析遇到不认识的参数时直接退出，一个多余参数就能让 clangd 代理死掉。现在降级为 warning 并忽略该参数。
+- **代理请求关联 id 串扰**：请求关联 key 只有裸 id，客户端与服务端用同一个 id 时响应会配到错误的请求上。现在 key 加 client / server 命名空间。
+- **MCP 失败响应不带 `isError`，AI 代理永远走不到错误分支**：成功响应有四种形状、失败是 `{ok:false,error:{code,message}}`，但一律不带 MCP 标准字段 `isError:true` → Cursor / Claude Code 的错误分支永不触发。现在内部统一用一个响应构造器，对外顶层载荷形状保持不变（不破坏既有契约与 AI agent 侧），失败时在 MCP 层补 `isError:true`；契约同步拆出独立的 `MCPFailure` schema。
+- **控制面板首屏空白**：`resolveWebviewView` 在 `projectName` 还是空的时候就同步赋值了 `webview.html`，首屏渲染成 `no-project` 被 CSS 藏掉；补救用的 `postMessage` 又早于 webview 加载完成，投递失败时完全静默。现在先 await 项目信息再赋 HTML（且**先注册**消息监听，避免 await 期间到达的 `panelReady` 丢失），webview 回报 `panelReady` 后重推全部状态，`postMessage` 投递失败记 warn。
+- **webview 可以用伪造消息驱动扩展侧命令**：来自 webview 的命令消息与配置值此前只做字段存在性检查。现在用 null 原型对象 + `CONFIG_VALUE_KINDS` + `validateConfigValue` 校验，配置值类型不符直接拒绝。
+- **UBT 刷新后恢复错了文件，`launch.json` 丢失**：备份与恢复各自独立地找「第一个 `.code-workspace`」，两次之间不共享文件名 → UBT 重写目录后可能恢复到另一个文件；文件头承诺保护的 `.vscode/launch.json` 从未被备份；恢复是直接覆盖、非原子。现在备份按原文件名存到 `.vscode/uehelper-backup/`，`snapshot()` 记录被备份的名字、`restore()` 只恢复它（找不到同名备份就不恢复并记 error），`launch.json` 一并纳入，恢复改 temp + rename。旧的单文件备份视为过期，直接忽略不迁移。
+- **silent 模式仍然弹窗，AI 代理被卡在对话框前**：`silent` 只作用于选项目那一步，选 MSVC / SDK 版本的两个 QuickPick 与一个模态错误框照弹。现在 silent 路径直接采用自动检测到的 MSVC / SDK 版本、不弹任何窗，检测失败则返回明确错误信封；非 silent 路径的错误框改为非模态。
+- **写数组类型设置会产生无意义 warning**：`Config.update` 写盘前的校验比较的是序列化字符串，数组 / 对象类设置每次都被判成「有变化」。现在改为按值比较。
+
 ## [0.2.0] - 2026-10-05
 
 ### Changed

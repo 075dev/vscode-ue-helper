@@ -62,7 +62,9 @@ export function activate(context: vscode.ExtensionContext): Promise<void> {
     const clangdOps = new ClangdOps({ workspace, logger });
 
     // 旧模块激活流程（保持兼容，后续 PR 逐步迁移到接受 workspace 参数）
-    const build = activateBuild(context, config, logger, detection);
+    // [D9] 注入 workspace —— TaskProvider 从这里同步取项目/引擎路径,
+    // 构造真实 UBT 命令(不再返回 placeholder echo 任务)。
+    const build = activateBuild(context, config, logger, detection, workspace);
     // [Phase 8 Stage 1] 注入 ClangdOps 给 activateClangd，让 CompletionModeController 走统一 API
     const clangd = activateClangd(context, config, logger, detection, workspace, clangdOps);
     // [Phase 8] headerWatcher removed — UBT triggered by proxy-side UeDiagnosticWatcher only

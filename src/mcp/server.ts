@@ -12,7 +12,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { type Logger } from '@core/logger';
-import { MCP_TOOLS, callTool } from './tools';
+import { MCP_TOOLS, callToolResult } from './tools';
 
 export class MCPServer {
   private server: Server;
@@ -42,9 +42,14 @@ export class MCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, (request) => {
       const { name, arguments: args } = request.params;
       this.logger.info(`[mcp] tool call: ${name}`);
-      const result = callTool(name ?? '', (args as Record<string, unknown>) ?? {});
+      // [D17] 走 callToolResult —— 拿到 MCP 协议级的 isError。
+      // 旧实现只把 JSON 塞进 content 且从不置 isError,Cursor / Claude Code
+      // 的错误分支永远不会触发。
+      const result = callToolResult(name ?? '', (args as Record<string, unknown>) ?? {});
       return {
-        content: [{ type: 'text', text: result }],
+        content: [{ type: 'text', text: result.text }],
+        // 成功时不出该字段（契约 MCPDispatch.isError:成功时不出现）
+        ...(result.isError ? { isError: true } : {}),
       };
     });
   }

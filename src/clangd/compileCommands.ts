@@ -43,6 +43,10 @@ import {
   getUbtPath,
 } from '@clangd/compileCommands/task';
 import { fillMissingCompileCommands, type FillResult } from '@clangd/compileCommands/fillMissing';
+// [D2] 快路径命中后的「源文件是否已被收录」探针（只算不写）
+import { computeMissingEntries } from '@clangd/compileCommands/fillMissing';
+// [D14] DB 读取原语
+import { readCompileCommands } from '@clangd/compileCommands/dbFile';
 
 // re-export 公共 API 让外部 @clangd/compileCommands 用户零感知拆分（per T4.5 拆分策略）
 export { isClangdAvailable, linkToWorkspaceRoot };
@@ -108,6 +112,103 @@ export interface GenerateOptions {
 /* ------------------------------------------------------------------ */
 
 /**
+ * [D2] 快路径命中后的「源文件是否已被收录」探针 —— **只算不写**。
+ *
+ * fingerprint 不覆盖 .cpp/.h，所以新增源文件不会改变指纹 → 快路径照样命中。
+ * 这里算一次 fillMissing（不写盘），若确实有源文件没被收录 → 返回 true，
+ * 调用方应强制走一次 UBT。
+ *
+ * @returns true = DB 已过期，必须重跑 UBT
+ */
+async function probeMissingSourceEntries(
+  ccPath: string,
+  opts: GenerateOptions,
+  log: Logger,
+): Promise<boolean> {
+  try {
+    const entries = await readCompileCommands(ccPath);
+    if (!entries || entries.length === 0) {
+      return false;
+    }
+    const { result } = await computeMissingEntries(entries, opts.project, log, opts.workspace);
+    if (result.added.length > 0) {
+      log.warn(
+        `[D2] fast-path DB is missing ${result.added.length} source entries ` +
+          `(first: ${result.added[0]}) → forcing a UBT run ` +
+          `(fingerprint does not cover .cpp/.h)`,
+      );
+      return true;
+    }
+    return false;
+  } catch (err) {
+    log.warn(
+      `[D2] fast-path missing-source probe failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
+/** Windows-only 仓库：路径比较统一小写，避免盘符/大小写不一致误判 */
+function samePath(a: string, b: string): boolean {
+  return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+}
+
+/**
+ * [D4] 在候选列表里定位 compile_commands.json —— 找到「第一个存在且非空」的文件。
+ *
+ * 候选顺序「项目本地 → helper 目录 → 引擎根」；命中**非项目本地**的候选
+ * （引擎根等共享位置）时，先**复制**到项目本地副本
+ * `<projectDir>/compile_commands.json`，再返回项目本地路径：
+ *
+ *   - linkToWorkspaceRoot 的 symlink 指向项目内文件 → 后续写操作
+ *     （fillMissing / helper 注入）落在项目内，不再顺着 symlink **写回引擎根**
+ *     （两个项目共用一个引擎时来回覆盖同一份 DB）；
+ *   - 候选顺序下，选中的那份就是**项目自己**的 DB，而不是别的项目留在
+ *     共享目录里的产物。
+ *
+ * @param candidates - 候选路径（按优先级排列）
+ * @param localDbPath - 项目本地副本路径
+ * @returns 定位到的路径；全部未命中 → undefined
+ */
+export async function locateCompileCommands(
+  candidates: readonly string[],
+  localDbPath: string,
+  log?: Logger,
+): Promise<string | undefined> {
+  for (const p of candidates) {
+    try {
+      const stat = await fs.stat(p);
+      if (stat.size <= 2) {
+        // ≤ 2 字节：空数组 [] 之类，不算有效 DB
+        log?.warn(
+          `[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`,
+        );
+        continue;
+      }
+      log?.info(
+        `[generateCompileCommands] found compile_commands.json at: ${p} (${stat.size} bytes)`,
+      );
+
+      if (samePath(p, localDbPath)) {
+        return p;
+      }
+      try {
+        await fs.copyFile(p, localDbPath);
+        log?.info(`[D4] DB copied to project-local copy: ${localDbPath}`);
+        return localDbPath;
+      } catch (copyErr) {
+        const copyMsg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+        log?.warn(`[D4] failed to copy DB to project-local copy (${copyMsg}); using ${p}`);
+        return p;
+      }
+    } catch {
+      // not here
+    }
+  }
+  return undefined;
+}
+
+/**
  * 通过 VS Code Task API 执行 UBT，生成 compile_commands.json。
  *
  * 双路径：
@@ -152,27 +253,40 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   opts.progress?.report({ message: 'Computing fingerprint...' });
   const fastPath: FastPathResult = await tryCompileCommandsFastPath(projectDir, log, opts.engineRoot);
   if (fastPath.hit) {
-    perfLog.record({
-      event: 'compileCommands.cacheHit',
-      elapsedMs: fastPath.elapsedMs,
-      meta: { fingerprint: fastPath.fingerprint, ccPath: fastPath.ccPath },
-    });
-    log.info(
-      `[perf] compileCommands cache HIT (fp ${fastPath.elapsedMs.toFixed(1)}ms), skip UBT → ${fastPath.ccPath}`,
-    );
-    // [Phase 7 PLAN B / per D-03] 阶段 5：fast-path 命中 — totalElapsed 收尾
-    try {
+    // [D2] 快路径命中 ≠ 「源文件没变」。
+    //
+    // fingerprint 只覆盖 .uproject / *.uplugin / *.Build.cs / *.Target.cs /
+    // Build.version —— **不含任何 .cpp/.h**。所以用户新增源文件时指纹不变，
+    // 快路径照样命中，UBT 根本不会启动 → 新文件永远进不了编译数据库
+    // （clangd 对新文件只能用 .clangd 的简化配置，全屏 false-positive）。
+    //
+    // 修法（成本低的一条）：命中后仍算一次 fillMissing —— 若确实有源文件
+    // 没被收录（added.length > 0），说明 DB 已过期，强制走一次 UBT。
+    const forcedByMissing = await probeMissingSourceEntries(fastPath.ccPath, opts, log);
+    if (!forcedByMissing) {
       perfLog.record({
-        event: 'compileCommands.totalElapsed',
-        elapsedMs: performance.now() - entryStart,
-        meta: { hit: true, outcome: 'cacheFastPath' },
+        event: 'compileCommands.cacheHit',
+        elapsedMs: fastPath.elapsedMs,
+        meta: { fingerprint: fastPath.fingerprint, ccPath: fastPath.ccPath },
       });
-    } catch (err) {
-      log.warn(
-        `[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`,
+      log.info(
+        `[perf] compileCommands cache HIT (fp ${fastPath.elapsedMs.toFixed(1)}ms), skip UBT → ${fastPath.ccPath}`,
       );
+      // [Phase 7 PLAN B / per D-03] 阶段 5：fast-path 命中 — totalElapsed 收尾
+      try {
+        perfLog.record({
+          event: 'compileCommands.totalElapsed',
+          elapsedMs: performance.now() - entryStart,
+          meta: { hit: true, outcome: 'cacheFastPath' },
+        });
+      } catch (err) {
+        log.warn(
+          `[perf] instrumentation totalElapsed (fast-path) failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      return fastPath.ccPath;
     }
-    return fastPath.ccPath;
+    // 强制走 UBT —— 落到下面的 UBT 路径
   }
   if ('error' in fastPath) {
     // 指纹或缓存 IO 异常：降级到原有 UBT 路径（per T-7-04 防御原则）
@@ -186,7 +300,10 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
     perfLog.record({
       event: 'compileCommands.cacheMiss',
       elapsedMs: fastPath.elapsedMs,
-      meta: { fingerprint: fastPath.fingerprint, hadCache: fastPath.hadCache },
+      meta: {
+        fingerprint: fastPath.fingerprint,
+        hadCache: 'hadCache' in fastPath ? fastPath.hadCache : undefined,
+      },
     });
     log.info(
       `[perf] compileCommands cache MISS (fp ${fastPath.elapsedMs.toFixed(1)}ms), running UBT`,
@@ -290,18 +407,51 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   //   <EngineRoot>/compile_commands.json
   // Native (-projectfiles): 只生成 .vcxproj，**不**生成 compile_commands.json
   //
+  // [D4] 候选顺序改为「项目本地 → helper 目录 → 引擎根」
+  //
+  // 引擎根的 compile_commands.json 是**共享**的：多项目共用同一个引擎时，
+  // 它可能是「上一个项目」留下的。把它排第一 → clangd 看到别的项目的编译参数；
+  // 而且 linkToWorkspaceRoot 会把它 symlink 进 .vscode/vscodeuehelper，后续
+  // fillMissing / helper 注入顺着 symlink **写回引擎根** —— 两个项目来回覆盖。
+  //
+  // 现在：
+  //   1. UBT 的产物（引擎根）先**复制**到项目本地副本
+  //      `<projectDir>/compile_commands.json`；
+  //   2. 候选顺序「项目本地 → helper 目录 → 引擎根」，引擎根仅最后兜底；
+  //   3. 命中非项目本地的候选 → 复制到项目本地副本再返回；
+  //   4. 返回的永远是项目本地副本 → linkToWorkspaceRoot 的 symlink 指向它，
+  //      写操作落在项目内，不再写回引擎根。
+  //
   // [P2-4] 阶段反馈：定位 compile_commands.json
   opts.progress?.report({ message: 'Locating compile_commands.json...' });
-  const candidates = [
-    // 优先：UE 5.x GenerateClangDatabase 默认输出到引擎根目录
-    path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS),
-    // 备选：项目目录的 .vscode/vscodeuehelper/（linkToWorkspaceRoot 目标位置）
-    // [Phase 11 SSoT] 走 WorkspaceState.compileCommandsPath（与 linkToWorkspaceRoot 目标对齐）
+  const localDbPath = path.join(projectDir, FILE_NAME_COMPILE_COMMANDS);
+  const helperDbPath =
     opts.workspace?.compileCommandsPath ??
-      path.join(projectDir, '.vscode', 'vscodeuehelper', FILE_NAME_COMPILE_COMMANDS),
-    // 备选：项目目录根
-    path.join(projectDir, FILE_NAME_COMPILE_COMMANDS),
-    // 备选：引擎根目录的 .vscode/<项目名>/（旧版 Native 模式可能）
+    path.join(projectDir, '.vscode', 'vscodeuehelper', FILE_NAME_COMPILE_COMMANDS);
+  const engineRootDbPath = path.join(opts.engineRoot, FILE_NAME_COMPILE_COMMANDS);
+
+  // UBT 产物 → 项目本地副本。
+  // 这一步同时保证「项目本地优先」选到的是**刚生成**的那份，而不是上一次
+  // 遗留在项目里的旧副本。
+  try {
+    const stat = await fs.stat(engineRootDbPath);
+    if (stat.size > 2) {
+      await fs.copyFile(engineRootDbPath, localDbPath);
+      log.info(`[D4] engine-root DB copied to project-local copy: ${localDbPath}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn(`[D4] engine-root DB copy skipped: ${msg}`);
+  }
+
+  const candidates = [
+    // [D4] 优先：项目本地副本（所有写操作落在这里）
+    localDbPath,
+    // helper 目录（clangd 的 CompilationDatabase 实际读取位置）
+    helperDbPath,
+    // 引擎根 —— 仅作最后兜底（共享目录，可能是别的项目的产物）
+    engineRootDbPath,
+    // 引擎根目录的 .vscode/<项目名>/（旧版 Native 模式可能）
     path.join(opts.engineRoot, '.vscode', projectName, FILE_NAME_COMPILE_COMMANDS),
     // 兼容 unreal-clangd 的输出目录名
     path.join(opts.engineRoot, '.vscode', 'unreal-clangd', FILE_NAME_COMPILE_COMMANDS),
@@ -314,66 +464,51 @@ export async function generateCompileCommands(opts: GenerateOptions): Promise<st
   // 找到**第一个存在且非空**的文件
   // [Phase 7 PLAN B / per D-03] 阶段 3：candidates 文件查找 — 循环前后 timing
   const candStart = performance.now();
-  for (const p of candidates) {
-    try {
-      const stat = await fs.stat(p);
-      if (stat.size > 2) {
-        // > 2 字节：避免空数组 []
+  const found = await locateCompileCommands(candidates, localDbPath, log);
+  if (found) {
+    // [Phase 7 D-08] 写入缓存，供下次快速命中
+    // [Phase 3.2] cache 编排抽到 @clangd/compileCommands/cache,主文件只保留 dedup 守卫 + 日志
+    const cachedCcPath = 'cachedCcPath' in fastPath ? fastPath.cachedCcPath : undefined;
+    if (!samePath(cachedCcPath ?? '', found)) {
+      try {
+        await writeCompileCommandsCache(path.dirname(opts.project), found, {
+          logger: log,
+          engineRoot: opts.engineRoot,
+        });
         log.info(
-          `[generateCompileCommands] found compile_commands.json at: ${p} (${stat.size} bytes)`,
+          `[perf] compileCommands cache WRITTEN (path changed: ${cachedCcPath ?? '(none)'} → ${found})`,
         );
-
-        // [Phase 7 D-08] 写入缓存，供下次快速命中
-        // [Phase 3.2] cache 编排抽到 @clangd/compileCommands/cache,主文件只保留 dedup 守卫 + 日志
-        const cachedCcPath = 'cachedCcPath' in fastPath ? fastPath.cachedCcPath : undefined;
-        if (cachedCcPath !== p) {
-          try {
-            await writeCompileCommandsCache(path.dirname(opts.project), p, {
-              logger: log,
-              engineRoot: opts.engineRoot,
-            });
-            log.info(
-              `[perf] compileCommands cache WRITTEN (path changed: ${cachedCcPath ?? '(none)'} → ${p})`,
-            );
-          } catch (cacheErr) {
-            // 写缓存失败：不阻塞主流程（per T-7-04 防御原则）
-            const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
-            log.warn(`[perf] failed to write compileCommands cache: ${msg}`);
-          }
-        }
-
-        try {
-          perfLog.record({
-            event: 'compileCommands.candidatesScanned',
-            elapsedMs: performance.now() - candStart,
-            meta: { candidateCount: candidates.length, hit: true, ccPath: p },
-          });
-        } catch (err) {
-          log.warn(
-            `[perf] instrumentation candidatesScanned failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-        // [Phase 7 PLAN B / per D-03] 阶段 5：generateCompileCommands 总耗时 — return 前
-        try {
-          perfLog.record({
-            event: 'compileCommands.totalElapsed',
-            elapsedMs: performance.now() - entryStart,
-            meta: { hit: true, outcome: 'found', ccPath: p },
-          });
-        } catch (err) {
-          log.warn(
-            `[perf] instrumentation totalElapsed (return) failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-        return p;
-      } else {
-        log.warn(
-          `[generateCompileCommands] ${p} exists but is empty (${stat.size} bytes), continuing search`,
-        );
+      } catch (cacheErr) {
+        // 写缓存失败：不阻塞主流程（per T-7-04 防御原则）
+        const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
+        log.warn(`[perf] failed to write compileCommands cache: ${msg}`);
       }
-    } catch {
-      // not here
     }
+
+    try {
+      perfLog.record({
+        event: 'compileCommands.candidatesScanned',
+        elapsedMs: performance.now() - candStart,
+        meta: { candidateCount: candidates.length, hit: true, ccPath: found },
+      });
+    } catch (err) {
+      log.warn(
+        `[perf] instrumentation candidatesScanned failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    // [Phase 7 PLAN B / per D-03] 阶段 5：generateCompileCommands 总耗时 — return 前
+    try {
+      perfLog.record({
+        event: 'compileCommands.totalElapsed',
+        elapsedMs: performance.now() - entryStart,
+        meta: { hit: true, outcome: 'found', ccPath: found },
+      });
+    } catch (err) {
+      log.warn(
+        `[perf] instrumentation totalElapsed (return) failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return found;
   }
 
   // candidates 全部未命中 — 记录扫描耗时（per D-03）
