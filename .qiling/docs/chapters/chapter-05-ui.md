@@ -3,10 +3,10 @@ chapter_id: "chapter-05"
 title: "控制面板与用户界面"
 feature: "ui"
 part: "第四篇 · 界面"
-generated_at: "2026-10-06T14:26:24.447Z"
-generated_by: "器灵工作流 v0.20.1 / ql-scan 功能域分章"
-ql_version: "0.20.1"
-last_mapped_commit: "cd18a09670d8398c5e65825166d9398370ce0093"
+generated_at: "2026-10-26T01:52:09.547Z"
+generated_by: "器灵工作流 v0.25.0 / ql-scan 功能域分章"
+ql_version: "0.25.0"
+last_mapped_commit: "92804b6fa547ed3e242e099236d5552069bc18e9"
 status: "scaffold"
 endpoints: 0
 events: 1
@@ -128,5 +128,5 @@ events: 1
 
 ## 附录 C · 数据来源与验证
 
-- **来源:** 能力条目由 `/ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
-- **变更日志:** 2026-10-06T14:26:24.447Z 由功能域分章初次生成(后续由 /ql-doc 随交付更新)。
+- **来源:** 能力条目由 `ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
+- **变更日志:** 2026-10-26T01:52:09.547Z 由功能域分章初次生成(后续由 ql-doc 随交付更新)。

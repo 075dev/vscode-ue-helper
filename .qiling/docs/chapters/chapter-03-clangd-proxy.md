@@ -3,10 +3,10 @@ chapter_id: "chapter-03"
 title: "clangd Proxy 代理"
 feature: "clangd-proxy"
 part: "第三篇 · IntelliSense"
-generated_at: "2026-10-06T14:26:24.447Z"
-generated_by: "器灵工作流 v0.20.1 / ql-scan 功能域分章"
-ql_version: "0.20.1"
-last_mapped_commit: "cd18a09670d8398c5e65825166d9398370ce0093"
+generated_at: "2026-10-26T01:52:09.547Z"
+generated_by: "器灵工作流 v0.25.0 / ql-scan 功能域分章"
+ql_version: "0.25.0"
+last_mapped_commit: "92804b6fa547ed3e242e099236d5552069bc18e9"
 status: "scaffold"
 endpoints: 0
 events: 0
@@ -114,12 +114,12 @@ events: 0
 
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
-| bugfix-003 | 2026-10-11 | `bridge.close()` 清空请求关联表(消除取消/崩溃导致的在途请求条目无界增长);删除 completion/signatureHelp/inlayHint 三个 no-op 本地化占位函数 | `.qiling/planning/bugfix/003-audit-fixes.md` |
 | 审计修复（19 条） | 2026-10-25 | 请求关联 key 加 client / server 命名空间,消除客户端与服务端同 id 时的响应串扰;未知 CLI 参数从「整进程退出」降级为 warning 并忽略 | `src/clangd/proxy/messages.ts`、`src/clangd/proxy/bridge.ts`、`src/clangd/proxy/cliArgs.ts`、`src/clangd/proxy/cli.ts` |
+| bugfix-003 | 2026-10-11 | `bridge.close()` 清空请求关联表(消除取消/崩溃导致的在途请求条目无界增长);删除 completion/signatureHelp/inlayHint 三个 no-op 本地化占位函数 | `.qiling/planning/bugfix/003-audit-fixes.md` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 
 ## 附录 C · 数据来源与验证
 
-- **来源:** 能力条目由 `/ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
-- **变更日志:** 2026-10-06T14:26:24.447Z 由功能域分章初次生成(后续由 /ql-doc 随交付更新)。
+- **来源:** 能力条目由 `ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
+- **变更日志:** 2026-10-26T01:52:09.547Z 由功能域分章初次生成(后续由 ql-doc 随交付更新)。

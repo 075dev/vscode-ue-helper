@@ -3,10 +3,10 @@ chapter_id: "chapter-04"
 title: "clangd 的 UE 支持"
 feature: "clangd-ue"
 part: "第三篇 · IntelliSense"
-generated_at: "2026-10-06T14:26:24.447Z"
-generated_by: "器灵工作流 v0.20.1 / ql-scan 功能域分章"
-ql_version: "0.20.1"
-last_mapped_commit: "cd18a09670d8398c5e65825166d9398370ce0093"
+generated_at: "2026-10-26T01:52:09.547Z"
+generated_by: "器灵工作流 v0.25.0 / ql-scan 功能域分章"
+ql_version: "0.25.0"
+last_mapped_commit: "92804b6fa547ed3e242e099236d5552069bc18e9"
 status: "scaffold"
 endpoints: 0
 events: 0
@@ -23,7 +23,7 @@ events: 0
 
 <!-- manual:syllabus -->
 <!-- auto:BEGIN -->
-- **本章你将学到:** clangd 的 UE 支持(clangd-ue)的功能怎么用——50 个源码文件、0 条能力入口(清单见 §三)。
+- **本章你将学到:** clangd 的 UE 支持(clangd-ue)的功能怎么用——54 个源码文件、0 条能力入口(清单见 §三)。
 - **前置章节:** 第 01 章(先让项目跑起来)。
 <!-- auto:END -->
 - **读法:** 查用 → 直接进 §三;想懂设计 → 看来源与证据。
@@ -58,8 +58,12 @@ events: 0
 
 - `src/clangd/AGENTS.md`
 - `src/clangd/clangdConfig.ts`
+- `src/clangd/clangdFlagRenderer.ts`
+- `src/clangd/clangdIndexCache.ts`
 - `src/clangd/clangdOps.ts`
+- `src/clangd/clangdYaml.ts`
 - `src/clangd/compileCommands/cache.ts`
+- `src/clangd/compileCommands/dbFile.ts`
 - `src/clangd/compileCommands/fillMissing.ts`
 - `src/clangd/compileCommands/symlink.ts`
 - `src/clangd/compileCommands/task.ts`
@@ -92,11 +96,7 @@ events: 0
 - `src/clangd/proxyManager.ts`
 - `src/clangd/types.ts`
 - `src/clangd/ueClangdCompat.ts`
-- `src/clangd/ueHelpers.ts`
-- `src/clangd/ueLinkManager.ts`
-- `src/clangd/ueMacroCompletionData.ts`
-- `src/clangd/ueMacroCompletionProvider.ts`
-…(共 50 个文件,已截断)
+…(共 54 个文件,已截断)
 
 ## 四、配置与限制
 
@@ -104,7 +104,7 @@ events: 0
 
 | 扩展名 | 文件数 |
 |--------|--------|
-| .ts | 47 |
+| .ts | 51 |
 | .md | 3 |
 
 ## 五、故障排查
@@ -116,7 +116,7 @@ events: 0
 
 <!-- manual:summary -->
 <!-- auto:BEGIN -->
-- 本章覆盖功能单元 clangd-ue:50 个文件、0 条能力入口。
+- 本章覆盖功能单元 clangd-ue:54 个文件、0 条能力入口。
 <!-- auto:END -->
 - 能力证据在 §三;本功能的"为什么"与使用心得欢迎写入本块。
 <!-- /manual:summary -->
@@ -131,18 +131,18 @@ events: 0
 
 ## 附录 A · 交付与开发留档
 
-- 功能域:clangd-ue(归属文件 50 个)· 来源:features.json 声明
+- 功能域:clangd-ue(归属文件 54 个)· 来源:features.json 声明
 
 ## 附录 B · 功能演进史
 
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
+| 审计修复（19 条） | 2026-10-25 | `.clangd` 改为多文档安全读写(保留注释);系统头路径持久化到设置项并由唯一渲染入口重建 flag 组;编译数据库候选顺序改为「项目本地 → helper 目录 → 引擎根」;补齐条目同步替换命令行源文件路径;新增源文件不再被指纹快路径吞掉;数据库改为一次原子写(紧凑格式),写入目标解析到 clangd 实际读取的那个文件;工作区备份按原文件名恢复并纳入 `launch.json` | `src/clangd/clangdYaml.ts`、`src/clangd/clangdFlagRenderer.ts`、`src/clangd/clangdOps.ts`、`src/clangd/compileCommands.ts`、`src/clangd/compileCommands/fillMissing.ts`、`src/clangd/compileCommands/dbFile.ts`、`src/clangd/workspaceBackup.ts` |
 | bugfix-003 | 2026-10-11 | `ClangdOps.mutate` 经队列串行化,修复并发调用(控制面板连点开关)后写覆盖先写的丢配置问题;回归测试锁定(stash 验证旧代码下真实失败) | `.qiling/planning/bugfix/003-audit-fixes.md` |
-| 审计修复（19 条） | 2026-10-25 | `.clangd` 改为多文档安全读写(保留注释);系统头路径持久化到设置项并由唯一渲染入口重建 flag 组;编译数据库候选顺序改为「项目本地 → helper 目录 → 引擎根」;补齐条目同步替换命令行源文件路径;新增源文件不再被指纹快路径吞掉;数据库改为一次原子写(紧凑格式);工作区备份按原文件名恢复并纳入 `launch.json` | `src/clangd/clangdYaml.ts`、`src/clangd/clangdFlagRenderer.ts`、`src/clangd/clangdOps.ts`、`src/clangd/compileCommands.ts`、`src/clangd/compileCommands/fillMissing.ts`、`src/clangd/compileCommands/dbFile.ts`、`src/clangd/workspaceBackup.ts` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 
 ## 附录 C · 数据来源与验证
 
-- **来源:** 能力条目由 `/ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
-- **变更日志:** 2026-10-06T14:26:24.447Z 由功能域分章初次生成(后续由 /ql-doc 随交付更新)。
+- **来源:** 能力条目由 `ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
+- **变更日志:** 2026-10-26T01:52:09.547Z 由功能域分章初次生成(后续由 ql-doc 随交付更新)。

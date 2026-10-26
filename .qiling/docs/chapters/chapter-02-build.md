@@ -3,10 +3,10 @@ chapter_id: "chapter-02"
 title: "UBT 构建与项目命令"
 feature: "build"
 part: "第二篇 · 构建与项目"
-generated_at: "2026-10-06T14:26:24.447Z"
-generated_by: "器灵工作流 v0.20.1 / ql-scan 功能域分章"
-ql_version: "0.20.1"
-last_mapped_commit: "cd18a09670d8398c5e65825166d9398370ce0093"
+generated_at: "2026-10-26T01:52:09.547Z"
+generated_by: "器灵工作流 v0.25.0 / ql-scan 功能域分章"
+ql_version: "0.25.0"
+last_mapped_commit: "92804b6fa547ed3e242e099236d5552069bc18e9"
 status: "scaffold"
 endpoints: 0
 events: 0
@@ -23,7 +23,7 @@ events: 0
 
 <!-- manual:syllabus -->
 <!-- auto:BEGIN -->
-- **本章你将学到:** UBT 构建与项目命令(build)的功能怎么用——37 个源码文件、27 条能力入口(清单见 §三)。
+- **本章你将学到:** UBT 构建与项目命令(build)的功能怎么用——38 个源码文件、28 条能力入口(清单见 §三)。
 - **前置章节:** 第 01 章(先让项目跑起来)。
 <!-- auto:END -->
 - **读法:** 查用 → 直接进 §三;想懂设计 → 看来源与证据。
@@ -37,7 +37,7 @@ events: 0
 
 | 能力 | 数量 | 明细 |
 |------|------|------|
-| VSCode 命令注册(track 包装) | 27 | [§3](#三使用说明) |
+| VSCode 命令注册(track 包装) | 28 | [§3](#三使用说明) |
 
 **功能说明:** UBT 编译/清理/重建、Live Coding 热重载、UE 项目创建/检测/诊断与规则安装
 <!-- auto:END -->
@@ -59,7 +59,7 @@ events: 0
 - VSCode 命令注册(track 包装):`vscodeUEHelper.liveCoding`
 - VSCode 命令注册(track 包装):`vscodeUEHelper.generateCompileCommands`
 - VSCode 命令注册(track 包装):`vscodeUEHelper.diagnoseProject`
-…共 27 条
+…共 28 条
 
 <!-- auto:END -->
 
@@ -72,38 +72,40 @@ events: 0
 
 | 类型 | 标识 | 证据(文件:行) |
 |------|------|------------------|
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.showProjectInfo` | `src/commands/index.ts:59` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.build` | `src/commands/index.ts:62` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.rebuild` | `src/commands/index.ts:65` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.clean` | `src/commands/index.ts:68` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.launchEditor` | `src/commands/index.ts:71` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.liveCoding` | `src/commands/index.ts:74` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.generateCompileCommands` | `src/commands/index.ts:77` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.diagnoseProject` | `src/commands/index.ts:87` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.createProject` | `src/commands/index.ts:90` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.installRules` | `src/commands/index.ts:93` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.uninstall` | `src/commands/index.ts:94` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.setSystemIncludes` | `src/commands/index.ts:95` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.openWorkspaceFile` | `src/commands/index.ts:98` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.openTerminalInNewWindow` | `src/commands/index.ts:99` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.selectConfig` | `src/commands/index.ts:102` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.selectTarget` | `src/commands/index.ts:103` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.enableClangdProxy` | `src/commands/index.ts:104` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.disableClangdProxy` | `src/commands/index.ts:105` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.showClangdProxyStatus` | `src/commands/index.ts:108` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.showControlPanel` | `src/commands/index.ts:111` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.copyBuildCommand` | `src/commands/index.ts:114` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.noLintCurrentLine` | `src/commands/index.ts:118` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.noLintNextLine` | `src/commands/index.ts:121` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.switchHeaderSource` | `src/commands/index.ts:126` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.retryFirstTimeInit` | `src/commands/index.ts:143` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.refreshProjectExplorer` | `src/commands/index.ts:150` |
-| VSCode 命令注册(track 包装) | `vscodeUEHelper.openProjectExplorerFile` | `src/commands/index.ts:153` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.showProjectInfo` | `src/commands/index.ts:60` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.build` | `src/commands/index.ts:63` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.rebuild` | `src/commands/index.ts:66` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.clean` | `src/commands/index.ts:69` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.launchEditor` | `src/commands/index.ts:72` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.liveCoding` | `src/commands/index.ts:75` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.generateCompileCommands` | `src/commands/index.ts:78` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.diagnoseProject` | `src/commands/index.ts:88` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.clearClangdIndex` | `src/commands/index.ts:93` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.createProject` | `src/commands/index.ts:94` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.installRules` | `src/commands/index.ts:97` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.uninstall` | `src/commands/index.ts:98` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.setSystemIncludes` | `src/commands/index.ts:99` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.openWorkspaceFile` | `src/commands/index.ts:102` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.openTerminalInNewWindow` | `src/commands/index.ts:103` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.selectConfig` | `src/commands/index.ts:106` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.selectTarget` | `src/commands/index.ts:107` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.enableClangdProxy` | `src/commands/index.ts:108` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.disableClangdProxy` | `src/commands/index.ts:109` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.showClangdProxyStatus` | `src/commands/index.ts:112` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.showControlPanel` | `src/commands/index.ts:115` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.copyBuildCommand` | `src/commands/index.ts:118` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.noLintCurrentLine` | `src/commands/index.ts:122` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.noLintNextLine` | `src/commands/index.ts:125` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.switchHeaderSource` | `src/commands/index.ts:130` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.retryFirstTimeInit` | `src/commands/index.ts:147` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.refreshProjectExplorer` | `src/commands/index.ts:154` |
+| VSCode 命令注册(track 包装) | `vscodeUEHelper.openProjectExplorerFile` | `src/commands/index.ts:157` |
 
 ### 3.2 归属文件
 
 - `src/commands/AGENTS.md`
 - `src/commands/build.ts`
+- `src/commands/clearClangdIndex.ts`
 - `src/commands/copyBuildCommand.ts`
 - `src/commands/createProject.ts`
 - `src/commands/diagnoseProject.ts`
@@ -146,7 +148,7 @@ events: 0
 
 | 扩展名 | 文件数 |
 |--------|--------|
-| .ts | 34 |
+| .ts | 35 |
 | .md | 3 |
 
 ## 五、故障排查
@@ -158,7 +160,7 @@ events: 0
 
 <!-- manual:summary -->
 <!-- auto:BEGIN -->
-- 本章覆盖功能单元 build:37 个文件、27 条能力入口。
+- 本章覆盖功能单元 build:38 个文件、28 条能力入口。
 <!-- auto:END -->
 - 能力证据在 §三;本功能的"为什么"与使用心得欢迎写入本块。
 <!-- /manual:summary -->
@@ -173,7 +175,7 @@ events: 0
 
 ## 附录 A · 交付与开发留档
 
-- 功能域:build(归属文件 37 个)· 来源:features.json 声明
+- 功能域:build(归属文件 38 个)· 来源:features.json 声明
 
 ## 附录 B · 功能演进史
 
@@ -185,5 +187,5 @@ events: 0
 
 ## 附录 C · 数据来源与验证
 
-- **来源:** 能力条目由 `/ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
-- **变更日志:** 2026-10-06T14:26:24.447Z 由功能域分章初次生成(后续由 /ql-doc 随交付更新)。
+- **来源:** 能力条目由 `ql-scan` 提取器按惯例反推,每条带 `文件:行号`;功能域划分来自`features.json` 清单声明。
+- **变更日志:** 2026-10-26T01:52:09.547Z 由功能域分章初次生成(后续由 ql-doc 随交付更新)。

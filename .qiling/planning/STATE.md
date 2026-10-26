@@ -25,7 +25,11 @@ last_activity: >-
   真缺陷)当场修复 + O1(写盘目标参数改必填)+ 回归网补强端到端用例。
   19 条缺陷判定:已修复 19 / 部分修复 0 / 未修复 0。
   最终回归 typecheck 0 错 / lint 0 errors 61 warnings / vitest 127 文件 1553
-  用例全绿 / build 成功。工作区未提交,尚未推送
+  用例全绿 / build 成功。
+  已交付:提交 92804b6 → 推送 add/004-auto-refresh-compile-commands → PR #3
+  (https://github.com/075dev/vscode-ue-helper/pull/3,base=main)→ 章节留档重扫
+  (docsmap --force,16 断言全过),机器节数字刷新为 28 命令 / 10 MCP 工具,
+  附录 B 演进史按「只增不清」重新追加
 ---
 # 项目状态
 
