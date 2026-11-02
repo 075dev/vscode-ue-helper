@@ -10,6 +10,7 @@ node_modules/**
 src/**
 tsconfig.json
 tsconfig.test.json
+tsconfig.e2e.json
 esbuild.config.mjs
 vitest.config.ts
 .eslintrc.json
@@ -24,7 +25,13 @@ CLAUDE.md
 .omp/**
 .specify/**
 .serena/**
-.planning/**
+.qiling/**
+.zcode/**
+.tmp/**
+.tsc-e2e/**
+.mcp.json
+features.json
+patterns.json
 .hermes/**
 .codegraph/**
 .code-review-graph/**
