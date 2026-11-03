@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
 import { triggerLiveCoding, isLiveCodingSupported } from '@build';
+import { tryLockBuild, unlockBuild } from '@build/lock';
 import { t } from '@i18n';
 import { withProgress } from '@ui/notifications';
 import type { DetectionHandles } from '@detection';
@@ -34,6 +35,11 @@ export async function executeLiveCoding(
   workspace?: WorkspaceState,
   // [Phase 11 SSoT] silent = true 时跳过 auto-pick / picker，供 MCP tools 调用
   silent: boolean = false,
+  // [D16] 调用方已持有构建锁时置 true。
+  //
+  // build 的「编辑器运行中 → 转发 Live Coding」路径由 executeBuild 触发,
+  // 那里已经持有同一把锁 —— 不标记的话这里会把自己拒绝掉。
+  alreadyLocked: boolean = false,
   // [Wave2 envelope 对齐] 运行时契约:resolve 为 Envelope(D5)——不可用/失败 →
   // errEnvelope(契约全局错误码),成功 → okEnvelope(summary 复用现有文案,data 恒为空)。
   // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
@@ -44,8 +50,21 @@ export async function executeLiveCoding(
     return errEnvelope(EC_LIVE_CODING_UNAVAILABLE, t('liveCoding.windowsOnly'));
   }
 
-  // 选目标 + 触发放在同一 progress 内，避免解析阶段无反馈像"卡住"
-  return await withProgress(t('liveCoding.running'), async (report, token): Promise<Envelope<undefined>> => {
+  // [D16] Live Coding 也是 spawn UBT —— 与全量构建共用互斥锁。
+  // 两个 UBT 并发时 UHT 代码生成阶段会交叉写 Intermediate/Build 下的
+  // .generated.h,表现为随机出现的 "unknown type name 'FID_...'" 假诊断。
+  //
+  // 与 executeBuild 一致:在入口检查并占锁,被占用时**快速拒绝**
+  // (不做无用的项目/引擎解析)。alreadyLocked=true 时跳过 —— 那是
+  // build 的「编辑器运行中 → 转发 Live Coding」路径,锁已由外层持有。
+  if (!alreadyLocked && !tryLockBuild()) {
+    void vscode.window.showInformationMessage(t('cmd.buildInFlight'));
+    return errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildInFlight'));
+  }
+
+  try {
+    // 选目标 + 触发放在同一 progress 内，避免解析阶段无反馈像"卡住"
+    return await withProgress(t('liveCoding.running'), async (report, token): Promise<Envelope<undefined>> => {
     // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
     report('Resolving project / engine...');
     const project = await resolveProjectOrPick({
@@ -71,6 +90,7 @@ export async function executeLiveCoding(
     await persistSelection(workspace, detection, undefined, engine);
 
     logger.info(`[liveCoding] triggering for ${project.name} on ${engine.version}`);
+
     try {
       report('Running UBT Live Coding compile...');
       // Bridge VS Code's CancellationToken to a Web AbortSignal so runBuild
@@ -119,5 +139,11 @@ export async function executeLiveCoding(
       void vscode.window.showErrorMessage(t('liveCoding.failed', { 0: msg }));
       return errEnvelope(EC_INTERNAL_ERROR, msg);
     }
-  });
+    });
+  } finally {
+    // [D16] 释放构建锁 —— alreadyLocked 时锁由外层(build)持有,不能在这里释放。
+    if (!alreadyLocked) {
+      unlockBuild();
+    }
+  }
 }

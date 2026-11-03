@@ -50,7 +50,7 @@ VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 7. activateBuild(...)          ← UBT Task Provider
 8. activateClangd(...)         ← 状态栏 / 备份 / completion mode / 代理
 9. activateUI(...)             ← 8 个主状态栏按钮，await detection.ready
-10. activateCommands(...)      ← 21 个命令（依赖全部 handles）
+10. activateCommands(...)      ← 28 个命令（依赖全部 handles）
 11. ControlPanelProvider.register(...)
 12. runFirstTimeInit(...)      ← fire-and-forget，首次使用弹 Initialize
 ```
@@ -162,8 +162,9 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 并行：
 
 ```
-MCP Server ──► tools.ts (6 个工具: ue_build / ue_launch_editor / ue_live_coding /
-                       ue_generate_compile_commands / ue_show_project_info / ue_set_system_includes)
+MCP Server ──► tools.ts (10 个工具: ue_build / ue_rebuild / ue_clean / ue_get_build_errors /
+                       ue_launch_editor / ue_live_coding / ue_generate_compile_commands /
+                       ue_show_project_info / ue_set_system_includes / ue_status)
                   └─► callTool 派发到真实 executeXxx（fire-and-forget，非 stub）
 ```
 
@@ -192,7 +193,7 @@ extension.ts
 | `vscodeUEHelper.*` 配置     | VS Code settings.json（workspace scope）                   | `Config` getter/setter   |
 | 用户选择的 engine / project | `.code-workspace` 的 `settings.vscodeUEHelper.*`           | `WorkspaceContext`       |
 | 首次初始化标记              | `.code-workspace` 的 `settings.vscodeUEHelper.initialized` | `firstRunInit.ts` 原子写 |
-| 备份 `.code-workspace`      | `.vscode/.code-workspace.backup`（gitignore）              | `WorkspaceBackup`        |
+| 备份 `.code-workspace` / `launch.json` | `.vscode/uehelper-backup/<原文件名>`（gitignore）            | `WorkspaceBackup`        |
 | UBT 解析缓存 / 编译数据库   | `.vscode/vscodeuehelper/`（gitignore）                     | `compileCommands*`       |
 
 ## 关键不变式（破坏会导致 bug）

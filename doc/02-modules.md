@@ -116,9 +116,8 @@ export interface DetectionResult {
 | `buildRunner.ts`  | 实际跑 UBT 进程（用 `execa`），流式 stdout/stderr，把 MSVC 诊断推到 Problems 面板                                                                   |
 | `taskProvider.ts` | `UBTTaskProvider` 实现 `vscode.TaskProvider` 接口，提供 `ue` 类型任务                                                                               |
 | `liveCoding.ts`   | 触发 UE Live Coding 热重载（仅 Windows + MSVC）                                                                                                     |
-| `launchEditor.ts` | 启动 Unreal Editor —— **注**：实现按平台分支（cmd / open / exec），但按宪法 I 产品仅承诺 Windows 支持                                               |
+| `launchEditor.ts` | 启动 Unreal Editor —— **Windows-only**：直接 `spawn` `UnrealEditor.exe`（不经 shell；路径含空格或 `&` 也能正确启动）                                               |
 | `types.ts`        | `UBTArgs` / `UBTCommand` / `BuildResult` / `ParsedDiagnostic`                                                                                       |
-| `domain/`         | DDD 参考目录（实体 / value-objects / repositories 的最小示例），当前并非业务分层落地点；按宪法 V 不引入 `application/` / `infrastructure/` 等空壳层 |
 
 ### 关键类型
 
@@ -170,7 +169,7 @@ export interface ParsedDiagnostic {
 | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `clangdConfig.ts`                                                                               | 写/读 `.clangd`（YAML）；`defaultClangdConfig` + `renderClangdConfig`                                                |
 | `clangdOps.ts`                                                                                  | **`ClangdOps` 类（Phase 8 统一 API）** —— `readConfig` / `exists` / `writeFull` / `mutate` / `applyAddFlags`         |
-| `compileCommands.ts`                                                                            | 跑 UBT `-ProjectFiles` 生成 `compile_commands.json`，符号链接到工作区根                                              |
+| `compileCommands.ts`                                                                            | 跑 UBT `-ProjectFiles` 生成 `compile_commands.json`，链接到 helper 目录（`.vscode/vscodeuehelper`）—— symlink 失败时回退为独立副本（Windows 默认状态）                                              |
 | `compileCommandsCache.ts` / `compileCommandsFallback.ts`                                        | 缓存、fallback                                                                                                       |
 | `completionMode.ts`                                                                             | 统一 slow 的 `.clangd` 重写控制器；无状态栏 toggle，内部兼容 API 保留                                                |
 | `completionFiles.ts`                                                                            | 创建 `.vscode/vscodeuehelper/` 下的补全 helper 文件                                                                  |
@@ -281,7 +280,7 @@ const MSVC_RE = /^(.*?)\((\d+)(?:,(\d+))?\)\s*:\s*(error|warning|note|fatal erro
 ('^(.*)\\((\\d+)(?:,(\\d+))?\\):\\s+(error|warning|note|fatal error)\\s+([A-Z]+\\d+):\\s+(.*)$');
 ```
 
-## 6. `src/commands/` —— 21 个 VS Code 命令
+## 6. `src/commands/` —— 28 个 VS Code 命令
 
 依赖 `@core` / `@detection` / `@clangd` / `@ui` / `@i18n`。完整命令列表见 `package.json#contributes.commands`，下面是分组速查。
 
@@ -331,6 +330,18 @@ const MSVC_RE = /^(.*?)\((\d+)(?:,(\d+))?\)\s*:\s*(error|warning|note|fatal erro
 | `vscodeUEHelper.refreshProjectExplorer`  | `refreshProjectExplorer.ts`  | 刷新项目目录树（项目资源管理器右键 + 工具栏 `view/title`） |
 | `vscodeUEHelper.openProjectExplorerFile` | `openProjectExplorerFile.ts` | 打开项目目录树中选中的文件                                 |
 
+**工具与辅助**
+
+| 命令 ID                                  | 实现文件                   | 功能                                                     |
+| ---------------------------------------- | -------------------------- | -------------------------------------------------------- |
+| `vscodeUEHelper.clearClangdIndex`        | `clearClangdIndex.ts`      | 清理 clangd 索引缓存（索引损坏 / 与引擎版本不匹配时）    |
+| `vscodeUEHelper.copyBuildCommand`        | `copyBuildCommand.ts`      | 复制当前 UBT 命令行到剪贴板                              |
+| `vscodeUEHelper.noLintCurrentLine`       | `noLint.ts`                | 行尾追加 `// NOLINT`（编辑器右键菜单）                  |
+| `vscodeUEHelper.noLintNextLine`          | `noLint.ts`                | 上方插入 `// NOLINTNEXTLINE`                             |
+| `vscodeUEHelper.switchHeaderSource`      | `switchHeaderSource.ts`    | 头文件 / 源文件确定性互跳                                 |
+| `vscodeUEHelper.openTerminalInNewWindow` | `openTerminalInNewWindow.ts` | 在新终端窗口打开                                        |
+| `vscodeUEHelper.retryFirstTimeInit`      | `firstRunInit.ts`          | 重跑首次初始化引导                                       |
+
 注：completionMode 自 H4-B 后已废弃，`toggleCompletionMode` 不再作为命令暴露；`CompletionModeController` 仅承载 `.clangd` 重写，状态栏不提供 fast/slow 切换。
 
 ## 7. `src/ui/` —— 用户界面
@@ -362,19 +373,23 @@ const MSVC_RE = /^(.*?)\((\d+)(?:,(\d+))?\)\s*:\s*(error|warning|note|fatal erro
 | 文件           | 职责                                                                              |
 | -------------- | --------------------------------------------------------------------------------- |
 | `server.ts`    | `MCPServer` 类：包装 `@modelcontextprotocol/sdk` 的 Server + StdioServerTransport |
-| `tools.ts`     | `MCP_TOOLS` 6 个工具定义 + `callTool` 派发                                        |
+| `tools.ts`     | `MCP_TOOLS` 10 个工具定义 + `callTool` 派发                                       |
 | `lifecycle.ts` | `shouldStartMCP` / `detectHost`（环境变量判断）                                   |
 
-### 6 个 MCP 工具
+### 10 个 MCP 工具
 
 | 工具名                         | 功能                                                                                   |
 | ------------------------------ | -------------------------------------------------------------------------------------- |
-| `ue_build`                     | UBT 构建（mode: build / rebuild / clean）                                              |
+| `ue_build`                     | UBT 构建（mode: build；支持可选 `module` 单模块编译）                                 |
+| `ue_rebuild`                   | UBT 重建                                                                                |
+| `ue_clean`                     | UBT 清理                                                                                |
+| `ue_get_build_errors`          | 读最近一次构建的结构化诊断（同步；构建进行中返回 `reason: 'build-in-progress'`）        |
 | `ue_launch_editor`             | 启动 Unreal Editor                                                                     |
 | `ue_live_coding`               | Live Coding 热重载（Windows only）                                                     |
 | `ue_generate_compile_commands` | 生成 `compile_commands.json`                                                           |
 | `ue_show_project_info`         | 返回检测结果                                                                           |
-| `ue_set_system_includes`       | 设置 Windows MSVC + Win SDK 头（Windows only，H4-B 后由 ClangdOps.applyAddFlags 写入） |
+| `ue_set_system_includes`       | 设置 Windows MSVC + Win SDK 头（Windows only，由统一渲染入口写入 `.clangd`）           |
+| `ue_status`                    | 返回项目 / 引擎 / 当前构建配置 + UE 版本能力矩阵（同步）                               |
 
 **`callTool` 派发**：`src/mcp/tools.ts:callTool(name, args)` 同步返回 `{ok, dispatched}`，内部 `dispatch(executeXxx(config, logger, detection, workspace, ..., silent=true), name)` 把工具调用派发到对应 `commands/*:executeXxx`，fire-and-forget，真实进度通过 `Logger` + Output 通道 + Problems 面板回报。不存在 stub 形态 —— `ue_toggle_completion_mode` 已删除（fast/slow 已合并）。
 

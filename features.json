@@ -1,0 +1,38 @@
+[
+  {
+    "feature": "build",
+    "title": "UBT 构建与项目命令",
+    "part": "第二篇 · 构建与项目",
+    "description": "UBT 编译/清理/重建、Live Coding 热重载、UE 项目创建/检测/诊断与规则安装",
+    "include": ["src/build/**", "src/commands/**", "src/detection/**", "src/rules/**"]
+  },
+  {
+    "feature": "clangd-proxy",
+    "title": "clangd Proxy 代理",
+    "part": "第三篇 · IntelliSense",
+    "description": "clangd 代理进程管理、热重载桥接与 UE 兼容层——让 clangd 在 UE 工程里稳定工作",
+    "include": ["src/clangd/proxy/**"]
+  },
+  {
+    "feature": "clangd-ue",
+    "title": "clangd 的 UE 支持",
+    "part": "第三篇 · IntelliSense",
+    "description": "compile_commands 生成与回退、UE 宏与补全文件、头源切换、UE 链接管理——UE C++ 的 IntelliSense 全套支持",
+    "include": ["src/clangd/**", "src/parsers/**"],
+    "exclude": ["src/clangd/proxy/**"]
+  },
+  {
+    "feature": "ui",
+    "title": "控制面板与用户界面",
+    "part": "第四篇 · 界面",
+    "description": "控制面板、项目资源管理器、状态栏、通知与问题面板",
+    "include": ["src/ui/**"]
+  },
+  {
+    "feature": "mcp",
+    "title": "MCP AI 工具集成",
+    "part": "第五篇 · AI 集成",
+    "description": "面向 AI agent 的 MCP 工具(ue_build / ue_rebuild / ue_get_build_errors 等),把构建能力暴露给 AI 编码助手",
+    "include": ["src/mcp/**", ".mcp.json"]
+  }
+]

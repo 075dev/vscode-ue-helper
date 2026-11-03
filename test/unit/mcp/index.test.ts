@@ -22,6 +22,8 @@ const mockDetectHost = vi.fn<[], 'cursor' | 'claude-code' | null>();
 const mockMCPServerStart = vi.fn<[], Promise<void>>();
 const mockMCPServerStop = vi.fn<[], Promise<void>>();
 const mockSetMCPContext = vi.fn<[unknown], void>();
+// [D7] MCP 启动时必须关闭 logger 的 console 输出(stdout 会被 JSON-RPC 帧占用)
+const mockSetConsoleEnabled = vi.fn<[boolean], void>();
 
 vi.mock('../../../src/mcp/lifecycle', async () => {
   const actual = await vi.importActual<typeof import('../../../src/mcp/lifecycle')>(
@@ -77,6 +79,8 @@ function stubLogger(): Logger {
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
+    // [D7] activateMCP 在 MCP 启动时关闭 console 输出
+    setConsoleEnabled: (enabled: boolean) => mockSetConsoleEnabled(enabled),
   } as unknown as Logger;
 }
 
@@ -98,6 +102,7 @@ beforeEach(() => {
   mockMCPServerStart.mockReset();
   mockMCPServerStop.mockReset();
   mockSetMCPContext.mockReset();
+  mockSetConsoleEnabled.mockReset();
   vi.mocked(MCPServer).mockClear();
 });
 
@@ -181,6 +186,52 @@ describe('activateMCP start path', () => {
     expect(result.host).toBe('claude-code');
     expect(mockSetMCPContext).toHaveBeenLastCalledWith(null);
   });
+
+  // ============ [D7] MCP 启动时关闭 console 输出(stdout 被 JSON-RPC 帧占用) ============
+
+  it('[D7] MCP 启动时关闭 logger console 输出', async () => {
+    mockDetectHost.mockReturnValue('cursor');
+    mockShouldStartMCP.mockReturnValue(true);
+    mockMCPServerStart.mockResolvedValue();
+
+    await activateMCP(
+      stubContext() as unknown as Parameters<typeof activateMCP>[0],
+      stubConfig(),
+      stubLogger(),
+      stubDetection(),
+    );
+
+    expect(mockSetConsoleEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('[D7] MCP 启动失败时恢复 console 输出', async () => {
+    mockDetectHost.mockReturnValue('cursor');
+    mockShouldStartMCP.mockReturnValue(true);
+    mockMCPServerStart.mockRejectedValue(new Error('boom'));
+
+    await activateMCP(
+      stubContext() as unknown as Parameters<typeof activateMCP>[0],
+      stubConfig(),
+      stubLogger(),
+      stubDetection(),
+    );
+
+    expect(mockSetConsoleEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it('[D7] 非 MCP 宿主不改动 console 开关', async () => {
+    mockDetectHost.mockReturnValue(null);
+    mockShouldStartMCP.mockReturnValue(false);
+
+    await activateMCP(
+      stubContext() as unknown as Parameters<typeof activateMCP>[0],
+      stubConfig(),
+      stubLogger(),
+      stubDetection(),
+    );
+
+    expect(mockSetConsoleEnabled).not.toHaveBeenCalled();
+  });
 });
 
 describe('dispose subscription', () => {
@@ -207,5 +258,7 @@ describe('dispose subscription', () => {
 
     expect(mockSetMCPContext).toHaveBeenLastCalledWith(null);
     expect(mockMCPServerStop).toHaveBeenCalledTimes(1);
+    // [D7] dispose 时恢复 console 输出
+    expect(mockSetConsoleEnabled).toHaveBeenLastCalledWith(true);
   });
 });

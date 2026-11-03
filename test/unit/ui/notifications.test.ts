@@ -57,7 +57,7 @@ describe('withProgress', () => {
 
   it('默认把 Window 位置与 cancellable 传给 withProgress', async () => {
     mockSetting(undefined);
-    const result = await withProgress('fake title', async () => 42);
+    const result = await withProgress('fake title', () => Promise.resolve(42));
 
     expect(result).toBe(42);
     const opts = (vscode.window.withProgress as unknown as ReturnType<typeof vi.fn>).mock
@@ -70,7 +70,7 @@ describe('withProgress', () => {
   it('配置 notification 时位置透传为 Notification', async () => {
     mockSetting('notification');
 
-    await withProgress('t', async () => undefined);
+    await withProgress('t', () => Promise.resolve(undefined));
 
     const opts = (vscode.window.withProgress as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0]![0] as { location: number };
@@ -81,8 +81,9 @@ describe('withProgress', () => {
     mockSetting(undefined);
     let capturedReport: ((msg: string, increment?: number) => void) | undefined;
 
-    await withProgress('t', async (report) => {
+    await withProgress('t', (report) => {
       capturedReport = report;
+      return Promise.resolve();
     });
 
     // setup.ts 的 withProgress mock 立即执行 task 并注入 {report: vi.fn()}

@@ -28,6 +28,8 @@ import type * as vscode from 'vscode';
 import { type Logger } from '@core/logger';
 import { type WorkspaceState } from '@core/workspace';
 import { type ClangdConfig } from './types';
+// [D3] .clangd 多文档 YAML 原语 —— 解析 / 合并 / 渲染
+import { mergeConfigIntoDoc, parseClangdDocs, renderClangdDocs } from './clangdYaml';
 // [Phase 9 SSoT] clangdOps 内部使用 clangdConfig（仅 defaultClangdConfig + renderClangdConfig——fs 写由本类 _atomicWrite 单一处理）
 // eslint-disable-next-line no-restricted-imports
 import { type ClangdConfigOptions, defaultClangdConfig, renderClangdConfig } from './clangdConfig';
@@ -50,6 +52,13 @@ export type ClangdMutateResult =
 export class ClangdOps implements vscode.Disposable {
   constructor(private readonly opts: ClangdOpsOptions) {}
 
+  /**
+   * [审计 F2] mutate 串行化队列:mutate 是 read-modify-write,两次并发调用
+   * (控制面板连点两个开关)会在彼此写回前读到同一份旧内容,后写者覆盖先写者。
+   * 所有 mutate 排队执行,保证单事务语义。
+   */
+  private mutateQueue: Promise<unknown> = Promise.resolve();
+
   /** 是否已 dispose（幂等标记，ClangdOps 自身无内部资源） */
   private _disposed = false;
 
@@ -66,6 +75,13 @@ export class ClangdOps implements vscode.Disposable {
 
   /**
    * 读取当前 .clangd 解析为 ClangdConfig
+   *
+   * [D3] **多文档安全** —— `.clangd` 是 YAML stream，`---` 分隔的多个配置块
+   * 是 clangd 的官方能力（按目录深度叠加）。旧实现用 `yaml.parse()`，遇到第二
+   * 个文档直接抛 "Source contains multiple documents" → readConfig 永远返回
+   * null。现在用 `parseAllDocuments` 取**第一个 map 文档**（承载 CompileFlags
+   * 的主文档），其余文档原样保留、不参与读取。
+   *
    * @returns ClangdConfig 或 null（路径不存在 / YAML 解析失败）
    */
   async readConfig(): Promise<ClangdConfig | null> {
@@ -77,18 +93,24 @@ export class ClangdOps implements vscode.Disposable {
     if (text === null) {
       return null;
     }
-    try {
-      const parsed: unknown = yaml.parse(text);
-      if (!parsed || typeof parsed !== 'object') {
-        return null;
-      }
-      return parsed as ClangdConfig;
-    } catch (err) {
+    const parsed = parseClangdDocs(text);
+    if (parsed.error) {
       this.logger.warn(
-        `[clangdOps] readConfig failed: ${err instanceof Error ? err.message : String(err)}`,
+        `[clangdOps] readConfig failed: ${
+          parsed.error instanceof Error ? parsed.error.message : String(parsed.error)
+        }`,
       );
       return null;
     }
+    const main = parsed.docs[parsed.mainIndex];
+    if (!main) {
+      return null;
+    }
+    const value: unknown = main.toJS();
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+    return value as ClangdConfig;
   }
 
   /**
@@ -176,6 +198,18 @@ export class ClangdOps implements vscode.Disposable {
    * ```
    */
   async mutate(mutator: (ctx: ClangdMutatorContext) => void): Promise<ClangdMutateResult> {
+    // 排队执行:前一个 mutate(含写回)完成后才开始下一次读
+    const run = this.mutateQueue.then(
+      () => this.runMutate(mutator),
+      // 前一个失败不阻塞后续:吞掉 rejection,本轮重新读文件
+      () => this.runMutate(mutator),
+    );
+    // 队列本身永不 reject(错误由 runMutate 捕获并转为结果),失败也已被上一行吸收
+    this.mutateQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async runMutate(mutator: (ctx: ClangdMutatorContext) => void): Promise<ClangdMutateResult> {
     const target = this.workspace.clangdConfigPath;
     if (!target) {
       return { ok: false, reason: 'no-config-path' };
@@ -183,32 +217,57 @@ export class ClangdOps implements vscode.Disposable {
 
     try {
       // 读取或初始化
-      let text: string;
+      let docs: yaml.Document[];
+      /** 磁盘上的原始文本（null = 文件不存在）。用于「内容未变则不重写」判定。 */
+      let originalText: string | null = null;
       try {
-        text = await fs.readFile(target, 'utf-8');
+        originalText = await fs.readFile(target, 'utf-8');
+        // [D3] 多文档安全解析：语法错误走 parse-failed，**多文档不报错**
+        const parsed = parseClangdDocs(originalText);
+        if (parsed.error) {
+          this.logger.error(
+            `[clangdOps] mutate parse failed: ${
+              parsed.error instanceof Error ? parsed.error.message : String(parsed.error)
+            }`,
+          );
+          return { ok: false, reason: 'parse-failed', error: parsed.error };
+        }
+        docs = parsed.docs;
       } catch {
         // 文件不存在 → 用 defaultClangdConfig 初始化
-        text = renderClangdConfig(defaultClangdConfig({ projectPath: undefined }));
+        docs = [new yaml.Document(defaultClangdConfig({ projectPath: undefined }))];
+      }
+
+      // [D3] 主文档 = 第一个 map 文档（承载 CompileFlags）。其余文档是用户
+      // 手写的 per-directory 配置，**原样保留**，写回时一并输出。
+      let mainDoc = docs.find((doc) => yaml.isMap(doc.contents));
+      if (!mainDoc) {
+        mainDoc = new yaml.Document(defaultClangdConfig({ projectPath: undefined }));
+        docs.unshift(mainDoc);
       }
 
       // 解析
-      let parsed: unknown;
-      try {
-        parsed = yaml.parse(text);
-      } catch (err) {
-        this.logger.error(
-          `[clangdOps] mutate parse failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return { ok: false, reason: 'parse-failed', error: err };
-      }
-
-      const config = (parsed && typeof parsed === 'object' ? parsed : {}) as ClangdConfig;
+      const parsedValue: unknown = mainDoc.toJS();
+      const config = (parsedValue && typeof parsedValue === 'object'
+        ? parsedValue
+        : {}) as ClangdConfig;
 
       // 应用 mutator
       mutator({ config });
 
+      // [D3] 写回：把 config **递归合并**进主文档 —— 未变动的子树（含注释）
+      // 原样保留，用户手写的注释不会因为扩展改一次配置就消失。
+      mergeConfigIntoDoc(mainDoc, config as unknown as Record<string, unknown>);
+
       // 写回
-      const newText = renderClangdConfig(config);
+      const newText = renderClangdDocs(docs);
+      // [D5] 内容未变则不重写 —— 统一入口下「面板保存」与「配置变更监听」会
+      // 各触发一次写入，第二次是同一份内容。这里跳过，避免无谓的磁盘写与
+      // mtime 抖动（clangd 会因 mtime 变化重建索引）。
+      if (originalText !== null && newText === originalText) {
+        this.logger.info('[clangdOps] mutate skipped (content unchanged)');
+        return { ok: true };
+      }
       await this._atomicWrite(target, newText);
       this.logger.info('[clangdOps] mutate committed');
       return { ok: true };

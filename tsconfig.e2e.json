@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": ".tsc-e2e",
+    "rootDir": "test/e2e",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": false,
+    "declarationMap": false,
+    "noEmitOnError": true
+  },
+  "include": ["test/e2e/**/*.ts"]
+}

@@ -20,7 +20,15 @@ import { type Config } from '@core/config';
 import { t } from '@i18n';
 import { runBuild, buildUBTCommand, resolveUBTPath, resolveUBTTarget } from '@build';
 import { isUnrealEditorRunning, shouldSuggestLiveCoding } from '@build/editorDetect';
-import { rememberBuildSnapshot } from '@build/lastBuild';
+import { tryLockBuild, unlockBuild } from '@build/lock';
+import {
+  rememberBuildSnapshot,
+  getLastBuildSnapshot,
+  newBuildId,
+  markBuildInProgress,
+  clearBuildInProgress,
+  type LastBuildSnapshot,
+} from '@build/lastBuild';
 import { pushDiagnostics, clearDiagnostics } from '@ui/problemsPanel';
 import { withProgress } from '@ui/notifications';
 import { getOutputChannel } from '@ui/outputChannel';
@@ -52,15 +60,57 @@ type BuildResultData = {
   durationMs: number;
 };
 
+// [F2-2 并发守卫] 构建互斥锁 —— [D16] 从本文件抽出到 @build/lock,
+// 与 executeLiveCoding 共用。旧实现在这里维护模块级 buildInFlight,
+// liveCoding 路径没有守卫 → 两个 UBT 可同时跑,交叉写 Intermediate/Build
+// 下的 .generated.h,表现为随机出现的 "unknown type name 'FID_...'" 假诊断。
+
 /**
  * executeBuild 的 envelope 类型:data 为 BuildResultData,或无 data(编辑器运行中
  * 转发 Live Coding 时原样透传 executeLiveCoding 的 envelope,成功路径无 data)。
  */
 type BuildEnvelope = Envelope<BuildResultData | undefined>;
 
-// [F2-2 并发守卫] 模块级 in-flight 标记:构建进行中再次触发时直接拒绝,不排队。
-// 完成后(无论成功/失败/取消)在 finally 清空,避免永久卡死后续构建。
-let buildInFlight: Promise<BuildEnvelope> | null = null;
+/**
+ * [D8] 计算快照里的 module 字段。
+ *
+ * module 仅 build 模式语义(UBT -Module=);rebuild/clean 直调携带时丢弃,
+ * 保证"不带 module 的调用与现状行为一致"(快照/envelope 均无该字段)。
+ */
+function moduleFieldsFor(mode: Mode, module?: string): { module?: string } {
+  const effective = mode === 'build' ? module : undefined;
+  return effective ? { module: effective } : {};
+}
+
+/**
+ * [D8] 早退收口用的失败快照。
+ *
+ * 构建命令的每个早退分支(没选到项目 / 没选到引擎 / 并发守卫 / 用户取消)
+ * 都要留一条快照 —— 否则 MCP `ue_get_build_errors` 读到的是上一次成功构建的
+ * 旧结果,agent 会误以为"这次改动编译通过了"。
+ */
+function failureSnapshot(params: {
+  buildId: string;
+  startedAtIso: string;
+  mode: Mode;
+  moduleFields: { module?: string };
+  cancelled: boolean;
+  error: string;
+}): LastBuildSnapshot {
+  return {
+    buildId: params.buildId,
+    startedAtIso: params.startedAtIso,
+    mode: params.mode,
+    ...params.moduleFields,
+    ok: false,
+    cancelled: params.cancelled,
+    exitCode: null,
+    durationMs: 0,
+    finishedAtIso: new Date().toISOString(),
+    diagnostics: [],
+    error: params.error,
+  };
+}
 
 export async function executeBuild(
   mode: Mode,
@@ -81,21 +131,83 @@ export async function executeBuild(
   // [Wave3 类型收口] dispatch(src/mcp/tools.ts)形参已放宽为 Promise<unknown>,
   // 声明收紧为精确的 Promise<Envelope<...>>(泛型以实际 data 形状为准,见 BuildEnvelope)。
 ): Promise<BuildEnvelope> {
+  // [D8] 每次构建尝试一个唯一 id + 开始时刻。
+  // 早退分支同样产生 buildId —— agent 用它判断读到的快照属于哪一次尝试。
+  const buildId = newBuildId();
+  const startedAtIso = new Date().toISOString();
+  const moduleFields = moduleFieldsFor(mode, module);
+
   // [F2-2] 已有构建在运行时,提示并直接返回(不排队,避免并行 spawn 两个 UBT,
   // 以及第二次 clearDiagnostics() 清掉第一次的诊断)
-  if (buildInFlight) {
+  // [D16] 锁与 liveCoding 共用 —— 两条路径都是 spawn UBT。
+  if (!tryLockBuild()) {
     void vscode.window.showInformationMessage(t('cmd.buildInFlight'));
+    // [D8] 并发守卫早退也要留快照(否则读到上一次构建的旧结果)
+    rememberBuildSnapshot(
+      failureSnapshot({
+        buildId,
+        startedAtIso,
+        mode,
+        moduleFields,
+        cancelled: false,
+        error: t('cmd.buildInFlight'),
+      }),
+    );
     return errEnvelope(EC_OPERATION_CANCELLED, t('cmd.buildInFlight'));
   }
-  const task = executeBuildInner(mode, config, logger, detection, workspace, silent, statusBar, module);
-  buildInFlight = task;
+  // [D8] 标记构建进行中 —— MCP ue_get_build_errors 在此期间回
+  // hasResult=false + reason='build-in-progress',避免 agent 把旧快照当新结果。
+  markBuildInProgress(buildId);
   try {
-    return await task;
+    const env = await executeBuildInner(
+      mode,
+      config,
+      logger,
+      detection,
+      workspace,
+      silent,
+      statusBar,
+      module,
+      buildId,
+      startedAtIso,
+    );
+    // [D8] 早退收口:inner 若没写快照(没选到项目 / 没选到引擎 / 用户关掉弹窗),
+    // 这里按 envelope 的错误补一条失败快照。
+    const snap = getLastBuildSnapshot();
+    if (!snap || snap.buildId !== buildId) {
+      rememberBuildSnapshot(
+        failureSnapshot({
+          buildId,
+          startedAtIso,
+          mode,
+          moduleFields,
+          cancelled: env.error?.code === 'OPERATION_CANCELLED',
+          error: env.error?.message ?? t('cmd.buildFailed'),
+        }),
+      );
+    }
+    return env;
   } catch (err) {
     // [C8/D5] 未知异常在命令出口统一包装,不向注册层抛裸异常
+    // [D8] 异常路径同样兜底补快照(inner 的 catch 已写过的则跳过)
+    const snap = getLastBuildSnapshot();
+    if (!snap || snap.buildId !== buildId) {
+      rememberBuildSnapshot(
+        failureSnapshot({
+          buildId,
+          startedAtIso,
+          mode,
+          moduleFields,
+          cancelled: false,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
     return errEnvelope(EC_INTERNAL_ERROR, err instanceof Error ? err.message : String(err));
   } finally {
-    buildInFlight = null;
+    // [D8] 清除进行中标记(必须在快照写入之后 —— 顺序由 finally 保证)
+    clearBuildInProgress(buildId);
+    unlockBuild();
   }
 }
 
@@ -112,7 +224,14 @@ async function executeBuildInner(
   statusBar?: StatusBarManager,
   // [add-002] UBT -Module= 单模块过滤;与编辑器感知构建互斥(module 仅从 MCP silent 路径进来)
   module?: string,
+  // [D8] 本次构建尝试的唯一标识与开始时刻(由 executeBuild 生成并传入)
+  buildId?: string,
+  // [D8] 本次构建的开始时刻(ISO 8601)
+  startedAtIso?: string,
 ): Promise<BuildEnvelope> {
+  // [D8] 兜底:直接调用 inner(仅测试)时生成一个 id,保证快照字段永远存在
+  const snapBuildId = buildId ?? newBuildId();
+  const snapStartedAt = startedAtIso ?? new Date().toISOString();
   // [Phase 11 SSoT] 选目标逻辑收敛到 @commands/_resolve
   const project = await resolveProjectOrPick({
     detection,
@@ -156,7 +275,25 @@ async function executeBuildInner(
       if (choice === useLiveCodingLabel) {
         logger.info('[build] editor running → rerouted to Live Coding');
         // 转发 Live Coding,原样透传其 envelope
-        return await executeLiveCoding(config, logger, detection, workspace);
+        // [D16] alreadyLocked=true —— 本调用已持有构建锁(见 executeBuild),
+        // 转发路径不能重复加锁,否则会被自己拒绝。
+        const lcEnv = await executeLiveCoding(config, logger, detection, workspace, silent, true);
+        // [D8] 转发路径也要写快照 —— UBT 全量构建没有跑,若不写,MCP 读到的
+        // 就是上一次构建的旧结果,agent 会误判"这次编译通过"。
+        rememberBuildSnapshot({
+          buildId: snapBuildId,
+          startedAtIso: snapStartedAt,
+          mode,
+          ...moduleFieldsFor(mode, module),
+          ok: false,
+          cancelled: lcEnv.error?.code === 'OPERATION_CANCELLED',
+          exitCode: null,
+          durationMs: 0,
+          finishedAtIso: new Date().toISOString(),
+          diagnostics: [],
+          error: t('cmd.buildReroutedLiveCoding'),
+        });
+        return lcEnv;
       }
       if (choice !== buildAnywayLabel) {
         logger.info('[build] editor running → build dismissed by user');
@@ -218,6 +355,8 @@ async function executeBuildInner(
     );
     // 记录失败快照：MCP ue_get_build_errors 需要能看到"构建没跑起来"的原因
     rememberBuildSnapshot({
+      buildId: snapBuildId,
+      startedAtIso: snapStartedAt,
       mode,
       ...moduleFields,
       ok: false,
@@ -238,7 +377,7 @@ async function executeBuildInner(
   // [WorkspaceBackup 接入] UBT -ProjectFiles 会重写 .code-workspace 丢失用户自定义，
   // 构建前快照 .code-workspace、构建后恢复。尊重 autoBackupWorkspace 设置（默认 true）；
   // 无 .code-workspace 文件时 snapshot/restore 自然 no-op。
-  const backup = config.autoBackupWorkspace ? new WorkspaceBackup(project.path) : undefined;
+  const backup = config.autoBackupWorkspace ? new WorkspaceBackup(project.path, logger) : undefined;
 
   const statusCtx: StatusBarContext = {
     project: { name: project.name, path: project.path },
@@ -320,6 +459,8 @@ async function executeBuildInner(
     // [ue_get_build_errors 数据源] 成功/失败/取消一律记录最近构建快照,
     // MCP 工具 ue_get_build_errors 从这里读（AI 闭环"构建 → 读错误 → 修复"）。
     rememberBuildSnapshot({
+      buildId: snapBuildId,
+      startedAtIso: snapStartedAt,
       mode,
       ...moduleFields,
       ok: !!result && !result.cancelled && result.exitCode === 0,
@@ -374,6 +515,8 @@ async function executeBuildInner(
     statusBar?.resetFromBuilding(statusCtx, statusSettings);
     // 异常中断也记录快照（error 字段说明为什么没有 exitCode）
     rememberBuildSnapshot({
+      buildId: snapBuildId,
+      startedAtIso: snapStartedAt,
       mode,
       ...moduleFields,
       ok: false,

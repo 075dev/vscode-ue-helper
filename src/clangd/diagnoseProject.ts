@@ -28,6 +28,7 @@ import {
   checkSystemIncludeFlags,
   checkDiagnostics,
   checkPreparsePlaceholders,
+  checkUeVersionAndCapabilities,
 } from './diagnostics/checks';
 
 // ---- 重新导出公共 API ----
@@ -52,6 +53,10 @@ export async function diagnoseProject(
   // [Phase 9 SSoT] .clangd 路径走 WorkspaceState.clangdConfigPath（单一真相源），不再 path.join 拼
   const clangdFile = workspace?.clangdConfigPath ?? path.join(projectDir, '.clangd');
   const checks: DiagnosticCheck[] = [];
+
+  // [借鉴 unreal-engine-mcp 的 ue_status / 版本兼容表] UE 版本 × 能力矩阵检查。
+  // 放在最前面：即使 .clangd 缺失导致提前返回，版本能力结论也要出现在报告里。
+  checks.push(...checkUeVersionAndCapabilities(workspace?.engineVersion ?? null));
 
   // [Phase 9 SSoT 收尾] 优先 ClangdOps.readText()（单一 fs 入口）；未注入时回落到 fs 直读兼容老测试
   const clangdContent = clangdOps

@@ -10,13 +10,16 @@ import type { WorkspaceState } from '@core/workspace';
 import type { ClangdHandles } from '@clangd';
 import type { ClangdOps } from '@clangd/clangdOps';
 import type { ProjectInfo, EngineInstall } from '@detection/types';
-import { resolveFlags, getGlossaryForWebview } from '@clangd/flagGlossary';
+import { getGlossaryForWebview } from '@clangd/flagGlossary';
+// [D5] .clangd Add 的统一写入入口（ctx 五项统一采集）
+import { writeClangdAddFlags } from '@clangd/clangdFlagRenderer';
 import { t } from '@i18n';
 import { getControlPanelHtml } from './controlPanel.html';
 import {
   COMMAND_MAP,
   COMMAND_REQUIREMENT,
   CONFIG_KEY_MAP,
+  validateConfigValue,
 } from './controlPanelMessages';
 import type { WebViewMessage, PanelMessage } from './controlPanelMessages';
 
@@ -93,7 +96,11 @@ function validateMessage(msg: unknown): WebViewMessage | null {
         ? (msg as WebViewMessage)
         : null;
     case 'saveAddFlags':
-      return Array.isArray(m['selectedIds']) ? (msg as WebViewMessage) : null;
+      // [D18] 逐项校验元素类型 —— 只接受字符串 id,避免把对象/数组塞进设置项
+      return Array.isArray(m['selectedIds']) &&
+        (m['selectedIds'] as unknown[]).every((v) => typeof v === 'string')
+        ? (msg as WebViewMessage)
+        : null;
     default:
       // panelReady / getConfig / getProxyConfig / getStatus / getAddFlags 无必填载荷
       return msg as WebViewMessage;
@@ -213,16 +220,26 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     void vscode.commands.executeCommand('workbench.view.extension.ueHelper');
   }
 
-  resolveWebviewView(
+  /**
+   * [D6] 首屏必须带上真实 projectName ——
+   * 旧实现是 `void this.refreshTitleInfo()`（内部 await detection.ready）之后
+   * **同步**赋 .html：此刻 projectName 还是空串 → HTML 渲染 `body.no-project`，
+   * 整个界面被 CSS 藏掉，只剩空状态遮罩。
+   * 补救靠后续 postMessage，但那次推送早于 webview iframe 加载完成，
+   * postMessage resolve 为 false 时完全静默 → 用户看到的就是一个空面板。
+   *
+   * 现在改为：先 await 拿到标题信息，再赋 .html —— 首屏即正确。
+   * VS Code 的 WebviewViewProvider 接口允许返回 Thenable，这里返回 Promise。
+   */
+  async resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
-  ): void {
+  ): Promise<void> {
     this._view = webviewView;
     webviewView.webview.options = { enableScripts: true, localResourceRoots: [] };
-    void this.refreshTitleInfo();
-    webviewView.webview.html = this.getHtmlContent(webviewView.webview);
 
+    // message 监听要**先**注册 —— await 期间的 panelReady 消息不能丢。
     this.disposables.push(
       webviewView.webview.onDidReceiveMessage((msg: WebViewMessage) => {
         void this.handleMessage(msg);
@@ -239,7 +256,22 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       }),
     );
 
+    await this.initWebview(webviewView);
     this.deps.logger.info('[controlPanel] view resolved');
+  }
+
+  /**
+   * [D6] 首屏初始化 —— 先拿标题信息，再赋 .html。
+   *
+   * 拿不到标题也要把 HTML 渲染出来（空状态遮罩），不能让面板永远空白。
+   */
+  private async initWebview(webviewView: vscode.WebviewView): Promise<void> {
+    try {
+      await this.refreshTitleInfo();
+    } catch (err) {
+      this.deps.logger.warn('[controlPanel] title refresh failed:', err);
+    }
+    webviewView.webview.html = this.getHtmlContent(webviewView.webview);
   }
 
   private async refreshTitleInfo(): Promise<void> {
@@ -269,12 +301,22 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       this.hasProject = false;
       this.hasEngine = false;
     }
+    this.pushTitle();
+    this.pushPanelState();
+  }
+
+  /**
+   * [D6] 把当前标题信息推到 webview。
+   *
+   * 单独成方法，供 refreshTitleInfo 与 panelReady 分支共用 ——
+   * 后者是 webview 就绪后的权威重推时机。
+   */
+  private pushTitle(): void {
     this.postMessage({
       type: 'updateTitle',
       projectName: this.projectName,
       engineVersion: this.engineVersion,
     });
-    this.pushPanelState();
   }
 
   /**
@@ -305,6 +347,14 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
     switch (msg.type) {
       case 'panelReady':
         logger.info('[controlPanel] panel ready');
+        // [D6] webview 已加载完成 —— 此时才推送的 postMessage 才必然被收到。
+        // 首屏之前的推送（配置变更 / 选择变更触发）可能早于 iframe 就绪，
+        // postMessage 返回 false 时消息直接丢失且**完全静默**。
+        // 这里按 panelReady 作为「webview 就绪」的权威信号，把全部状态重推一遍。
+        this.pushTitle();
+        this.pushPanelState();
+        this.pushProxyConfig();
+        this.pushStatus();
         break;
 
       case 'executeCommand': {
@@ -411,6 +461,16 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
           this.postMessage({ type: 'showError', message: `Unknown config key: ${msg.key}` });
           return;
         }
+        // [D18] 值类型校验 —— 伪造消息可能带对象/数组,写进 settings.json 后
+        // 消费方(path.join 等)会抛 TypeError,故障点离原因很远。
+        const valueCheck = validateConfigValue(msg.key, msg.value);
+        if (!valueCheck.ok) {
+          logger.warn(
+            `[controlPanel] invalid config value rejected: ${msg.key} — ${valueCheck.reason}`,
+          );
+          this.postMessage({ type: 'showError', message: valueCheck.reason });
+          return;
+        }
         logger.info(`[controlPanel] update config: ${msg.key}=${String(msg.value)}`);
         try {
           await config.update(configKey, msg.value);
@@ -427,6 +487,15 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         if (!configKey) {
           logger.warn(`[controlPanel] unknown proxy config key rejected: ${msg.key}`);
           this.postMessage({ type: 'showError', message: `Unknown proxy config key: ${msg.key}` });
+          return;
+        }
+        // [D18] 同 updateConfig:值类型校验
+        const valueCheck = validateConfigValue(msg.key, msg.value);
+        if (!valueCheck.ok) {
+          logger.warn(
+            `[controlPanel] invalid proxy config value rejected: ${msg.key} — ${valueCheck.reason}`,
+          );
+          this.postMessage({ type: 'showError', message: valueCheck.reason });
           return;
         }
         logger.info(`[controlPanel] update proxy config: ${msg.key}=${String(msg.value)}`);
@@ -510,7 +579,7 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
       }
 
       case 'saveAddFlags': {
-        // 整体 force-write：把 selectedIds 通过 flagGlossary 渲染后写入 .clangd
+        // 整体 force-write：把 selectedIds 通过**统一入口**写入 .clangd
         const clangdOps = this.deps.clangdOps;
         if (!clangdOps) {
           this.postMessage({
@@ -520,16 +589,32 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
           return;
         }
         try {
-          // [Plan 循环保护] 注意：这里走"写 userAddFlags → onDidChange 监听器会再触发 applyAddFlags"的双阶段写入。
-          // 为避免 race 与重复 IO，我们**先**算 addFlags，再 await config.update，然后 applyAddFlags 仍然执行一次。
-          // onDidChange 监听器幂等（写入相同内容不会修改文件），所以无重复风险。
-          const addFlags = resolveFlags(msg.selectedIds, {});
-          await config.update('clangd.userAddFlags', msg.selectedIds);
-          const applyRes = await clangdOps.applyAddFlags(addFlags);
+          // [D5] 统一入口 —— ctx 五项（compatHeader / macroHelper /
+          // preparseHeaders / intermediateUhtDirs / systemIncludeFlags）由
+          // collectClangdFlagContext 统一采集。
+          // 旧实现自己调 `resolveFlags(msg.selectedIds, {})` —— ctx **完全为空**,
+          // 于是 compat-header / preparse-headers / uht-include-dirs 这些依赖
+          // 动态路径的词条渲染出 0 个 flag：用户勾了「强制包含 UE Clangd 兼容头」,
+          // 面板报"保存成功",`.clangd` 里却啥也没有 —— 勾选静默失效。
+          //
+          // [D5] `system-include-windows` **不在 glossary 里**（没有对应
+          // checkbox）,webview 保存时只收集有 checkbox 的 id → 保存一次就把
+          // system-include-windows 丢掉 → Windows SDK / MSVC 的 /imsvc 全部消失
+          // → clangd 找不到任何系统头 → 满屏 false-positive。
+          // 这里保留既有的 system-include-windows（由 Set System Includes 管理）。
+          const existing = this.deps.config.userAddFlags ?? [];
+          const keepSystem = existing.filter((id) => id === 'system-include-windows');
+          const nextIds = [...new Set([...msg.selectedIds, ...keepSystem])];
+
+          await this.deps.config.update('clangd.userAddFlags', nextIds);
+          const applyRes = await writeClangdAddFlags(
+            { clangdOps, config: this.deps.config, logger },
+            nextIds,
+          );
           if (applyRes.ok) {
             this.postMessage({
               type: 'addFlagSaveResult',
-              result: { success: true, saved: msg.selectedIds.length, failed: 0 },
+              result: { success: true, saved: nextIds.length, failed: 0 },
             });
           } else {
             this.postMessage({
@@ -579,6 +664,14 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
         logger.warn(`[controlPanel] unknown key skipped: ${u.key}`);
         continue;
       }
+      // [D18] 值类型校验 —— 同 updateConfig,拒绝把对象/数组写进 settings.json
+      const valueCheck = validateConfigValue(u.key, u.value);
+      if (!valueCheck.ok) {
+        failed++;
+        firstError ??= valueCheck.reason;
+        logger.warn(`[controlPanel] invalid value skipped: ${u.key} — ${valueCheck.reason}`);
+        continue;
+      }
       try {
         await config.update(configKey, u.value);
         saved++;
@@ -593,9 +686,28 @@ export class ControlPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private postMessage(msg: PanelMessage): void {
-    if (this._view) {
-      void this._view.webview.postMessage(msg);
+    if (!this._view) {
+      return;
     }
+    // [D6] postMessage resolve 为 false = 消息没送出去（webview 尚未就绪 / 已销毁）。
+    // 旧实现 `void this._view.webview.postMessage(msg)` 把结果直接丢掉，
+    // 消息静默丢失且无任何痕迹 —— 首屏就是靠这个补救的，结果补救无效。
+    // 现在至少记一条 warn，让"状态没推出去"可观测。
+    void this._view.webview.postMessage(msg).then(
+      (delivered) => {
+        if (!delivered) {
+          this.deps.logger.warn(
+            `[controlPanel] postMessage dropped (webview not ready): ${msg.type}`,
+          );
+        }
+      },
+      (err) => {
+        this.deps.logger.warn(
+          `[controlPanel] postMessage failed: ${msg.type}`,
+          err,
+        );
+      },
+    );
   }
 
   private getHtmlContent(webview: vscode.Webview): string {

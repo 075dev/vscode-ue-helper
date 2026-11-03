@@ -277,6 +277,50 @@ describe('Logger — F1-5 配置联动', () => {
   });
 });
 
+describe('Logger — [D7] console 输出开关', () => {
+  it('默认开启 console 输出', () => {
+    const log = freshLogger('test');
+    expect(log.isConsoleEnabled()).toBe(true);
+  });
+
+  it('setConsoleEnabled(false) 后 info 不再写 console,但仍写 OutputChannel', () => {
+    const log = freshLogger('test');
+    const channel = getLoggerOutputChannel('test');
+    log.setConsoleEnabled(false);
+
+    log.info('[test] quiet');
+
+    expect(console.log).not.toHaveBeenCalled();
+    expect(asMockChannel(channel).appendLine).toHaveBeenCalledTimes(1);
+    const line = (channel.appendLine as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+    expect(line).toContain('[test] quiet');
+  });
+
+  it('setConsoleEnabled(false) 后 warn / error 也不写 console', () => {
+    const log = freshLogger('test');
+    const channel = getLoggerOutputChannel('test');
+    log.setConsoleEnabled(false);
+
+    log.warn('[test] w');
+    log.error('[test] e');
+
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+    expect(asMockChannel(channel).appendLine).toHaveBeenCalledTimes(2);
+  });
+
+  it('重新开启后 console 输出恢复', () => {
+    const log = freshLogger('test');
+    log.setConsoleEnabled(false);
+    log.info('[test] a');
+    log.setConsoleEnabled(true);
+    log.info('[test] b');
+
+    expect(console.log).toHaveBeenCalledTimes(1);
+    expect(log.isConsoleEnabled()).toBe(true);
+  });
+});
+
 describe('sharedLogger', () => {
   it('是 Logger 实例,默认 prefix VSCodeUEHelper', () => {
     expect(sharedLogger).toBeInstanceOf(Logger);

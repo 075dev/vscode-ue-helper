@@ -110,6 +110,20 @@ vi.mock('vscode', () => ({
   // [T4.5 task 子模块] Shell quoting 引用风格 mock — 必须在 top-level (vscode.ShellQuoting)，
   // 真实 vscode API 把 ShellQuoting 作为顶层 enum，不能放进 tasks 命名空间。
   ShellQuoting: { Strong: 'strong', Weak: 'weak' },
+  // [D9/MAJOR-1] TaskGroup 同样是 top-level enum。src/build/taskProvider.ts 的
+  // 模块级常量 TASK_KINDS 会读 vscode.TaskGroup.Build —— 缺这一项会让所有
+  // 间接 import src/build/index.ts 的测试文件在**收集阶段**就加载失败
+  // （报 "No 'TaskGroup' export is defined on the 'vscode' mock"）。
+  TaskGroup: { Clean: 'clean', Build: 'build', Rebuild: 'rebuild', Test: 'test' },
+  // ProcessExecution —— 真实 vscode API 是 top-level class；taskProvider 构造
+  // task 时会 new 它（模块加载不触发，但运行时需要，故一并补上）。
+  ProcessExecution: class {
+    constructor(
+      public readonly process: string,
+      public readonly args: string[],
+      public readonly options?: { cwd?: string; env?: Record<string, string> },
+    ) {}
+  },
   Diagnostic: class {
     range: unknown;
     message: string;

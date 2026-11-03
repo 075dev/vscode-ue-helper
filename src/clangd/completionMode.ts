@@ -25,8 +25,8 @@
 
 import type { Config } from '@core/config';
 import type { ClangdOps } from './clangdOps';
-import { resolveFlags } from './flagGlossary';
-import { getPrepareIncludesList } from './preparseIncludes';
+// [D5] 统一渲染 + 写入入口 —— ctx 五项由 collectClangdFlagContext 统一采集
+import { writeClangdAddFlags } from './clangdFlagRenderer';
 
 export interface RewriteResult {
   /** 是否真实写入 .clangd */
@@ -67,7 +67,13 @@ export class CompletionModeController {
   }
 
   /**
-   * 把当前 `Config.userAddFlags` 通过 flagGlossary.resolveFlags 渲染后写入 .clangd。
+   * 把当前 `Config.userAddFlags` 渲染后写入 .clangd。
+   *
+   * [D5] 走**统一入口** `writeClangdAddFlags` —— ctx 的五项
+   * （compatHeader / macroHelper / preparseHeaders / intermediateUhtDirs /
+   * systemIncludeFlags）由 `collectClangdFlagContext` 统一采集。
+   * 旧实现自己调 `resolveFlags` 且 ctx 只带三项，`uht-include-dirs` 与
+   * `system-include-windows` 永远渲染不出来。
    *
    * 签名仍接受一个可选 `mode` 参数仅为兼容旧调用点（test 中 `rewriteClangd('slow')`）；
    * 实际值被忽略 —— T2.1 后 fast/slow 已合并，统一 slow。
@@ -85,19 +91,10 @@ export class CompletionModeController {
       return { written: false, warning: 'missingProjectPath' };
     }
 
-    const preparseHeaders = await getPrepareIncludesList('slow', projectPath);
-    const ws = this.clangdOps.workspace;
-    const compatHeaderPath = ws.ueClangdCompatPath ?? undefined;
-    const macroHelperPath = ws.macroHelperPath ?? undefined;
-
-    const userAdd = this.config.userAddFlags;
-    const addFlags = resolveFlags(userAdd, {
-      ...(compatHeaderPath ? { compatHeaderPath } : {}),
-      ...(macroHelperPath ? { macroHelperPath } : {}),
-      preparseHeaders,
-    });
-
-    const result = await this.clangdOps.applyAddFlags(addFlags);
+    const result = await writeClangdAddFlags(
+      { clangdOps: this.clangdOps, config: this.config },
+      this.config.userAddFlags,
+    );
     if (result.ok) {
       return { written: true };
     }

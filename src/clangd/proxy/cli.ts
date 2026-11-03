@@ -85,7 +85,15 @@ export function runProxy(
   spawnFn: typeof spawn = spawn,
   stdio: CliStdio = realStdio,
 ): DoneClaim {
-  const { options, errors } = parseArgs(argv);
+  const { options, errors, warnings } = parseArgs(argv);
+
+  // [D11] 未知参数只记警告并继续 —— launcher 的 `%*` 会让 cmd.exe 拆词，
+  // 含空格的路径尾巴会变成"未知参数"。旧实现把它当致命错误 → exit(2) →
+  // clangd 扩展拿不到语言服务器 → 整个工程无 IntelliSense + 无限重启循环。
+  // 写 stderr（不是 stdout）—— stdout 是 LSP 帧流，污染它会打断协议解析。
+  for (const warn of warnings) {
+    io.stderrWrite(`[clangd-proxy] WARNING: ${warn}`);
+  }
 
   if (errors.length > 0) {
     for (const err of errors) {

@@ -26,9 +26,9 @@
 | `notifications.ts`        | 通知弹窗封装（`notifyInfo` / `notifyWarn` / `notifyError`）                                          |
 | `problemsPanel.ts`        | Problems 面板诊断管理（DiagnosticManager）                                                           |
 | `outputChannel.ts`        | Output Channel 日志输出封装                                                                          |
-| `controlPanel.ts`         | `ControlPanelProvider` —— Webview 控制面板（侧边栏）                                                 |
+| `controlPanel.ts`         | `ControlPanelProvider` —— Webview 控制面板（侧边栏）。首屏先 `await` 标题信息再赋 HTML；`panelReady` 重推全部状态；`postMessage` 投递失败记 warn |
 | `controlPanel.html.ts`    | 控制面板 HTML 模板（从 `controlPanel.ts` 拆出便于热更新）                                            |
-| `controlPanelMessages.ts` | 控制面板 host ↔ webview 双向消息协议                                                                 |
+| `controlPanelMessages.ts` | 控制面板 host ↔ webview 双向消息协议。命令白名单用 null 原型对象；`validateConfigValue` 校验配置值类型 |
 | `perfStatusBar.ts`        | perf 埋点状态栏                                                                                      |
 | `projectExplorer.ts`      | 项目目录树 TreeDataProvider                                                                          |
 | `projectExplorerFs.ts`    | 项目目录树 fs 扫描（与 provider 解耦）                                                               |
@@ -93,7 +93,7 @@ if (process.platform === 'win32') {
 - `_isBuilding === true` 时 `updateConfig` 直接 return —— build spinner / 错误结果状态不被配置变化打断，build 结束由 `showBuildResult` → `update()` 走完整路径一并刷新。
 - `_cachedCtx === null`（首次 `update` 还未跑过）时 `updateConfig` 只更新 `configBtn` / `targetBtn`，`projectInfoBtn` 不动 —— 避免在没有 detection 结果时显示「No Project | No Engine」。
 
-回归测试：`test/unit/ui/statusBarConfigSync.test.ts`（6 个 case 覆盖 configuration / target / platform 同步更新 + `_isBuilding` 守护 + 完整 renderFull）。
+回归测试：`test/unit/ui/statusBarConfigSync.test.ts`（9 个 case 覆盖 configuration / target / platform 同步更新 + `_isBuilding` 守护 + 完整 renderFull）。
 
 ## QuickPicks 选择器
 
@@ -175,6 +175,38 @@ class DiagnosticManager {
 - **行列从 0 开始**：MSVC 输出是 1-based，要减 1（`src/parsers/msvcParser.ts` 已统一处理）。
 - **构建前清空前一次的诊断**：不要累积旧错误。
 
+## ControlPanel Webview
+
+### 首屏与消息握手时序
+
+```
+resolveWebviewView()  →  async，返回 Promise<void>
+  ├── 注册 onDidReceiveMessage / onDidChangeVisibility 监听   ← 必须先注册
+  └── await initWebview()
+         ├── await refreshTitleInfo()   → projectName / engineVersion
+         └── webview.html = getHtmlContent(webview)
+```
+
+- **先注册监听，再 `await`**：`resolveWebviewView` 改成 `async` 后，await 期间到达的 `panelReady` 消息会丢 —— 监听晚注册就没有补救时机。
+- **先拿标题信息，再赋 HTML**：旧实现同步赋 HTML，此刻 `projectName` 还是空串 → HTML 渲染 `body.no-project`，整个界面被 CSS 藏掉，只剩空状态遮罩。拿不到标题也要把 HTML 渲染出来（空状态遮罩），不能让面板永远空白。
+- **`panelReady` 是 webview 就绪的权威信号**：收到后重推 title / panelState / proxyConfig / status 四类状态。首屏之前的推送可能早于 iframe 就绪，`postMessage` resolve 为 false 时消息直接丢失。
+- **`postMessage` 失败要留痕**：`void postMessage(msg).then(...)` —— 投递为 false（webview 未就绪 / 已销毁）或 promise reject 时记 `logger.warn`，不再静默丢消息。
+
+### 消息校验
+
+webview 消息**可以被伪造**，扩展侧必须自校验：
+
+- **命令白名单用 null 原型对象**（`Object.create(null)`）—— 对象字面量继承 `Object.prototype`，`COMMAND_MAP['constructor']` 会返回继承来的函数（truthy）→ 绕过「未知命令」分支。
+- **配置值逐项校验类型**（`validateConfigValue`）—— `CONFIG_VALUE_KINDS` 显式列出每个字段的类型（boolean / number / select / string），`select` 还校验取值在白名单内。不匹配即拒绝并回推错误。
+- **命令消息的载荷也要校验** —— `saveAddFlags` 的 `selectedIds` 只接受字符串数组。
+
+### 保存 Add flags
+
+`saveAddFlags` 走 `@clangd` 的**统一写入入口** `clangdFlagRenderer.writeClangdAddFlags`：
+
+- ctx 五项由 `collectClangdFlagContext` 统一采集 —— 旧实现传的是**完全为空**的 ctx，依赖动态路径的词条（compat header / preparse headers / UHT include dirs）渲染出 0 个 flag，用户勾选**静默失效**（面板报「保存成功」，`.clangd` 里啥也没有）。
+- 保存的是**并集**：保留用户已选的 `system-include-windows`（它在 glossary 里没有对应 checkbox，webview 不会回传）—— 否则保存一次就把 Windows SDK / MSVC 的 `/imsvc` 全部丢掉。
+
 ## Output Channel 与日志
 
 统一的日志输出通道，所有模块共享：
@@ -194,7 +226,7 @@ channel.error('[ui] ...');
 [build] running UBT...
 [clangd] wrote .clangd config
 [ui] statusBar updated
-[commands] registered 21 commands
+[commands] registered 28 commands
 ```
 
 UI 模块日志前缀：`[ui]`。子区域细分可加 `[ui/statusBar]` / `[ui/controlPanel]` 等。日志要携带上下文（诊断 / 命令 / 资源名），满足宪法 §III 的 observable 原则。
@@ -250,4 +282,4 @@ UI 模块日志前缀：`[ui]`。子区域细分可加 `[ui/statusBar]` / `[ui/c
 
 - **不要**在 UI 层调用 `vscode.workspace.workspaceFile` / `getWorkspaceFolder` 直读 —— 一律读 `WorkspaceState` 提供的 getter。
 - **不要**读 `config.completionMode` 决策 UI 行为 —— fast/slow 已统一 slow，UI 不再展示模式状态。
-- **不要**写 `.clangd` / `compile_commands.json` —— 全部走对应模块（`@clangd` / `@build`）；UI 仅触发命令或回调。
+- **不要**直接写 `.clangd` / `compile_commands.json` —— `.clangd` 的 `CompileFlags.Add` 只经 `@clangd` 的统一入口 `clangdFlagRenderer.writeClangdAddFlags` 写；`compile_commands.json` 由 `@clangd` / `@build` 负责。UI 仅触发命令或回调。

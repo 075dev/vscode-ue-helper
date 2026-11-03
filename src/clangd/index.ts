@@ -30,6 +30,8 @@ import { ClangdProxyManager } from './proxyManager';
 import { UeLinkManager } from './ueLinkManager';
 import { registerUeMacroCompletionProvider } from './ueMacroCompletionProvider';
 import { registerUeReflectionLinter } from './ueReflectionLinter';
+// [D5] 「哪些配置变更要重写 .clangd」的单一真相源 —— 与本文件下方的 re-export 同源
+import { shouldRewriteClangd } from './clangdFlagRenderer';
 import { perfLog } from './perfLog';
 import { PerfStatusBar } from '@ui/perfStatusBar';
 import { IncrementalFileWatcher } from './fileWatcher';
@@ -53,10 +55,19 @@ export {
 export {
   generateCompileCommands,
   linkToWorkspaceRoot,
+  locateCompileCommands,
   isClangdAvailable,
   fillMissingCompileCommands,
   type FillResult,
 } from './compileCommands';
+// [D14] DB 读写原语 + 纯计算的「补齐缺失条目」
+export {
+  readCompileCommands,
+  writeCompileCommandsAtomic,
+  resolveCompileCommandsWriteTarget,
+  type CompileCommandEntry,
+} from './compileCommands/dbFile';
+export { computeMissingEntries } from './compileCommands/fillMissing';
 export {
   generateFallbackCompileCommands,
   type FallbackOptions,
@@ -75,6 +86,7 @@ export {
 export {
   createCompletionFiles,
   addCompletionHelperToCompileCommands,
+  buildCompletionHelperEntry,
   getMacroCompletionHelperPath,
   getCompletionHelperPath,
   FILENAME_COMPLETION_HELPER,
@@ -100,8 +112,27 @@ export {
   listMsvcVersions,
   listSdkVersions,
   renderClangdFlags,
+  readMsvcVersion,
   type SystemIncludeInfo,
 } from './windowsSdk';
+// [D5] .clangd Add 的统一渲染 + 写入入口
+export {
+  renderClangdAddFlags,
+  collectClangdFlagContext,
+  writeClangdAddFlags,
+  CLANGD_REWRITE_CONFIG_KEYS,
+  shouldRewriteClangd,
+  type ClangdFlagRenderContext,
+  type ClangdFlagWriterDeps,
+  type ConfigurationChangeLike,
+} from './clangdFlagRenderer';
+// [D3] .clangd 多文档 YAML 原语
+export {
+  parseClangdDocs,
+  mergeConfigIntoDoc,
+  renderClangdDocs,
+  type ParsedClangdDocs,
+} from './clangdYaml';
 export {
   FILENAME_UE_CLANGD_COMPAT,
   getUeClangdCompatDir,
@@ -235,6 +266,35 @@ export function activateClangd(
   context.subscriptions.push(ueMacroCompletionProvider);
   context.subscriptions.push(ueReflectionLinter);
 
+  // [D5] 配置变更 → 重写 .clangd
+  //
+  // rewriteClangd 此前是**零生产调用点的死函数**，所以「用户直接改
+  // settings.json 里的 clangd.userAddFlags 后 .clangd 不跟着变」一直没被发现。
+  // 现在把它接到 config.onDidChange 上：配置一变就用统一入口重写 .clangd。
+  //
+  // 控制面板的保存路径也会触发这条链路（面板先 config.update 再写 .clangd），
+  // 两次写入内容相同，ClangdOps 侧有「内容未变则不重写」的判定，不会产生
+  // 无谓的磁盘写与 mtime 抖动。
+  context.subscriptions.push(
+    config.onDidChange((e) => {
+      if (!shouldRewriteClangd(e)) {
+        return;
+      }
+      void completionMode
+        .rewriteClangd()
+        .then((result) => {
+          if (!result.written) {
+            logger.warn(`[clangd] .clangd rewrite skipped: ${result.warning ?? 'unknown'}`);
+          }
+        })
+        .catch((err) => {
+          logger.warn(
+            `[clangd] .clangd rewrite failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+    }),
+  );
+
   // [Phase 7 PLAN A / per D-06] 性能状态栏（尊重 showPerfInStatusBar setting）
   // - 设置为 false 时完全跳过创建（尊重用户选择）
   // - perfLog 始终在内存中记录；状态栏关闭只关 UI 不关数据通路
@@ -276,9 +336,14 @@ export function activateClangd(
     }
     const projectDir = path.dirname(project.path);
     const watcher = new IncrementalFileWatcher();
-    // [借鉴 boocs/unreal-clangd] 新增 .h/.cpp → 节流提示刷新 compile_commands.json。
-    // hint 内部用 vscode.commands.executeCommand 间接触发，避免 clangd → commands 循环依赖。
-    const compileCommandsHint = new CompileCommandsRefreshHint({ logger });
+    // [借鉴 boocs/unreal-clangd] 新增 .h/.cpp → 刷新 compile_commands.json。
+    // [add-004 / D9] 默认 auto:节流到期后台静默重建(quiet,无弹窗);
+    // compileCommandsAutoRefresh=false 回到手动提示模式。getter 每拍现读,
+    // 配置开关变更即时生效,无需 reload。
+    const compileCommandsHint = new CompileCommandsRefreshHint({
+      logger,
+      mode: () => (config.compileCommandsAutoRefresh ? 'auto' : 'notify'),
+    });
     watcher.onBatch = (batch) => {
       // 通知 perfLog（per D-15/D-17）—— 状态栏可订阅 onMetricUpdate 实时刷新
       perfLog.recordIncrementalScan(batch.totalLatencyMs, batch.files.length);

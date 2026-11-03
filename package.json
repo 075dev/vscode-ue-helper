@@ -44,6 +44,7 @@
     "onCommand:vscodeUEHelper.generateCompileCommands",
     "onCommand:vscodeUEHelper.createProject",
     "onCommand:vscodeUEHelper.diagnoseProject",
+    "onCommand:vscodeUEHelper.clearClangdIndex",
     "onCommand:vscodeUEHelper.showProjectInfo",
     "onCommand:vscodeUEHelper.setSystemIncludes",
     "onCommand:vscodeUEHelper.installRules",
@@ -107,6 +108,12 @@
         "title": "%cmd.diagnoseProject.title%",
         "category": "UE Helper",
         "icon": "$(checklist)"
+      },
+      {
+        "command": "vscodeUEHelper.clearClangdIndex",
+        "title": "%cmd.clearClangdIndex.title%",
+        "category": "UE Helper",
+        "icon": "$(clear-all)"
       },
       {
         "command": "vscodeUEHelper.createProject",
@@ -397,6 +404,11 @@
           "default": true,
           "description": "%config.editorAwareBuild.desc%"
         },
+        "vscodeUEHelper.compileCommandsAutoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.compileCommandsAutoRefresh.desc%"
+        },
         "vscodeUEHelper.scaffold.clangFormat": {
           "type": "boolean",
           "default": true,
@@ -505,6 +517,21 @@
           },
           "default": [],
           "markdownDescription": "%config.clangd.userAddFlags.desc%"
+        },
+        "vscodeUEHelper.clangd.msvcRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.clangd.msvcRoot.desc%"
+        },
+        "vscodeUEHelper.clangd.sdkRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.clangd.sdkRoot.desc%"
+        },
+        "vscodeUEHelper.clangd.fmsCompatibilityVersion": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.clangd.fmsCompatibilityVersion.desc%"
         }
       }
     },
@@ -541,6 +568,7 @@
     "test:unit:watch": "vitest",
     "test": "npm run test:unit",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "npm run build && tsc -p tsconfig.e2e.json && node .tsc-e2e/runTests.js",
     "prepackage": "npm run build",
     "package": "vsce package",
     "publish": "vsce publish",

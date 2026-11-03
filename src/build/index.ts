@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
+import type { WorkspaceState } from '@core/workspace';
 import { UBTTaskProvider, buildTaskArgs } from './taskProvider';
 
 export { UBTTaskProvider, buildTaskArgs };
@@ -54,9 +55,12 @@ export function activateBuild(
   context: vscode.ExtensionContext,
   config: Config,
   _logger: Logger,
-  detection: DetectionHandles,
+  _detection: DetectionHandles,
+  // [D9] WorkspaceState —— TaskProvider 从这里同步取项目/引擎路径,
+  // 构造真实 UBT 命令（不再用 placeholder echo）。
+  workspace?: WorkspaceState,
 ): BuildHandles {
-  const taskProvider = new UBTTaskProvider(detection.scanner, detection.discovery, config);
+  const taskProvider = new UBTTaskProvider(workspace, config);
   context.subscriptions.push(vscode.tasks.registerTaskProvider('ue', taskProvider));
   _logger.info('[build] task provider registered');
   return { taskProvider };

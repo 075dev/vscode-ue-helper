@@ -29,13 +29,18 @@ import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
 import { errEnvelope, EC_MCP_CONTEXT_NOT_INITIALIZED, EC_UNKNOWN_TOOL } from '@core/envelope';
+import { buildUeCapabilityReport } from '@core/ueCapabilities';
 import { executeBuild } from '@commands/build';
 import { executeLaunchEditor } from '@commands/launchEditor';
 import { executeLiveCoding } from '@commands/liveCoding';
 import { executeGenerateCompileCommands } from '@commands/generateCompileCommands';
 import { executeSetSystemIncludes } from '@commands/setSystemIncludes';
 import { showProjectInfo } from '@commands/showProjectInfo';
-import { getLastBuildSnapshot, summarizeBuildErrorsForAgent } from '@build/lastBuild';
+import {
+  getLastBuildSnapshot,
+  getInProgressBuildId,
+  summarizeBuildErrorsForAgent,
+} from '@build/lastBuild';
 
 export interface MCPTool {
   name: string;
@@ -116,6 +121,18 @@ export const MCP_TOOLS: MCPTool[] = [
     description: 'Set system includes for Windows MSVC + Windows SDK.',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    // [借鉴 unreal-engine-mcp 的 ue_status] 工具名沿用社区事实标准,AI 代理按名字
+    // 发现时命中率更高。返回引擎版本 + 版本能力矩阵 + 当前构建配置,
+    // 让代理在动手前先知道「这个 UE 版本能做什么 / 该配哪个 clangd」。
+    name: 'ue_status',
+    description:
+      'Report the detected Unreal Engine version, the active build configuration/target/platform, ' +
+      'and the UE-version capability matrix (minimum supported version, recommended clangd/LLVM ' +
+      'toolchain, response-file compile commands, UHT generated headers). Call this before ' +
+      'generating compile commands so the toolchain choice matches the engine version.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 /**
@@ -133,6 +150,29 @@ export interface MCPContext {
 
 let _ctx: MCPContext | null = null;
 
+/**
+ * [D8] 判断一个 resolve 值是否为契约错误信封（envelope.ok === false）。
+ *
+ * 命令层按契约返回 Envelope（决策 D5）：失败时 ok=false 且带 error 对象。
+ * MCP 的 dispatch 是 fire-and-forget —— resolve 出来的错误信封必须被识别出来
+ * 并记日志，否则失败在 MCP 侧完全静默。
+ */
+function isErrEnvelope(value: unknown): value is { ok: false; error: { code: string; message: string } } {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as { ok?: unknown; error?: unknown };
+  if (candidate.ok !== false) {
+    return false;
+  }
+  const error = candidate.error;
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const detail = error as { code?: unknown; message?: unknown };
+  return typeof detail.code === 'string' && typeof detail.message === 'string';
+}
+
 /** 注入 MCP 运行时上下文 —— activateMCP 内部调用。传 null 等于清空(unmount/dispose)。 */
 export function setMCPContext(ctx: MCPContext | null): void {
   _ctx = ctx;
@@ -144,6 +184,36 @@ export function getMCPContext(): MCPContext | null {
 }
 
 /**
+ * 工具调用的统一结果 —— [D17]
+ *
+ * `text` 是放进 MCP `content[0].text` 的载荷 JSON 文本；
+ * `isError` 是 MCP 协议标准字段（CallToolResult.isError），
+ * 失败时置 true —— 旧实现从不置位，Cursor / Claude Code 的错误分支形同虚设。
+ */
+export interface ToolResult {
+  /** 载荷 JSON 文本 */
+  text: string;
+  /** MCP 协议级错误标记；失败时 true */
+  isError: boolean;
+}
+
+/**
+ * [D17] 唯一的响应构造器。
+ *
+ * 旧实现里四种成功形状（dispatch 回执 / 空快照 / 有快照 / ue_status）
+ * 与失败信封各自 `JSON.stringify({...})`，形状散落在 switch 的每个分支里。
+ * 这里收敛为一个出口：
+ *   - 载荷形状由调用方给（对外契约不变 —— 契约 openapi.yaml 已定义 required）
+ *   - `isError` 由 `ok === false` 统一推导，不再逐个分支手写
+ *   - 失败载荷额外带 `isError: true`，让只读文本的 agent 也能识别失败
+ */
+function makeResult(payload: object): ToolResult {
+  const record = payload as Record<string, unknown>;
+  const isError = record['ok'] === false;
+  const finalPayload = isError ? { ...record, isError: true } : record;
+  return { text: JSON.stringify(finalPayload), isError };
+}
+/**
  * Call a tool by name with the given args. Returns the JSON string the
  * MCP transport expects。
  *
@@ -151,11 +221,23 @@ export function getMCPContext(): MCPContext | null {
  * 所以 fire-and-forget dispatch 后立刻返回 `{ok: true, dispatched}`,
  * 真实进度通过 logger 输出。错误路径同步返回 `{ok: false, error: {code, message}}`
  * (契约 openapi.yaml Error + 决策 D5,错误码取自全局 9 项枚举)。
+ *
+ * [D17] 本函数保留"只返回字符串"的旧签名（测试与外部调用方兼容）；
+ * 需要 MCP 协议级 `isError` 的调用方请用 `callToolResult`。
  */
 export function callTool(name: string, args: Record<string, unknown>): string {
+  return callToolResult(name, args).text;
+}
+
+/**
+ * [D17] 调用工具并返回带 `isError` 的完整结果 —— MCP server 的入口。
+ *
+ * 与 `callTool` 同一套 dispatch 逻辑，区别只在返回值多一个协议级错误标记。
+ */
+export function callToolResult(name: string, args: Record<string, unknown>): ToolResult {
   if (!_ctx) {
     // 契约错误出口(openapi.yaml Error + 决策 D5):{ok: false, error: {code, message}},非裸字符串
-    return JSON.stringify(
+    return makeResult(
       errEnvelope(
         EC_MCP_CONTEXT_NOT_INITIALIZED,
         'MCP context not initialized — extension is not running in Cursor / Claude Code host',
@@ -167,10 +249,23 @@ export function callTool(name: string, args: Record<string, unknown>): string {
   // fire-and-forget:真实进度通过 logger 流到 OutputChannel + Problems 面板。
   // 这里仅记录 dispatch + 捕获未处理的 rejection。
   // 形参放宽为 Promise<unknown>:命令层已按契约返回 Envelope(骨架阶段),dispatch 只关心 rejection。
+  //
+  // [D8] resolve 出来的**错误信封**同样要记日志 —— 旧实现只 catch rejection,
+  // 导致命令层的早退失败(没选到项目/引擎、并发守卫被拒)在整个 MCP 会话里完全静默:
+  // agent 只看到 "{ok:true, dispatched}" 就以为构建已经在跑。
   const dispatch = (p: Promise<unknown>, label: string): void => {
-    p.catch((err) => {
-      logger.error(`[mcp] tool ${label} failed:`, err);
-    });
+    void p.then(
+      (value) => {
+        if (isErrEnvelope(value)) {
+          logger.error(
+            `[mcp] tool ${label} failed: ${value.error.code}: ${value.error.message}`,
+          );
+        }
+      },
+      (err) => {
+        logger.error(`[mcp] tool ${label} failed:`, err);
+      },
+    );
   };
 
   switch (name) {
@@ -196,7 +291,7 @@ export function callTool(name: string, args: Record<string, unknown>): string {
         executeBuild(mode, config, logger, detection, workspace, true, undefined, module),
         name,
       );
-      return JSON.stringify({
+      return makeResult({
         ok: true,
         dispatched: name,
         mode,
@@ -206,18 +301,34 @@ export function callTool(name: string, args: Record<string, unknown>): string {
     }
     case 'ue_rebuild':
       dispatch(executeBuild('rebuild', config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_clean':
       dispatch(executeBuild('clean', config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_get_build_errors': {
       // 同步读进程内快照（MCP server 与扩展宿主同进程，见 src/mcp/server.ts），
       // 不需要 fire-and-forget —— AI 代理拿到的就是确定性的最近构建结果。
-      const snap = getLastBuildSnapshot();
-      if (!snap) {
-        return JSON.stringify({
+      //
+      // [D8] 构建进行中优先返回 build-in-progress：
+      // MCP 是 fire-and-forget，agent 触发 ue_build 后立刻读错误是很常见的用法，
+      // 此时构建通常还没跑完。若直接返回上一轮的快照，agent 会把旧结果当成本次
+      // 构建的结果（"编译通过了"），从而做出错误的修复决策。
+      const inProgress = getInProgressBuildId();
+      if (inProgress) {
+        return makeResult({
           ok: true,
           hasResult: false,
+          buildId: inProgress,
+          reason: 'build-in-progress',
+          note: 'a build is currently running; call ue_get_build_errors again after it finishes',
+        });
+      }
+      const snap = getLastBuildSnapshot();
+      if (!snap) {
+        return makeResult({
+          ok: true,
+          hasResult: false,
+          reason: 'no-build',
           note: 'no build has run in this session; call ue_build first',
         });
       }
@@ -231,9 +342,12 @@ export function callTool(name: string, args: Record<string, unknown>): string {
       const summary = summarizeBuildErrorsForAgent(snap);
       // 注意：summary 里也有 build 级别的 ok（构建是否成功），所以嵌套在 build 字段下，
       // 避免与工具调用级别的 ok 冲突。
-      return JSON.stringify({
+      // [D8] 顶层 buildId 与 build.buildId 一致 —— agent 可用它判断读到的结果
+      // 是否属于自己刚触发的那次构建（早退分支同样产生 buildId）。
+      return makeResult({
         ok: true,
         hasResult: true,
+        buildId: snap.buildId,
         build: {
           ...summary,
           errorCount: summary.totals.errors,
@@ -243,24 +357,43 @@ export function callTool(name: string, args: Record<string, unknown>): string {
     }
     case 'ue_launch_editor':
       dispatch(executeLaunchEditor(config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_live_coding':
       dispatch(executeLiveCoding(config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_generate_compile_commands':
       dispatch(executeGenerateCompileCommands(config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_show_project_info':
       dispatch(showProjectInfo(config, logger, detection, workspace, true), name);
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
     case 'ue_set_system_includes':
       dispatch(
         executeSetSystemIncludes(config, logger, detection, workspace, clangdOps, true),
         name,
       );
-      return JSON.stringify({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+      return makeResult({ ok: true, dispatched: name, note: 'fire-and-forget; see logger' });
+    case 'ue_status': {
+      // 同步读:全部来自进程内已注入的 detection/workspace/config,无需等待子进程。
+      // [借鉴 unreal-engine-mcp 的 ue_status] 返回版本能力矩阵,而不是在能力缺失时
+      // 抛一个代理看不懂的错误。
+      const engine = workspace?.engine ?? null;
+      const project = workspace?.project ?? null;
+      const capabilities = buildUeCapabilityReport(engine?.version ?? null);
+      return makeResult({
+        ok: true,
+        project: project ? { name: project.name, path: project.path } : null,
+        engine: engine ? { version: engine.version, path: engine.path } : null,
+        build: {
+          configuration: config.configuration,
+          target: config.target,
+          platform: config.platform,
+        },
+        capabilities,
+      });
+    }
     default:
       // 契约错误出口(openapi.yaml Error + 决策 D5):{ok: false, error: {code, message}},非裸字符串
-      return JSON.stringify(errEnvelope(EC_UNKNOWN_TOOL, `Unknown tool: ${name}`));
+      return makeResult(errEnvelope(EC_UNKNOWN_TOOL, `Unknown tool: ${name}`));
   }
 }

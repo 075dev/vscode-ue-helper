@@ -49,8 +49,19 @@ export interface CliOptions {
 export interface ParseArgsResult {
   /** 解析后的选项 */
   options: CliOptions;
-  /** 错误信息列表（空数组表示无错误） */
+  /** 错误信息列表（空数组表示无错误）—— 非空即致命，调用方应退出进程 */
   errors: string[];
+  /**
+   * [D11] 警告信息列表（非致命，调用方应记录后继续运行）。
+   *
+   * 未知参数走这里而不是 errors：launcher 是 `node "...\clangdProxy.js" %*`，
+   * 参数原样过 cmd.exe —— 含空格的路径（`C:\Program Files\LLVM\bin\clangd.exe`、
+   * `D:\Program Files\Epic Games\UE_5.4\...`）会被 cmd 拆成两段，后一段就成了
+   * “未知参数”。旧实现把未知参数当致命错误 → 代理 exit(2) → clangd 扩展拿不到
+   * 语言服务器 → 整个工程没有 IntelliSense，且 `clangd.restartAfterCrash` 默认开
+   * → 无限重启循环。未知参数必须忽略而不是杀死进程。
+   */
+  warnings: string[];
 }
 
 const DEFAULT_KEEPALIVE_MAX = 20;
@@ -64,6 +75,8 @@ const DEFAULT_LOCALIZATION_MODE = 'append';
  */
 export function parseArgs(argv: string[]): ParseArgsResult {
   const errors: string[] = [];
+  // [D11] 未知参数只记警告,不致命 —— 见 ParseArgsResult.warnings 的说明。
+  const warnings: string[] = [];
   const options: CliOptions = {
     keepaliveMax: DEFAULT_KEEPALIVE_MAX,
     keepaliveTtlSec: DEFAULT_KEEPALIVE_TTL_SEC,
@@ -216,7 +229,10 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         break;
       }
       default:
-        errors.push(`Unknown proxy argument: ${arg}`);
+        // [D11] 未知参数 → 警告并忽略,不再致命。
+        // cmd.exe 拆词会把含空格路径的尾巴变成"未知参数",杀死进程会让整个
+        // 工程失去 IntelliSense。忽略它代理仍能正常工作。
+        warnings.push(`Unknown proxy argument (ignored): ${arg}`);
         break;
     }
     i++;
@@ -227,5 +243,5 @@ export function parseArgs(argv: string[]): ParseArgsResult {
   }
 
   options.realClangdArgs = realArgs.filter((a) => a !== '--');
-  return { options, errors };
+  return { options, errors, warnings };
 }

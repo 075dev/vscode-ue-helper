@@ -82,6 +82,19 @@ export class Logger {
   private prefix: string;
   /** 当前日志级别（'info' 及以上会被记录） */
   private currentLevel: LogLevel = 'info';
+  /**
+   * [D7] 是否把日志同时写到 console。
+   *
+   * MCP stdio 传输把 JSON-RPC 帧写到 `process.stdout`（换行分隔），
+   * 而 `console.log` 也写 stdout —— 任何一行 info 日志都会插进帧流，
+   * 让 MCP 客户端解析失败。关闭 console 输出后日志只进 OutputChannel，
+   * stdout 保持纯净。
+   *
+   * warn / error 走 stderr，**本身不与 stdout 冲突**；但开关语义是
+   * "仅写 OutputChannel、不写 console"，所以三路统一受控 —— 避免
+   * MCP 场景下 console 里混进无法归属的噪声。
+   */
+  private consoleEnabled = true;
 
   /**
    * @param prefix 同时作为 Output 通道的标题和每条日志的前缀
@@ -90,6 +103,22 @@ export class Logger {
   constructor(prefix: string = 'VSCodeUEHelper') {
     this.channelName = prefix;
     this.prefix = `[${prefix}]`;
+  }
+
+  /**
+   * [D7] 开关 console 输出（三路统一：info / warn / error）。
+   *
+   * MCP 激活时调用 `setConsoleEnabled(false)`，避免日志污染 stdout 帧流。
+   *
+   * @param enabled true = 正常写 console；false = 只写 OutputChannel
+   */
+  setConsoleEnabled(enabled: boolean): void {
+    this.consoleEnabled = enabled;
+  }
+
+  /** 当前 console 输出是否开启（测试与诊断用） */
+  isConsoleEnabled(): boolean {
+    return this.consoleEnabled;
   }
 
   /** 获取当前共享通道；通道被释放后自动创建新的实例。 */
@@ -145,7 +174,11 @@ export class Logger {
     }
     const line = this.format('info', args);
     this.ensureChannel().appendLine(line);
-    console.log(line);
+    // [D7] console.log 写 stdout —— 与 MCP stdio 的 JSON-RPC 帧流冲突。
+    // console 关闭时只留 OutputChannel，stdout 保持纯净。
+    if (this.consoleEnabled) {
+      console.log(line);
+    }
   }
 
   /** 警告日志。不致命的异常、降级处理、找不到资源等 */
@@ -155,7 +188,10 @@ export class Logger {
     }
     const line = this.format('warn', args);
     this.ensureChannel().appendLine(line);
-    console.warn(line);
+    // [D7] console 输出受开关控制(MCP 场景下只留 OutputChannel)
+    if (this.consoleEnabled) {
+      console.warn(line);
+    }
   }
 
   /** 错误日志。命令失败、激活失败、解析错误等 */
@@ -165,7 +201,10 @@ export class Logger {
     }
     const line = this.format('error', args);
     this.ensureChannel().appendLine(line);
-    console.error(line);
+    // [D7] console 输出受开关控制(MCP 场景下只留 OutputChannel)
+    if (this.consoleEnabled) {
+      console.error(line);
+    }
   }
 
   /** 调试日志。仅在 lspLoggingLevel = debug 时记录 */

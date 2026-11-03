@@ -37,6 +37,23 @@ folders[1] = UE 引擎根目录
 
 **原因**：UE 项目通常很大，递归扫描会卡顿；workspace 配置是显式的用户意图。
 
+### 这是前提，不是降级方案（2026-10-21 用户拍板）
+
+`.code-workspace` 硬依赖是**设计意图**，不得以「增强鲁棒性」为由加兜底发现：
+
+- UE 的 C++ 项目**必须**先在 UE 编辑器里执行 **Generate Visual Studio project files**
+  （UBT `-ProjectFiles`）才会产出 `.sln/.vcxproj`；同一流程同时生成 `.code-workspace`。
+  换句话说，`.code-workspace` 是 UE 生成的权威产物，插件读取它是读取「用户意图」，
+  不是在猜。
+- 因此**不要**引入：注册表扫描、Epic 安装目录搜索、`mcp_engine.txt` 之类的引擎路径兜底。
+  那些属于「脱离工作区独立运行」的形态（独立 MCP server / CLI 工具），与本插件定位不符。
+- 检测为空时的**正确动作**是让用户去生成 / 核对 `.code-workspace`（`folders[]` 的
+  `path === '.'` 是项目、`name === 'UE5'` 是引擎），而不是插件替用户猜。
+- 用户可见文案必须指向这个动作。**禁止**出现「请手动设置 `vscodeUEHelper.engineRoot`」
+  之类的引导 —— `engineRoot` **不是**本插件的设置项（`package.json` 中无此键），
+  引擎路径只来自 `folders[]`。
+
+
 ## DetectionHandles 结构
 
 ```typescript

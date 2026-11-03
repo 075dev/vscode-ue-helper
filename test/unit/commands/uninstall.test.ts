@@ -128,4 +128,27 @@ describe('executeUninstall', () => {
     expect(result.data?.removed).toContain('.clangd');
     await expect(fs.access(path.join(tmpRoot, '.clangd'))).rejects.toThrow();
   });
+
+  // [M1] 插件自己创建的备份目录必须被清理 ——
+  // D12 起备份落在 `.vscode/uehelper-backup/<原文件名>`，而清理清单此前仍写着
+  // D12 之前的旧路径 `.vscode/.code-workspace.backup` → 备份目录永远不会被删。
+  it('[M1] 清理插件自己创建的 .vscode/uehelper-backup/ 目录(含 D12 前的旧目录)', async () => {
+    const backupDir = path.join(tmpRoot, '.vscode', 'uehelper-backup');
+    await fs.mkdir(backupDir, { recursive: true });
+    await fs.writeFile(path.join(backupDir, 'MyGame.code-workspace'), '{}', 'utf-8');
+    await fs.writeFile(path.join(backupDir, 'launch.json'), '{}', 'utf-8');
+
+    const legacyBackupDir = path.join(tmpRoot, '.vscode', '.code-workspace.backup');
+    await fs.mkdir(legacyBackupDir, { recursive: true });
+    await fs.writeFile(path.join(legacyBackupDir, 'MyGame.code-workspace'), '{}', 'utf-8');
+
+    const result = await executeUninstall(createLoggerMock(), makeWorkspace(tmpRoot));
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.removed).toContain('.vscode/uehelper-backup/');
+
+    // 两个备份目录都不该残留
+    await expect(fs.access(backupDir)).rejects.toThrow();
+    await expect(fs.access(legacyBackupDir)).rejects.toThrow();
+  });
 });

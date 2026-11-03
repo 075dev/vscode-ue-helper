@@ -32,6 +32,8 @@ const mockListSdk = vi.fn<unknown[], Promise<string[]>>();
 const mockRenderFlags = vi.fn<unknown[], Promise<string[]>>();
 const mockReadRecommended = vi.fn<unknown[], Promise<string | null>>();
 const mockSelectSdk = vi.fn<unknown[], string>();
+// [D5] setSystemIncludes 现在会读「用户选中的」MSVC 版本对应的 fms 兼容版本
+const mockReadMsvcVersion = vi.fn<unknown[], Promise<string | null>>();
 
 vi.mock('@clangd/windowsSdk', () => ({
   discoverSystemIncludes:
@@ -42,6 +44,7 @@ vi.mock('@clangd/windowsSdk', () => ({
   readRecommendedSdkVersion:
     (...args: unknown[]): Promise<string | null> => mockReadRecommended(...args),
   selectSdkVersion: (...args: unknown[]): string => mockSelectSdk(...args),
+  readMsvcVersion: (...args: unknown[]): Promise<string | null> => mockReadMsvcVersion(...args),
 }));
 
 // ---- Mock @clangd/flagGlossary ----
@@ -140,6 +143,12 @@ function createClangdOpsMock(applyResult?: {
       exists: vi.fn(() => Promise.resolve(true)),
       writeFull: vi.fn(() => Promise.resolve(undefined)),
       applyAddFlags: applyAddFlagsMock,
+      // [D5] 统一入口 collectClangdFlagContext 会读 workspace 采集 ctx —— mock 提供最小形态
+      workspace: {
+        ueClangdCompatPath: undefined,
+        macroHelperPath: undefined,
+        projectFile: undefined,
+      },
     } as unknown as ClangdOps,
     applyAddFlagsMock,
   };
@@ -188,12 +197,19 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     mockSelectSdk.mockReset().mockReturnValue('10.0.22621.0');
     mockRenderFlags.mockReset().mockResolvedValue(['-fms-compatibility-version=19.38.33130']);
     mockResolveFlags.mockReset().mockReturnValue(['FLAG_A']);
+    mockReadMsvcVersion.mockReset().mockResolvedValue('19.38.33130');
 
     showQuickPickMock = vscode.window.showQuickPick as unknown as ReturnType<typeof vi.fn>;
     showQuickPickMock
       .mockReset()
       .mockResolvedValueOnce({ label: '14.38.33130' })
       .mockResolvedValueOnce({ label: '10.0.22621.0' });
+
+    // 本文件未开 vitest clearMocks —— vscode mock 的调用记录跨用例累积,
+    // 而 [D15] 用例要断言"未弹窗",必须先清零。
+    (vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>).mockReset();
   });
 
   it('成功:渲染 flags 经 applyAddFlags 写入,userAddFlags 同步回设置,返回 ok envelope', async () => {
@@ -204,6 +220,19 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     expect(updateMock).toHaveBeenCalledWith('clangd.userAddFlags', [
       'system-include-windows',
     ]);
+    // [D5] MSVC / SDK 路径持久化 —— 统一入口靠它们重建 system-include-windows
+    expect(updateMock).toHaveBeenCalledWith(
+      'clangd.msvcRoot',
+      'C:\\VS\\MSVC\\14.38.33130',
+    );
+    expect(updateMock).toHaveBeenCalledWith(
+      'clangd.sdkRoot',
+      'C:\\Kits\\10\\Include\\10.0.22621.0',
+    );
+    expect(updateMock).toHaveBeenCalledWith(
+      'clangd.fmsCompatibilityVersion',
+      '19.38.33130',
+    );
     expect(
       vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
     ).toHaveBeenCalledWith(expect.stringContaining('System includes set'));
@@ -213,7 +242,7 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     expect(env.summary).toBe('System includes set: MSVC 14.38.33130, SDK 10.0.22621.0');
   });
 
-  it('silent 且未检测到项目 → PROJECT_NOT_DETECTED,不触发探测、不弹 picker', async () => {
+  it('silent 且未检测到项目 → PROJECT_NOT_DETECTED,不触发探测、不弹 picker、不弹窗', async () => {
     const emptyDetection = createDetectionMock([]);
     // 传 null(而非 undefined):默认参数会对 undefined 回落为 PROJECT,null 才表示"解析为空"
     const noProjectWs = createWorkspaceMock(null);
@@ -227,9 +256,11 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
       silent: true,
     });
 
+    // [D15 收口 + MINOR-1] silent(MCP/AI 代理)路径**不弹任何窗** ——
+    // agent 无法关闭通知，弹窗对它只是噪音；失败原因由错误信封承载。
     expect(
       vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>,
-    ).toHaveBeenCalledWith(expect.stringContaining('.uproject'));
+    ).not.toHaveBeenCalled();
     expect(mockDiscover).not.toHaveBeenCalled();
     expect(showQuickPickMock).not.toHaveBeenCalled();
     // [envelope 对齐] 未检测到 .uproject → PROJECT_NOT_DETECTED(映射表直配)
@@ -296,5 +327,112 @@ describe('executeSetSystemIncludes(envelope 对齐)', () => {
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INTERNAL_ERROR');
     expect(env.error?.message).toContain('ClangdOps is required');
+  });
+
+  // ============ [D15] silent(MCP/AI 代理)路径不弹窗 ============
+
+  it('[D15] silent=true:不弹 QuickPick,直接采用自动检测到的 MSVC/SDK 并完成写入', async () => {
+    const env = await invoke({
+      config,
+      logger,
+      detection,
+      workspace,
+      clangdOps,
+      silent: true,
+    });
+
+    // 关键验收:agent 无法回答交互式选择框 —— silent 路径不得弹
+    expect(showQuickPickMock).not.toHaveBeenCalled();
+    expect(applyAddFlagsMock).toHaveBeenCalled();
+    expect(env.ok).toBe(true);
+    // 直接采用 detected 的根路径
+    expect(updateMock).toHaveBeenCalledWith('clangd.msvcRoot', DETECTED.msvcRoot);
+    expect(updateMock).toHaveBeenCalledWith('clangd.sdkRoot', DETECTED.sdkRoot);
+    // 摘要仍给出可读的版本标签
+    expect(env.summary).toBe(
+      'System includes set: MSVC 14.38.33130, SDK 10.0.22621.0',
+    );
+  });
+
+  it('[D15] silent=true:不弹成功提示框', async () => {
+    await invoke({ config, logger, detection, workspace, clangdOps, silent: true });
+
+    expect(
+      vscode.window.showInformationMessage as unknown as ReturnType<typeof vi.fn>,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('[D15] silent=true 且探测失败:返回错误信封,不弹任何窗', async () => {
+    mockDiscover.mockReset().mockResolvedValue(null);
+
+    const env = await invoke({
+      config,
+      logger,
+      detection,
+      workspace,
+      clangdOps,
+      silent: true,
+    });
+
+    expect(
+      vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>,
+    ).not.toHaveBeenCalled();
+    expect(env.ok).toBe(false);
+    expect(env.error?.code).toBe('CLANGD_NOT_AVAILABLE');
+  });
+
+  it('[D15] 非 silent 路径:探测失败弹的是非模态错误框(不再阻塞整个窗口)', async () => {
+    mockDiscover.mockReset().mockResolvedValue(null);
+
+    await invoke({ config, logger, detection, workspace, clangdOps });
+
+    const errorMock = vscode.window.showErrorMessage as unknown as ReturnType<typeof vi.fn>;
+    expect(errorMock).toHaveBeenCalled();
+    const options = errorMock.mock.calls[0]?.[1] as { modal?: boolean } | undefined;
+    expect(options?.modal).toBe(false);
+  });
+
+  // ============ [MAJOR-3] fms 版本来源必须唯一 ============
+
+  it('[MAJOR-3] 用户选的 MSVC 与探测到的不同 → .clangd 与设置项用的是同一个(选中版本的)fms 版本', async () => {
+    // 用户在 QuickPick 里选了 14.36.32532（探测到的是 14.38.33130）
+    showQuickPickMock
+      .mockReset()
+      .mockResolvedValueOnce({ label: '14.36.32532' })
+      .mockResolvedValueOnce({ label: '10.0.22621.0' });
+    // 按传入的 msvcRoot 返回对应的 fms 版本
+    mockReadMsvcVersion.mockReset().mockImplementation((root: unknown) =>
+      Promise.resolve(
+        String(root).includes('14.36.32532') ? '19.36.32532' : '19.38.33130',
+      ),
+    );
+
+    await invoke({ config, logger, detection, workspace, clangdOps });
+
+    // 渲染 .clangd 时用的是**选中版本**的 fms（此前用的是探测值 19.38.33130）
+    const renderParams = mockRenderFlags.mock.calls[0]?.[0] as {
+      fmsCompatibilityVersion?: string | null;
+    };
+    expect(renderParams?.fmsCompatibilityVersion).toBe('19.36.32532');
+    expect(renderParams?.fmsCompatibilityVersion).not.toBe(DETECTED.fmsCompatibilityVersion);
+
+    // 持久化设置项用的是同一个值 → 后续任何一次 .clangd 重写内容都一致
+    expect(updateMock).toHaveBeenCalledWith('clangd.fmsCompatibilityVersion', '19.36.32532');
+    expect(updateMock).toHaveBeenCalledWith(
+      'clangd.msvcRoot',
+      'C:\\VS\\MSVC\\14.36.32532',
+    );
+  });
+
+  it('[MAJOR-3] silent 路径:探测到的 msvcRoot 就是选中的 → fms 版本与持久化值一致', async () => {
+    mockReadMsvcVersion.mockReset().mockResolvedValue('19.38.33130');
+
+    await invoke({ config, logger, detection, workspace, clangdOps, silent: true });
+
+    const renderParams = mockRenderFlags.mock.calls[0]?.[0] as {
+      fmsCompatibilityVersion?: string | null;
+    };
+    expect(renderParams?.fmsCompatibilityVersion).toBe('19.38.33130');
+    expect(updateMock).toHaveBeenCalledWith('clangd.fmsCompatibilityVersion', '19.38.33130');
   });
 });

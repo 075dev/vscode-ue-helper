@@ -30,6 +30,7 @@ const REQUIRED_COMMANDS: ReadonlyArray<string> = [
   'vscodeUEHelper.launchEditor',
   'vscodeUEHelper.showProjectInfo',
   'vscodeUEHelper.diagnoseProject',
+  'vscodeUEHelper.clearClangdIndex',
   'vscodeUEHelper.generateCompileCommands',
   'vscodeUEHelper.setSystemIncludes',
   'vscodeUEHelper.createProject',
@@ -43,8 +44,13 @@ const REQUIRED_COMMANDS: ReadonlyArray<string> = [
   'vscodeUEHelper.disableClangdProxy',
   'vscodeUEHelper.showClangdProxyStatus',
   'vscodeUEHelper.showControlPanel',
+  'vscodeUEHelper.retryFirstTimeInit',
   'vscodeUEHelper.refreshProjectExplorer',
   'vscodeUEHelper.openProjectExplorerFile',
+  'vscodeUEHelper.copyBuildCommand',
+  'vscodeUEHelper.noLintCurrentLine',
+  'vscodeUEHelper.noLintNextLine',
+  'vscodeUEHelper.switchHeaderSource',
 ];
 
 // mocha 全局由 suite/index.ts 注入
@@ -73,7 +79,7 @@ mocha.describe('VSCodeUEHelper e2e (T5.5 + 2026-09-08 onCommand fix)', () => {
     }
   });
 
-  mocha.it('all 22 vscodeUEHelper commands registered', async () => {
+  mocha.it('all vscodeUEHelper commands registered', async () => {
     const allCmds = await vscode.commands.getCommands(true);
     const ueCmds = allCmds.filter((c) => c.startsWith('vscodeUEHelper.'));
     const missing = REQUIRED_COMMANDS.filter((id) => !ueCmds.includes(id));
@@ -99,12 +105,12 @@ mocha.describe('VSCodeUEHelper e2e (T5.5 + 2026-09-08 onCommand fix)', () => {
     }
   });
 
-  mocha.it('commands.getCommands returns >=22 ueHelper commands at 200ms', async () => {
+  mocha.it('commands.getCommands returns all ueHelper commands at 200ms', async () => {
     const allCmds = await vscode.commands.getCommands(true);
     const ueCmds = allCmds.filter((c) => c.startsWith('vscodeUEHelper.'));
-    if (ueCmds.length < 22) {
+    if (ueCmds.length < REQUIRED_COMMANDS.length) {
       throw new Error(
-        `only ${ueCmds.length} vscodeUEHelper.* commands registered, expected 22`,
+        `only ${ueCmds.length} vscodeUEHelper.* commands registered, expected ${REQUIRED_COMMANDS.length}`,
       );
     }
   });

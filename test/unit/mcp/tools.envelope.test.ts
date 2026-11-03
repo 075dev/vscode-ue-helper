@@ -51,7 +51,7 @@ vi.mock('@commands/showProjectInfo', () => ({
 // 测试主体 import (hoist 之后)
 // ============================================================
 
-import { MCP_TOOLS, callTool, setMCPContext } from '@mcp/tools';
+import { MCP_TOOLS, callTool, callToolResult, setMCPContext } from '@mcp/tools';
 import { rememberBuildSnapshot, resetLastBuildSnapshot } from '@build/lastBuild';
 import { EC_MCP_CONTEXT_NOT_INITIALIZED, EC_UNKNOWN_TOOL } from '@core/envelope';
 import type { Config } from '@core/config';
@@ -92,7 +92,7 @@ const DISPATCH_TOOLS_WITHOUT_MODE: string[] = [
   'ue_set_system_includes',
 ];
 
-/** 契约 operationId 清单(9 项,顺序与 MCP_TOOLS 一致) */
+/** 契约 operationId 清单(10 项,顺序与 MCP_TOOLS 一致) */
 const CONTRACT_OPERATION_IDS: string[] = [
   'ue_build',
   'ue_rebuild',
@@ -103,6 +103,7 @@ const CONTRACT_OPERATION_IDS: string[] = [
   'ue_generate_compile_commands',
   'ue_show_project_info',
   'ue_set_system_includes',
+  'ue_status',
 ];
 
 describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
@@ -127,7 +128,7 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
   // 1. 工具清单 ↔ 契约 operationId
   // ============================================================
 
-  it('MCP_TOOLS 9 个工具名与契约 operationId 一一对应', () => {
+  it('MCP_TOOLS 10 个工具名与契约 operationId 一一对应', () => {
     expect(MCP_TOOLS.map((t) => t.name)).toEqual(CONTRACT_OPERATION_IDS);
   });
 
@@ -181,17 +182,22 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
   // 3. ue_get_build_errors ↔ 契约同步快照
   // ============================================================
 
-  it('ue_get_build_errors 空态 keys 严格为 {ok, hasResult, note},且不触发任何 dispatch', () => {
+  it('ue_get_build_errors 空态 keys 严格为 {ok, hasResult, reason, note},且不触发任何 dispatch', () => {
     const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as Record<string, unknown>;
-    expect(Object.keys(parsed).sort()).toEqual(['hasResult', 'note', 'ok']);
+    // [D8] 增补 reason(空态原因:no-build / build-in-progress)
+    expect(Object.keys(parsed).sort()).toEqual(['hasResult', 'note', 'ok', 'reason']);
     expect(parsed['ok']).toBe(true);
     expect(parsed['hasResult']).toBe(false);
+    // [D8] 空态必须给出原因,agent 才知道该重试还是该先触发构建
+    expect(parsed['reason']).toBe('no-build');
     expect(String(parsed['note'])).toContain('ue_build');
     expect(mockExecuteBuild).not.toHaveBeenCalled();
   });
 
   it('ue_get_build_errors 有快照:build 含契约 BuildSummary 已对齐字段 ok/mode/exitCode/diagnostics/filesWithErrors', () => {
     rememberBuildSnapshot({
+      buildId: 'b-envelope-1',
+      startedAtIso: '2026-09-19T00:00:00.000Z',
       mode: 'rebuild',
       ok: true,
       cancelled: false,
@@ -212,10 +218,14 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
     const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
       ok: boolean;
       hasResult: boolean;
+      buildId?: string;
       build: Record<string, unknown>;
     };
     expect(parsed.ok).toBe(true);
     expect(parsed.hasResult).toBe(true);
+    // [D8] 顶层 buildId 与 build.buildId 一致 —— agent 用它判断结果属于哪次尝试
+    expect(parsed.buildId).toBe('b-envelope-1');
+    expect(parsed.build['buildId']).toBe('b-envelope-1');
     expect(parsed.build['ok']).toBe(true); // 契约 BuildSummary required: ok
     expect(parsed.build['mode']).toBe('rebuild');
     expect(parsed.build['exitCode']).toBe(0);
@@ -270,5 +280,42 @@ describe('MCP tools 契约对齐(MCPDispatch / 快照 / Error)', () => {
       mode: 'build',
       note: expect.any(String) as unknown,
     });
+  });
+
+  // ============================================================
+  // 6. [D17] 统一响应构造器 + MCP 协议级 isError
+  // ============================================================
+
+  it('[D17] callToolResult 成功时 isError=false 且载荷不含 isError 键', () => {
+    const result = callToolResult('ue_build', {});
+    expect(result.isError).toBe(false);
+    const parsed = JSON.parse(result.text) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(true);
+    expect('isError' in parsed).toBe(false);
+  });
+
+  it('[D17] callToolResult 失败时 isError=true 且载荷带 isError:true', () => {
+    const result = callToolResult('no_such_tool', {});
+    expect(result.isError).toBe(true);
+    const parsed = JSON.parse(result.text) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    expect(parsed['isError']).toBe(true);
+    expect((parsed['error'] as { code?: string }).code).toBe(EC_UNKNOWN_TOOL);
+  });
+
+  it('[D17] MCP context 未初始化 → isError=true', () => {
+    setMCPContext(null);
+    const result = callToolResult('ue_build', {});
+    expect(result.isError).toBe(true);
+    const parsed = JSON.parse(result.text) as Record<string, unknown>;
+    expect(parsed['isError']).toBe(true);
+    expect((parsed['error'] as { code?: string }).code).toBe(EC_MCP_CONTEXT_NOT_INITIALIZED);
+  });
+
+  it('[D17] callTool 保持旧签名(只返回字符串)以兼容既有调用方', () => {
+    const ret = callTool('ue_build', {});
+    expect(typeof ret).toBe('string');
+    // 与 callToolResult 的 text 一致
+    expect(ret).toBe(callToolResult('ue_build', {}).text);
   });
 });

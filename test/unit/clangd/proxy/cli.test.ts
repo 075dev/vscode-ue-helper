@@ -91,7 +91,7 @@ describe('parseArgs — CLI 参数解析', () => {
 
   // ─── 未知参数 ─────────────────────────────────────────────
 
-  it('未知代理参数返回错误信息', () => {
+  it('[D11] 未知代理参数只记警告,不致命(其余参数照常解析)', () => {
     const result = parseArgs([
       'node',
       'proxy.js',
@@ -101,10 +101,64 @@ describe('parseArgs — CLI 参数解析', () => {
       '/usr/bin/clangd',
     ]);
 
-    expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors.some((e) => e.includes('--unknown-arg'))).toBe(true);
+    // 关键:未知参数不再进 errors —— 旧实现会让代理 exit(2),
+    // 导致 cmd.exe 拆词产生的"未知参数"把整个工程的 IntelliSense 打掉。
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings.some((w) => w.includes('--unknown-arg'))).toBe(true);
     expect(result.options.realClangd).toBe('/usr/bin/clangd');
     expect(result.options.keepaliveMax).toBe(20); // 默认值
+  });
+
+  it('[D11] cmd.exe 拆词产生的裸路径参数被忽略,不产生致命错误', () => {
+    // 模拟 launcher `node proxy.js %*` 在 cmd.exe 下把含空格的路径拆成两段：
+    // --real-clangd "C:\Program Files\LLVM\bin\clangd.exe"
+    //   → --real-clangd C:\Program + 裸参数 Files\LLVM\bin\clangd.exe
+    // 裸参数(不以 -- 开头)解析器本来就跳过;关键是它不能变成"未知参数"错误。
+    const result = parseArgs([
+      'node',
+      'proxy.js',
+      '--real-clangd',
+      'C:\\Program',
+      'Files\\LLVM\\bin\\clangd.exe',
+    ]);
+
+    expect(result.errors.filter((e) => e.includes('Unknown'))).toHaveLength(0);
+    expect(result.warnings.filter((w) => w.includes('Unknown'))).toHaveLength(0);
+  });
+
+  it('[D11] 扩展与代理版本不匹配(代理不认识新参数)时不致命', () => {
+    // 扩展侧新增了参数、代理侧还没跟上 —— 旧实现会让代理 exit(2),
+    // clangd 扩展拿不到语言服务器 → 整个工程无 IntelliSense + 无限重启循环。
+    const result = parseArgs([
+      'node',
+      'proxy.js',
+      '--future-option-from-newer-extension',
+      '--real-clangd',
+      '/usr/bin/clangd',
+    ]);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings.some((w) => w.includes('--future-option-from-newer-extension'))).toBe(
+      true,
+    );
+    expect(result.options.realClangd).toBe('/usr/bin/clangd');
+  });
+
+  it('[D11] 未知参数不影响其余已知参数的解析', () => {
+    const result = parseArgs([
+      'node',
+      'proxy.js',
+      '--keepalive-max',
+      '50',
+      '--bogus',
+      '--real-clangd',
+      '/usr/bin/clangd',
+    ]);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.options.keepaliveMax).toBe(50);
+    expect(result.options.realClangd).toBe('/usr/bin/clangd');
   });
 
   // ─── --real-clangd 作为最后一个参数 ───────────────────────────

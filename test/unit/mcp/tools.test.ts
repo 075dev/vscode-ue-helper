@@ -18,14 +18,14 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vite
 // 必须在 hoist 阶段可枚举,因此抽到顶层 const。
 // ============================================================
 
-type MockedExecute = Mock<unknown[], Promise<void>>;
+type MockedExecute = Mock<unknown[], Promise<unknown>>;
 
-const mockExecuteBuild = vi.fn<unknown[], Promise<void>>();
-const mockExecuteLaunchEditor = vi.fn<unknown[], Promise<void>>();
-const mockExecuteLiveCoding = vi.fn<unknown[], Promise<void>>();
-const mockExecuteGenerateCompileCommands = vi.fn<unknown[], Promise<void>>();
-const mockExecuteSetSystemIncludes = vi.fn<unknown[], Promise<void>>();
-const mockShowProjectInfo = vi.fn<unknown[], Promise<void>>();
+const mockExecuteBuild = vi.fn<unknown[], Promise<unknown>>();
+const mockExecuteLaunchEditor = vi.fn<unknown[], Promise<unknown>>();
+const mockExecuteLiveCoding = vi.fn<unknown[], Promise<unknown>>();
+const mockExecuteGenerateCompileCommands = vi.fn<unknown[], Promise<unknown>>();
+const mockExecuteSetSystemIncludes = vi.fn<unknown[], Promise<unknown>>();
+const mockShowProjectInfo = vi.fn<unknown[], Promise<unknown>>();
 
 vi.mock('@commands/build', () => ({
   executeBuild: (...args: unknown[]) => mockExecuteBuild(...args),
@@ -52,7 +52,11 @@ vi.mock('@commands/showProjectInfo', () => ({
 // ============================================================
 
 import { MCP_TOOLS, callTool, setMCPContext, getMCPContext } from '@mcp/tools';
-import { rememberBuildSnapshot, resetLastBuildSnapshot } from '@build/lastBuild';
+import {
+  rememberBuildSnapshot,
+  resetLastBuildSnapshot,
+  markBuildInProgress,
+} from '@build/lastBuild';
 import type { Config } from '@core/config';
 import type { Logger } from '@core/logger';
 import type { DetectionHandles } from '@detection';
@@ -177,8 +181,8 @@ describe('MCP tools', () => {
   // 1. MCP_TOOLS schema
   // ============================================================
 
-  it('MCP_TOOLS 含 9 个工具且不含已废弃的 ue_toggle_completion_mode', () => {
-    expect(MCP_TOOLS).toHaveLength(9);
+  it('MCP_TOOLS 含 10 个工具且不含已废弃的 ue_toggle_completion_mode', () => {
+    expect(MCP_TOOLS).toHaveLength(10);
     const names = MCP_TOOLS.map((t) => t.name);
     expect(names).toEqual([
       'ue_build',
@@ -190,6 +194,7 @@ describe('MCP tools', () => {
       'ue_generate_compile_commands',
       'ue_show_project_info',
       'ue_set_system_includes',
+      'ue_status',
     ]);
     expect(MCP_TOOLS.find((t) => t.name === 'ue_toggle_completion_mode')).toBeUndefined();
   });
@@ -458,6 +463,8 @@ describe('MCP tools', () => {
 
   it('ue_get_build_errors 有快照时返回 build 摘要(计数/文件去重/诊断明细)', () => {
     rememberBuildSnapshot({
+      buildId: 'b-tools-1',
+      startedAtIso: '2026-09-12T00:00:00.000Z',
       mode: 'build',
       ok: false,
       cancelled: false,
@@ -516,6 +523,8 @@ describe('MCP tools', () => {
 
   it('[add-002] ue_get_build_errors 快照带 module 时 build.module 透出', () => {
     rememberBuildSnapshot({
+      buildId: 'b-tools-2',
+      startedAtIso: '2026-09-25T00:00:00.000Z',
       mode: 'build',
       module: 'XianDreamwalking',
       ok: true,
@@ -539,6 +548,8 @@ describe('MCP tools', () => {
 
   it('[add-002] ue_get_build_errors 全量构建快照无 module 字段', () => {
     rememberBuildSnapshot({
+      buildId: 'b-tools-3',
+      startedAtIso: '2026-09-25T00:00:00.000Z',
       mode: 'build',
       ok: true,
       cancelled: false,
@@ -567,5 +578,154 @@ describe('MCP tools', () => {
     expect(fakeLogError).toHaveBeenCalled();
     const errCall = fakeLogError.mock.calls[0];
     expect(String(errCall?.[0])).toContain('ue_build');
+  });
+
+  // ============================================================
+  // 5. ue_status —— [借鉴 unreal-engine-mcp 的 ue_status]
+  // ============================================================
+
+  it('ue_status 返回引擎版本 + 构建配置 + 版本能力矩阵', () => {
+    setMCPContext({
+      config: fakeConfig,
+      logger: fakeLogger,
+      detection: fakeDetection,
+      workspace: {
+        engine: { version: '5.3.2', path: 'C:/UE_5.3' },
+        project: { name: 'MyGame', path: 'D:/Proj/MyGame.uproject' },
+      } as unknown as WorkspaceState,
+    });
+
+    const parsed = JSON.parse(callTool('ue_status', {})) as {
+      ok: boolean;
+      engine: { version: string; path: string } | null;
+      project: { name: string; path: string } | null;
+      build: { configuration: string; target: string; platform: string };
+      capabilities: {
+        supported: boolean;
+        recommendedClangd: string | null;
+        capabilities: { id: string; supported: boolean }[];
+      };
+    };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.engine?.version).toBe('5.3.2');
+    expect(parsed.project?.name).toBe('MyGame');
+    expect(parsed.build).toEqual({
+      configuration: 'Development',
+      target: 'Editor',
+      platform: 'Win64',
+    });
+    expect(parsed.capabilities.supported).toBe(true);
+    expect(parsed.capabilities.recommendedClangd).toBe('16.0.6');
+    expect(
+      parsed.capabilities.capabilities.find((cap) => cap.id === 'responseFileCommands')
+        ?.supported,
+    ).toBe(true);
+  });
+
+  it('ue_status 在未检测到引擎时返回 null 引擎并给出未知版本结论', () => {
+    setMCPContext({
+      config: fakeConfig,
+      logger: fakeLogger,
+      detection: fakeDetection,
+      workspace: {} as unknown as WorkspaceState,
+    });
+
+    const parsed = JSON.parse(callTool('ue_status', {})) as {
+      ok: boolean;
+      engine: null;
+      project: null;
+      capabilities: { supported: boolean; major: number | null; recommendedClangd: null };
+    };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.engine).toBeNull();
+    expect(parsed.project).toBeNull();
+    expect(parsed.capabilities.major).toBeNull();
+    expect(parsed.capabilities.supported).toBe(false);
+    expect(parsed.capabilities.recommendedClangd).toBeNull();
+  });
+
+  // ============================================================
+  // 6. [D8] 构建快照早退收口 + fire-and-forget 吞错修复
+  // ============================================================
+
+  it('[D8] 构建进行中:ue_get_build_errors 返回 hasResult=false + reason=build-in-progress', () => {
+    // 先放一份旧快照(上一次成功构建),再标记新构建进行中
+    rememberBuildSnapshot({
+      buildId: 'b-old',
+      startedAtIso: '2026-10-25T00:00:00.000Z',
+      mode: 'build',
+      ok: true,
+      cancelled: false,
+      exitCode: 0,
+      durationMs: 10,
+      finishedAtIso: '2026-10-25T00:00:00.000Z',
+      diagnostics: [],
+    });
+    markBuildInProgress('b-running');
+
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      ok: boolean;
+      hasResult: boolean;
+      reason?: string;
+      buildId?: string;
+      build?: unknown;
+    };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.hasResult).toBe(false);
+    expect(parsed.reason).toBe('build-in-progress');
+    expect(parsed.buildId).toBe('b-running');
+    // 关键:进行中时不回旧快照 —— 否则 agent 会把上次结果当本次结果
+    expect(parsed.build).toBeUndefined();
+  });
+
+  it('[D8] 有快照时顶层 buildId 与 build.buildId 一致', () => {
+    rememberBuildSnapshot({
+      buildId: 'b-final',
+      startedAtIso: '2026-10-25T00:00:00.000Z',
+      mode: 'build',
+      ok: false,
+      cancelled: false,
+      exitCode: 2,
+      durationMs: 10,
+      finishedAtIso: '2026-10-25T00:00:00.000Z',
+      diagnostics: [],
+    });
+
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      buildId?: string;
+      build: { buildId?: string; startedAtIso?: string };
+    };
+
+    expect(parsed.buildId).toBe('b-final');
+    expect(parsed.build.buildId).toBe('b-final');
+    expect(parsed.build.startedAtIso).toBe('2026-10-25T00:00:00.000Z');
+  });
+
+  it('[D8] 空态返回 reason=no-build', () => {
+    resetLastBuildSnapshot();
+    const parsed = JSON.parse(callTool('ue_get_build_errors', {})) as {
+      hasResult: boolean;
+      reason?: string;
+    };
+    expect(parsed.hasResult).toBe(false);
+    expect(parsed.reason).toBe('no-build');
+  });
+
+  it('[D8] dispatch resolve 出错误信封时也记日志(不只 catch rejection)', async () => {
+    mockExecuteBuild.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'PROJECT_NOT_DETECTED', message: 'No .uproject selected.' },
+    });
+    const parsed = JSON.parse(callTool('ue_build', {})) as { ok: boolean };
+    expect(parsed.ok).toBe(true);
+    await flushMicrotasks();
+
+    expect(fakeLogError).toHaveBeenCalled();
+    const logged = fakeLogError.mock.calls.map((c) => String(c?.[0])).join('\n');
+    expect(logged).toContain('ue_build');
+    expect(logged).toContain('PROJECT_NOT_DETECTED');
   });
 });

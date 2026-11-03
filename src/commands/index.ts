@@ -27,6 +27,7 @@ import { executeEnableClangdProxy } from './enableClangdProxy';
 import { executeDisableClangdProxy } from './disableClangdProxy';
 import { executeShowClangdProxyStatus } from './showClangdProxyStatus';
 import { executeDiagnoseProject } from './diagnoseProject';
+import { executeClearClangdIndex } from './clearClangdIndex';
 import { executeShowControlPanel } from './showControlPanel';
 import { executeRefreshProjectExplorer } from './refreshProjectExplorer';
 import { executeOpenProjectExplorerFile } from './openProjectExplorerFile';
@@ -72,12 +73,24 @@ export function activateCommands(
     executeLaunchEditor(config, logger, detection, workspace),
   );
   track('vscodeUEHelper.liveCoding', () => executeLiveCoding(config, logger, detection, workspace));
-  track('vscodeUEHelper.generateCompileCommands', () =>
-    executeGenerateCompileCommands(config, logger, detection, workspace),
+  // [add-004 / D9] 附加参数 { quiet: true } → 后台自动重建形态(无 picker/无弹窗);
+  // 无参调用(命令面板/MCP)行为不变
+  track('vscodeUEHelper.generateCompileCommands', (quietOpts?: unknown) =>
+    executeGenerateCompileCommands(
+      config,
+      logger,
+      detection,
+      workspace,
+      false,
+      quietOpts as { quiet?: boolean } | undefined,
+    ),
   );
   track('vscodeUEHelper.diagnoseProject', () =>
     executeDiagnoseProject(logger, detection, workspace, clangdOps),
   );
+  // [借鉴 Incanta/vscode-cpp-unreal 的 "Clear clangd Index"] 诊断 → 修复闭环:
+  // diagnoseProject 只报告问题,本命令提供可执行的补救动作(清理 clangd 索引缓存)。
+  track('vscodeUEHelper.clearClangdIndex', () => executeClearClangdIndex(logger, workspace));
   track('vscodeUEHelper.createProject', () =>
     executeCreateProject(config, logger, detection, clangdOps, workspace),
   );

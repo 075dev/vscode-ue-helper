@@ -20,7 +20,11 @@ import { type Logger } from '@core/logger';
 import { type Config } from '@core/config';
 import type { DetectionHandles } from '@detection';
 import { executeBuild } from '@commands/build';
-import { getLastBuildSnapshot, resetLastBuildSnapshot } from '@build/lastBuild';
+import {
+  getLastBuildSnapshot,
+  resetLastBuildSnapshot,
+  getInProgressBuildId,
+} from '@build/lastBuild';
 import { initI18n, t } from '@i18n';
 
 // executeBuild 会校验 Build.bat 是否存在;测试用假路径,mock 为存在
@@ -524,6 +528,112 @@ describe('executeBuild', () => {
     const snap = getLastBuildSnapshot();
     expect(snap?.module).toBe('Foo');
     expect(snap?.error).toBe('boom');
+  });
+
+  // ============ [D8] 早退收口:每个早退分支都留失败快照 ============
+
+  it('[D8] 未选项目:补写失败快照(buildId 非空 + error 说明原因)', async () => {
+    mockResolveProjectOrPick.mockResolvedValue(undefined);
+
+    await executeBuild('build', config, logger, detection);
+
+    const snap = getLastBuildSnapshot();
+    expect(snap).not.toBeNull();
+    expect(snap!.ok).toBe(false);
+    expect(snap!.buildId).toBeTruthy();
+    expect(snap!.startedAtIso).toBeTruthy();
+    expect(snap!.error).toContain('.uproject');
+    expect(snap!.diagnostics).toHaveLength(0);
+  });
+
+  it('[D8] 未选引擎:补写失败快照', async () => {
+    mockResolveEngineOrPick.mockResolvedValue(undefined);
+
+    await executeBuild('build', config, logger, detection);
+
+    const snap = getLastBuildSnapshot();
+    expect(snap).not.toBeNull();
+    expect(snap!.ok).toBe(false);
+    expect(snap!.buildId).toBeTruthy();
+    expect(snap!.error).toBeTruthy();
+  });
+
+  it('[D8] 每次构建的 buildId 互不相同(agent 可据此判断结果属于哪次尝试)', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    await executeBuild('build', config, logger, detection);
+    const first = getLastBuildSnapshot()?.buildId;
+    await executeBuild('build', config, logger, detection);
+    const second = getLastBuildSnapshot()?.buildId;
+
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first).not.toBe(second);
+  });
+
+  it('[D8] 早退快照覆盖旧快照(不会读到上一次成功构建的结果)', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+    await executeBuild('build', config, logger, detection);
+    expect(getLastBuildSnapshot()!.ok).toBe(true);
+
+    // 第二次构建早退 → 快照被失败结果覆盖
+    mockResolveProjectOrPick.mockResolvedValue(undefined);
+    await executeBuild('build', config, logger, detection);
+
+    expect(getLastBuildSnapshot()!.ok).toBe(false);
+  });
+
+  it('[D8] 并发守卫早退也补写快照', async () => {
+    let releaseProgress: (() => void) | undefined;
+    (mockWithProgress as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_title: unknown, task: ProgressTask) => {
+        void Promise.resolve().then(() => task(vi.fn(), fakeToken()));
+        return new Promise<void>((resolve) => {
+          releaseProgress = resolve;
+        });
+      },
+    );
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    const p1 = executeBuild('build', config, logger, detection);
+    try {
+      await flushMicrotasks();
+      const env2 = await executeBuild('build', config, logger, detection);
+      expect(env2).toMatchObject({ ok: false, error: { code: 'OPERATION_CANCELLED' } });
+      // 被拒的这次尝试也有自己的 buildId 快照
+      const snap = getLastBuildSnapshot();
+      expect(snap!.ok).toBe(false);
+      expect(snap!.buildId).toBeTruthy();
+      expect(snap!.error).toBeTruthy();
+    } finally {
+      releaseProgress?.();
+      await p1;
+    }
+  });
+
+  it('[D8] Live Coding 转发路径补写快照(UBT 未跑,不能让 agent 误判编译通过)', async () => {
+    mockIsUnrealEditorRunning.mockResolvedValue(true);
+    (vscode.window.showWarningMessage as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      t('cmd.editorRunning.useLiveCoding'),
+    );
+    mockExecuteLiveCoding.mockResolvedValue({ ok: true, summary: 'live coding triggered' });
+
+    await executeBuild('build', editorAwareConfig, logger, detection, undefined, false);
+
+    const snap = getLastBuildSnapshot();
+    expect(snap).not.toBeNull();
+    expect(snap!.ok).toBe(false);
+    expect(snap!.buildId).toBeTruthy();
+    expect(snap!.error).toBeTruthy();
+    expect(mockRunBuild).not.toHaveBeenCalled();
+  });
+
+  it('[D8] 构建结束后进行中标记被清除', async () => {
+    mockRunBuild.mockResolvedValue(buildResult(0, false));
+
+    await executeBuild('build', config, logger, detection);
+
+    expect(getInProgressBuildId()).toBeNull();
   });
 });
 

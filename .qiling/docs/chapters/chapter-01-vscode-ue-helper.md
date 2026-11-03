@@ -3,33 +3,33 @@ chapter_id: "chapter-01"
 title: "vscode-ue-helper"
 part: "第一篇 · 认识项目"
 phase: init
-generated_at: "2026-09-28T08:08:12.386Z"
-generated_by: "器灵工作流 v0.18.0 / ql-scan"
-ql_version: "0.18.0"
-last_mapped_commit: "9b73e260e6b6446b3caa20325e6f31cbc071b657"
+generated_at: "2026-10-26T01:52:09.547Z"
+generated_by: "器灵工作流 v0.25.0 / ql-scan"
+ql_version: "0.25.0"
+last_mapped_commit: "92804b6fa547ed3e242e099236d5552069bc18e9"
 status: "initialized"
 docsmap_init: true
 scan_path: "."
-scanned_entries: 330
+scanned_entries: 358
 routes_detected: 0
 events_detected: 3
 commands_detected: 0
-custom_extracts: 0
+custom_extracts: 38
 endpoints: 0
 events: 3
 ---
 
 # 第 01 章 · vscode-ue-helper(起步)
 
-> 本章是全书的**第一章**:认识并跑起来。由 `/ql-scan` 阅读代码自动生成。
-> `<!-- manual -->` 块内的内容欢迎人工撰写润色(重扫自动保留);其余机器节不要手改——项目结构变化后用 `/ql-scan --force` 重扫覆盖。
+> 本章是全书的**第一章**:认识并跑起来。由 `ql-scan` 阅读代码自动生成。
+> `<!-- manual -->` 块内的内容欢迎人工撰写润色(重扫自动保留);其余机器节不要手改——项目结构变化后用 `ql-scan --force` 重扫覆盖。
 
 **一句话:** All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, and optional MCP AI agent integration.
 
 ## 本章导学
 
 <!-- manual:syllabus -->
-- **本章你将学到:** vscode-ue-helper 的 19 个 npm 命令、3 个事件、36 处命令/工具注册(27 个 VSCode 命令 + 9 个 MCP 工具,见 §3.5)怎么用——从把项目跑起来,到按证据核对每一项能力。
+- **本章你将学到:** vscode-ue-helper 的 19 个 npm 命令、3 个事件、38 处命令/工具注册(28 个 VSCode 命令 + 10 个 MCP 工具,见 §3.5)怎么用——从把项目跑起来,到按证据核对每一项能力。
 - **前置章节:** 无——本章是全书第一章,从零开始。
 - **读法:** 只想查用 → 直接进 [§三 使用说明](#三使用说明);完整了解 → 按顺序读;赶时间 → 先读章末"本章小结"再回看正文(教科书惯例)。
 
@@ -45,7 +45,7 @@ events: 3
 |------|------|----------|
 | npm 命令 | 19 | [§3.1](#三使用说明) |
 | 事件发布 | 3 | [§3.3](#三使用说明) |
-| 自定义提取(--patterns) | 36 | [§3.5](#三使用说明) |
+| 自定义提取(--patterns) | 38 | [§3.5](#三使用说明) |
 
 **项目形态:** Node.js 生态项目(`package.json` 检出),关键依赖:`esbuild`、`typescript`、`vitest`、`eslint`(用途为推断)
 
@@ -65,7 +65,7 @@ events: 3
 
 ## 三、使用说明
 
-> 本节所有能力条目均从代码反推,每条附 `文件:行号` 证据;与 OpenAPI 契约的对应关系待 `/ql-design` 后补全。
+> 本节所有能力条目均从代码反推,每条附 `文件:行号` 证据;与 OpenAPI 契约的对应关系待 `ql-design` 后补全。
 
 ### 3.1 命令清单(package.json scripts,原样列出)
 
@@ -84,6 +84,7 @@ events: 3
 | `npm run test:unit:watch` | `vitest` |
 | `npm run test` | `npm run test:unit` |
 | `npm run test:coverage` | `vitest run --coverage` |
+| `npm run test:e2e` | `npm run build && tsc -p tsconfig.e2e.json && node .tsc-e2e/runTests.js` |
 | `npm run prepackage` | `npm run build` |
 | `npm run package` | `vsce package` |
 | `npm run publish` | `vsce publish` |
@@ -98,6 +99,56 @@ events: 3
 | `onDidChangeSelection` | fire | `src/core/workspace.ts:219` |
 | `changeEmitter` | fire | `src/ui/projectExplorer.ts:51` |
 | `exit` | emit | `test/unit/core/subprocessRegistry.test.ts:88` |
+
+### 3.5 自定义提取(--patterns)
+
+**VSCode 命令注册(track 包装)**
+
+| 标识 | 证据(文件:行) |
+|------|------------------|
+| `vscodeUEHelper.showProjectInfo` | `src/commands/index.ts:60` |
+| `vscodeUEHelper.build` | `src/commands/index.ts:63` |
+| `vscodeUEHelper.rebuild` | `src/commands/index.ts:66` |
+| `vscodeUEHelper.clean` | `src/commands/index.ts:69` |
+| `vscodeUEHelper.launchEditor` | `src/commands/index.ts:72` |
+| `vscodeUEHelper.liveCoding` | `src/commands/index.ts:75` |
+| `vscodeUEHelper.generateCompileCommands` | `src/commands/index.ts:78` |
+| `vscodeUEHelper.diagnoseProject` | `src/commands/index.ts:88` |
+| `vscodeUEHelper.clearClangdIndex` | `src/commands/index.ts:93` |
+| `vscodeUEHelper.createProject` | `src/commands/index.ts:94` |
+| `vscodeUEHelper.installRules` | `src/commands/index.ts:97` |
+| `vscodeUEHelper.uninstall` | `src/commands/index.ts:98` |
+| `vscodeUEHelper.setSystemIncludes` | `src/commands/index.ts:99` |
+| `vscodeUEHelper.openWorkspaceFile` | `src/commands/index.ts:102` |
+| `vscodeUEHelper.openTerminalInNewWindow` | `src/commands/index.ts:103` |
+| `vscodeUEHelper.selectConfig` | `src/commands/index.ts:106` |
+| `vscodeUEHelper.selectTarget` | `src/commands/index.ts:107` |
+| `vscodeUEHelper.enableClangdProxy` | `src/commands/index.ts:108` |
+| `vscodeUEHelper.disableClangdProxy` | `src/commands/index.ts:109` |
+| `vscodeUEHelper.showClangdProxyStatus` | `src/commands/index.ts:112` |
+| `vscodeUEHelper.showControlPanel` | `src/commands/index.ts:115` |
+| `vscodeUEHelper.copyBuildCommand` | `src/commands/index.ts:118` |
+| `vscodeUEHelper.noLintCurrentLine` | `src/commands/index.ts:122` |
+| `vscodeUEHelper.noLintNextLine` | `src/commands/index.ts:125` |
+| `vscodeUEHelper.switchHeaderSource` | `src/commands/index.ts:130` |
+| `vscodeUEHelper.retryFirstTimeInit` | `src/commands/index.ts:147` |
+| `vscodeUEHelper.refreshProjectExplorer` | `src/commands/index.ts:154` |
+| `vscodeUEHelper.openProjectExplorerFile` | `src/commands/index.ts:157` |
+
+**MCP 工具(ue_ 前缀)**
+
+| 标识 | 证据(文件:行) |
+|------|------------------|
+| `ue_build` | `src/mcp/tools.ts:57` |
+| `ue_rebuild` | `src/mcp/tools.ts:81` |
+| `ue_clean` | `src/mcp/tools.ts:86` |
+| `ue_get_build_errors` | `src/mcp/tools.ts:93` |
+| `ue_launch_editor` | `src/mcp/tools.ts:100` |
+| `ue_live_coding` | `src/mcp/tools.ts:105` |
+| `ue_generate_compile_commands` | `src/mcp/tools.ts:110` |
+| `ue_show_project_info` | `src/mcp/tools.ts:115` |
+| `ue_set_system_includes` | `src/mcp/tools.ts:120` |
+| `ue_status` | `src/mcp/tools.ts:128` |
 
 ### 3.6 项目结构(目录树,深度 ≤ 4,忽略 node_modules/dist/build/.git 等)
 
@@ -122,10 +173,12 @@ events: 3
   📄 doc/04-developer-guide.md
   📄 doc/README.md
 📄 esbuild.config.mjs
+📄 features.json
 📄 LICENSE
 📄 package.json
 📄 package.nls.json
 📄 package.nls.zh-cn.json
+📄 patterns.json
 📄 README.md
 📁 resources/
   📄 resources/icon.png
@@ -148,9 +201,13 @@ events: 3
   📁 src/clangd/
     📄 src/clangd/AGENTS.md
     📄 src/clangd/clangdConfig.ts
+    📄 src/clangd/clangdFlagRenderer.ts
+    📄 src/clangd/clangdIndexCache.ts
     📄 src/clangd/clangdOps.ts
+    📄 src/clangd/clangdYaml.ts
     📁 src/clangd/compileCommands/
       📄 src/clangd/compileCommands/cache.ts
+      📄 src/clangd/compileCommands/dbFile.ts
       📄 src/clangd/compileCommands/fillMissing.ts
       📄 src/clangd/compileCommands/symlink.ts
       📄 src/clangd/compileCommands/task.ts
@@ -174,15 +231,9 @@ events: 3
     📄 src/clangd/formatTidyFiles.ts
     📄 src/clangd/index.ts
     📄 src/clangd/intermediateUhtCollector.ts
-    📄 src/clangd/modifyRspFiles.ts
-    📄 src/clangd/perfLog.ts
-    📄 src/clangd/perfProxy.ts
-    📄 src/clangd/preparseIncludes.ts
-    📁 src/clangd/proxy/
-      📄 src/clangd/proxy/AGENTS.md
-      📄 src/clangd/proxy/bridge.ts
-      📄 src/clangd/proxy/cli.ts
-…(共 330 项,已截断显示前 80 项;完整清单请直接浏览目录或收窄 --scan-path)
+    📁 src/clangd/locator/
+      📄 src/clangd/locator/clangdLocator.ts
+…(共 358 项,已截断显示前 80 项;完整清单请直接浏览目录或收窄 --scan-path)
 ```
 
 ---
@@ -195,14 +246,14 @@ events: 3
 
 | 扩展名 | 文件数 | 占比 |
 |--------|--------|------|
-| .ts | 238 | 83.8% |
-| .md | 20 | 7.0% |
-| .json | 13 | 4.6% |
-| .cjs | 5 | 1.8% |
-| .mjs | 4 | 1.4% |
-| .png | 1 | 0.4% |
-| .ps1 | 1 | 0.4% |
-| .bak | 1 | 0.4% |
+| .ts | 260 | 84.1% |
+| .md | 20 | 6.5% |
+| .json | 16 | 5.2% |
+| .cjs | 5 | 1.6% |
+| .mjs | 4 | 1.3% |
+| .vsix | 2 | 0.6% |
+| .png | 1 | 0.3% |
+| .ps1 | 1 | 0.3% |
 
 **框架/关键依赖(推断自 package.json):**
 
@@ -255,14 +306,14 @@ events: 3
 
 **怀疑文档过期?**
 
-- 用附录 C 的基线 commit 自查:`git log --oneline <基线>..HEAD`;项目结构大改后用 `/ql-scan --force` 重扫。
+- 用附录 C 的基线 commit 自查:`git log --oneline <基线>..HEAD`;项目结构大改后用 `ql-scan --force` 重扫。
 
 ---
 
 ## 本章小结
 
 <!-- manual:summary -->
-- 本章认识了 vscode-ue-helper:19 个 npm 命令、3 个事件、36 处命令/工具注册(27 个 VSCode 命令 + 9 个 MCP 工具)。
+- 本章认识了 vscode-ue-helper:19 个 npm 命令、3 个事件、38 处命令/工具注册(28 个 VSCode 命令 + 10 个 MCP 工具)。
 - 启动链路未自动检出,排查方式见 §五 与附录 C。
 - 完整能力清单与证据在 [§三](#三使用说明);配置与限制在 [§四](#四配置与限制)。
 
@@ -288,11 +339,11 @@ events: 3
 
 | 字段 | 值 |
 |------|---|
-| 来源命令 | /ql-scan |
+| 来源命令 | ql-scan |
 | 扫描路径 | . |
-| 扫描基线 commit | 9b73e260e6b6446b3caa20325e6f31cbc071b657 |
-| 扫描条目数 | 330(目录树显示 80) |
-| 生成时间 | 2026-09-28T08:08:12.386Z |
+| 扫描基线 commit | 92804b6fa547ed3e242e099236d5552069bc18e9 |
+| 扫描条目数 | 358(目录树显示 80) |
+| 生成时间 | 2026-10-26T01:52:09.547Z |
 
 ### A.2 新代码放哪(推断指引)
 
@@ -304,8 +355,8 @@ events: 3
 
 ### A.3 下一步
 
-- 尚无 OpenAPI 契约 → 运行 `/ql-design` 生成契约(§3.2 路由清单可作为讨论输入)
-- 已有 OpenAPI 契约 → 运行 `/ql-build` 直接构建
+- 尚无 OpenAPI 契约 → 运行 `ql-design` 生成契约(§3.2 路由清单可作为讨论输入)
+- 已有 OpenAPI 契约 → 运行 `ql-build` 直接构建
 
 ---
 
@@ -320,14 +371,14 @@ events: 3
 ### C.1 关联文档
 
 - [文档树索引](../README.md)
-- 项目状态:[../.planning/STATE.md](../../.planning/STATE.md)
-- OpenAPI 契约:[.planning/context/openapi.yaml](../../.planning/context/openapi.yaml)
+- 项目状态:[../planning/STATE.md](../planning/STATE.md)
+- OpenAPI 契约:[.qiling/planning/context/openapi.yaml](../planning/context/openapi.yaml)
 
 ### C.2 未检出清单
 
 | 项 | 状态 | 原因 | 建议 |
 |----|------|------|------|
-| HTTP 路由 | 未检出(Not detected) | 未在路由语境文件(`*routes*`/`*router*`/`*controller*` 或 `app.xxx()` 调用)中发现端点声明 | 若使用装饰器/配置式等其他路由风格,用 `--patterns` 自定义提取器补充,或运行 `/ql-design` 生成契约 |
+| HTTP 路由 | 未检出(Not detected) | 未在路由语境文件(`*routes*`/`*router*`/`*controller*` 或 `app.xxx()` 调用)中发现端点声明 | 若使用装饰器/配置式等其他路由风格,用 `--patterns` 自定义提取器补充,或运行 `ql-design` 生成契约 |
 | 命令/工具注册 | 未检出(Not detected) | 未发现 `registerCommand` / MCP `server.tool` / CLI `program.command` 类调用 | 若项目有其他注册风格,用 `--patterns` 自定义提取器补充 |
 | 启动链路 | 未检出(Not detected) | package.json 无 start/dev 脚本 | 以项目 README 或 `package.json` 的 scripts 为准人工确认 |
 
@@ -341,5 +392,4 @@ events: 3
 
 | 日期 | 操作 | 说明 |
 |------|------|------|
-| 2026-09-28T08:08:12.386Z | 自动生成 | 由 `/ql-scan` 初始化,基线 commit `9b73e260` |
-| 2026-10-03 | add | ClangdLocator 统一 clangd 路径解析:懒探测+缓存+失效,两视图(proxy 排除 launcher / SDK 推导 clang 驱动器);realClangdResolver 与 windowsSdk 重复链路收敛,默认 LLVM 目录唯一份,proxy 链路新增 where 候选级;36 端点对外行为不变(决策 D8)(add-003) |
+| 2026-10-26T01:52:09.547Z | 自动生成 | 由 `ql-scan` 初始化,基线 commit `92804b6f` |

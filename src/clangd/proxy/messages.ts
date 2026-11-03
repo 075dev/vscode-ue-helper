@@ -226,37 +226,57 @@ export function getError(msg: unknown): JsonRpcError | undefined {
  * 线程安全：否（JS 单线程）。
  * 内存：所有关联存储在 Map 中，调用 clear() 或 remove() 释放。
  */
+/**
+ * 关联命名空间。
+ *
+ * [D10] LSP 的 request id 在两个方向上**各自独立编号**：
+ * 客户端发起的请求（hover / definition / …）和服务器发起的请求
+ * （workspace/configuration / client/registerCapability /
+ * window/workDoneProgress/create）都可能用 id=1、id=2……
+ * 共用一张表会互相覆盖：服务器请求进来时把客户端待响应的关联删掉，
+ * 导致真正的响应到达时找不到原 method，hover 汉化被静默丢弃。
+ */
+export type CorrelationNamespace = 'client' | 'server';
+
 export class RequestCorrelation {
-  /** id → method 映射 */
-  private readonly map = new Map<number | string, string>();
+  /** `${namespace}:${id}` → method 映射 */
+  private readonly map = new Map<string, string>();
+
+  /** 复合 key —— 命名空间 + id */
+  private static key(id: number | string, ns: CorrelationNamespace): string {
+    return `${ns}:${id}`;
+  }
 
   /**
    * 记录一个请求的 id → method 关联。
    *
    * @param id - 请求的 id
    * @param method - 请求的 method
+   * @param ns - 命名空间，默认 'client'（客户端发起的请求）
    */
-  record(id: number | string, method: string): void {
-    this.map.set(id, method);
+  record(id: number | string, method: string, ns: CorrelationNamespace = 'client'): void {
+    this.map.set(RequestCorrelation.key(id, ns), method);
   }
 
   /**
    * 查找 id 对应的 method。
    *
    * @param id - 要查找的 id
+   * @param ns - 命名空间，默认 'client'
    * @returns 对应的 method，或 undefined（未找到）
    */
-  lookup(id: number | string): string | undefined {
-    return this.map.get(id);
+  lookup(id: number | string, ns: CorrelationNamespace = 'client'): string | undefined {
+    return this.map.get(RequestCorrelation.key(id, ns));
   }
 
   /**
    * 移除一个 id 的关联。
    *
    * @param id - 要移除的 id
+   * @param ns - 命名空间，默认 'client'
    */
-  remove(id: number | string): void {
-    this.map.delete(id);
+  remove(id: number | string, ns: CorrelationNamespace = 'client'): void {
+    this.map.delete(RequestCorrelation.key(id, ns));
   }
 
   /**

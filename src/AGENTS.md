@@ -13,7 +13,7 @@
 | `clangd/`             | `src/clangd/AGENTS.md`        | `.clangd` 统一写入 / compile_commands / 补全文件 / workspace 备份            |
 | `clangd/proxy/`       | `src/clangd/proxy/AGENTS.md`  | 独立 LSP 代理 CLI 子进程                                                    |
 | `clangd/diagnostics/` | `src/clangd/diagnostics/AGENTS.md` | "Diagnose Clangd Project" 命令的检查器                                |
-| `commands/`           | `src/commands/AGENTS.md`      | 21 个 VS Code 命令处理器                                                    |
+| `commands/`           | `src/commands/AGENTS.md`      | 28 个 VS Code 命令处理器                                                    |
 | `ui/`                 | `src/ui/AGENTS.md`            | 状态栏 / QuickPick / 通知 / Problems / Webview / Project Explorer           |
 | `mcp/`                | `src/mcp/AGENTS.md`           | MCP 服务器（**仅 Cursor / Claude Code 启动**）                              |
 | `i18n/`               | `src/i18n/AGENTS.md`          | 中英双语字符串查找（`t('key', params)`）                                    |

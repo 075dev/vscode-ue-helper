@@ -356,7 +356,17 @@ function identifyRoots(paths: string[]): { msvcRoot: string | null; sdkRoot: str
   return { msvcRoot, sdkRoot };
 }
 
-async function readMsvcVersion(msvcRoot: string, logger?: Logger): Promise<string | null> {
+/**
+ * 读出 MSVC 编译器版本（用于 `-fms-compatibility-version=`）。
+ *
+ * [D5] 导出供 `setSystemIncludes` 使用 —— 用户在 QuickPick 里选的 msvcRoot
+ * 可能与探测到的不是同一个版本，fms 版本必须对应**选中的**那个，
+ * 否则持久化下去的 `-fms-compatibility-version` 是错的。
+ */
+export async function readMsvcVersion(
+  msvcRoot: string,
+  logger?: Logger,
+): Promise<string | null> {
   // Run `<msvcRoot>/bin/Hostx64/x64/cl.exe` — its banner contains the
   // MSVC version (e.g. "19.39.33523"). cl.exe exits non-zero with no
   // input file, but the banner is what we want.

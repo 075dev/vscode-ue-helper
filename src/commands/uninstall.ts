@@ -5,7 +5,9 @@
  *   - .clangd (项目根)
  *   - compile_commands.json (项目根)
  *   - .vscode/vscodeuehelper/
- *   - .vscode/.code-workspace.backup
+ *   - .vscode/uehelper-backup/ (D12 起的备份目录;路径取自 @clangd/workspaceBackup
+ *     的单一真相源,避免两处各写一份常量而漂移)
+ *   - .vscode/.code-workspace.backup (D12 之前的旧备份目录,遗留清理)
  *   - .cursor/rules/unreal-cpp.mdc
  *   - .github/copilot-instructions.md
  *
@@ -27,6 +29,7 @@ import {
 } from '@core/envelope';
 import { t } from '@i18n';
 import type { WorkspaceState } from '@core/workspace';
+import { getWorkspaceBackupDir } from '@clangd/workspaceBackup';
 
 interface CleanupTarget {
   label: string;
@@ -94,6 +97,15 @@ export async function executeUninstall(
       { label: '.clangd', paths: [clangdPath ?? path.join(root, '.clangd')] },
       { label: 'compile_commands.json', paths: [path.join(root, 'compile_commands.json')] },
       {
+        // [M1] D12 起备份落在 `.vscode/uehelper-backup/<原文件名>` —— 路径取自
+        // @clangd/workspaceBackup 的单一真相源。此前这里写的是 D12 之前的旧路径
+        // `.vscode/.code-workspace.backup`，插件**自己创建的备份目录永远不会被清理**，
+        // 与 README「Uninstall (Clean Generated Files)」的承诺不符。
+        label: '.vscode/uehelper-backup/',
+        paths: [getWorkspaceBackupDir(root)],
+      },
+      {
+        // D12 之前的旧备份目录（历史遗留，一并清掉）
         label: '.vscode/.code-workspace.backup',
         paths: [path.join(root, '.vscode', '.code-workspace.backup')],
       },

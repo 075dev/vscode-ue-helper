@@ -409,13 +409,22 @@ export class LspBridge {
    * 通知：如果是 publishDiagnostics，应用本地化；否则透传。
    */
   private processServerMessage(msg: JsonRpcMessage): void {
-    // 响应/错误响应：查找关联并调用钩子
+    // [D10] 响应/错误响应 vs 服务端请求 —— 必须靠 method 字段区分。
+    //
+    // LSP 的 request id 在两个方向各自独立编号。clangd 发给客户端的
+    // workspace/configuration / client/registerCapability /
+    // window/workDoneProgress/create 都是**带 id 的服务端请求**。
+    // 旧实现只看"有没有 id"就当响应处理 → 查表命中客户端同号的关联 →
+    // 把客户端待响应的关联删掉 → 真正的 hover 响应到达时找不到原 method →
+    // 汉化被静默丢弃（且日志里看不出异常）。
+    //
+    // 判定规则：有 method 的是请求，没有 method 的才是响应。
     const id = getId(msg);
-    if (id !== undefined) {
-      const method = this.correlation.lookup(id);
+    if (id !== undefined && getMethod(msg) === undefined) {
+      const method = this.correlation.lookup(id, 'client');
       this.hooks?.onServerResponse?.(msg, method);
       // 响应只消费一次关联
-      this.correlation.remove(id);
+      this.correlation.remove(id, 'client');
 
       // 根据原始请求 method 应用本地化
       const localized = this.applyLocalizationToResponse(msg, method);
@@ -480,18 +489,8 @@ export class LspBridge {
       return this.localizeHoverResult(msg);
     }
 
-    if (method === 'textDocument/completion') {
-      return this.localizeCompletionResult(msg);
-    }
-
-    if (method === 'textDocument/signatureHelp') {
-      return this.localizeSignatureHelpResult(msg);
-    }
-
-    if (method === 'textDocument/inlayHint') {
-      return this.localizeInlayHintResult(msg);
-    }
-
+    // completion / signatureHelp / inlayHint 的本地化尚未实现(原 no-op 占位已删,
+    // [审计 F6] 需要时再加,避免空壳分发)。
     return msg;
   }
 
@@ -690,33 +689,6 @@ export class LspBridge {
   }
 
   /**
-   * 本地化 textDocument/completion 响应。
-   *
-   * TODO: 后续实现 Completion 项 label/detail 汉化。
-   */
-  private localizeCompletionResult(msg: JsonRpcMessage): JsonRpcMessage {
-    return msg;
-  }
-
-  /**
-   * 本地化 textDocument/signatureHelp 响应。
-   *
-   * TODO: 后续实现 SignatureHelp 参数名/标签汉化。
-   */
-  private localizeSignatureHelpResult(msg: JsonRpcMessage): JsonRpcMessage {
-    return msg;
-  }
-
-  /**
-   * 本地化 textDocument/inlayHint 响应。
-   *
-   * TODO: 后续实现 InlayHint 类型名/标签汉化。
-   */
-  private localizeInlayHintResult(msg: JsonRpcMessage): JsonRpcMessage {
-    return msg;
-  }
-
-  /**
    * 向客户端发送消息。
    */
   private sendToClient(msg: JsonRpcMessage): void {
@@ -760,9 +732,12 @@ export class LspBridge {
    * 关闭桥接。
    *
    * 先刷新待处理 didClose，再关闭传输层。
+   * [审计 F3] 清空请求关联表:连接关闭后,崩溃/取消导致的在途请求条目
+   * 永远等不到响应,不清会一直滞留。
    */
   close(): void {
     this.flush();
+    this.correlation.clear();
     this.transport.close();
   }
 
