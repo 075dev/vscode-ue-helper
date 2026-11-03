@@ -30,6 +30,8 @@ last_activity: >-
   (https://github.com/075dev/vscode-ue-helper/pull/3,base=main)→ 章节留档重扫
   (docsmap --force,16 断言全过),机器节数字刷新为 28 命令 / 10 MCP 工具,
   附录 B 演进史按「只增不清」重新追加
+  增量推送(2026-11-03):7730851(.vscodeignore 补新目录排除,修复 vsce package
+  崩溃)已推上 PR #3 分支,PR 自动包含;打包产物 14 文件 / 446.66KB
 ---
 # 项目状态
 
