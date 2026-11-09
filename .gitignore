@@ -112,3 +112,15 @@ graphify-out/
 
 # 器灵 ql-update 迁移自动备份(本地留存,勿提交)
 .qiling/planning-backups/
+
+# gsd-graph / gsd-core 运行时副产物(自 master 分支 af5df6a 并入)
+.last-build-status.json
+.last-sync-status.json
+config.json
+graph.v1.json
+GRAPH_REPORT.md
+hooks/
+ontology.lock.json
+review-queue.json
+snapshots/
+sources.manifest.json
