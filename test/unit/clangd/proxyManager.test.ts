@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { ClangdProxyManager } from '@clangd/proxyManager';
+import { ClangdProxyManager, extractRealClangdArgs } from '@clangd/proxyManager';
 
 // ---------------------------------------------------------------------------
 // 辅助：创建 ExtensionContext mock
@@ -287,6 +287,96 @@ describe('ClangdProxyManager — 扩展端代理管理器', () => {
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining('Unable to resolve real clangd path'),
       );
+    });
+
+    it('Given 现有 arguments 已是嵌套 proxy 参数 When enable Then 剥离出真实 clangd 参数,不再二次嵌套(bugfix-006)', async () => {
+      // Given:bugfix-006 实机形态——另一窗口已写入完整 proxy 参数(含内层 --real-clangd),
+      // 本窗口 isActive 判定失效后走 enable,旧实现把整段当"真实 clangd 参数"再次嵌套。
+      const nestedProxyArgs = [
+        '--real-clangd',
+        'C:/ext-0.2.0/out/launcher/proxy-launcher.bat',
+        '--keepalive-max',
+        '20',
+        '--log-path',
+        'C:/Code/logs/clangd-proxy.log',
+        '--',
+        '--background-index-priority=normal',
+      ];
+      const realClangd = 'D:/scoop/apps/llvm/current/bin/clangd.exe';
+      const configMock = createConfigMock({ clangdPath: realClangd });
+      fileExists.mockImplementation((candidate) => candidate === realClangd);
+
+      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+        get: vi.fn((key: string) => {
+          if (key === 'arguments') {
+            return nestedProxyArgs;
+          }
+          return undefined;
+        }),
+        update: vi.fn(),
+      } as unknown as vscode.WorkspaceConfiguration);
+
+      const manager = new ClangdProxyManager(context, configMock as never, logger as never, {
+        fileExists,
+      });
+      const enableSpy = vi.spyOn(manager.settingsManager, 'enable');
+
+      // When
+      await manager.enable();
+
+      // Then:第二参数必须是剥离后的真实 clangd 参数——不得再包含 --real-clangd / 分隔符
+      const [, realArgs] = enableSpy.mock.calls[0] ?? [];
+      expect(realArgs).toEqual(['--background-index-priority=normal']);
+    });
+  });
+
+  describe('extractRealClangdArgs — 嵌套参数剥离(bugfix-006)', () => {
+    it('Given 非 proxy 形态的原始参数 When 提取 Then 原样返回', () => {
+      const args = ['--compile-commands-dir=build', '--background-index'];
+      expect(extractRealClangdArgs(args)).toEqual(args);
+    });
+
+    it('Given 空数组 When 提取 Then 返回空数组', () => {
+      expect(extractRealClangdArgs([])).toEqual([]);
+    });
+
+    it('Given 单层 proxy 参数 When 提取 Then 返回最后一个分隔符之后的真实参数', () => {
+      const args = [
+        '--real-clangd',
+        'C:/llvm/clangd.exe',
+        '--keepalive-max',
+        '20',
+        '--',
+        '--background-index-priority=normal',
+      ];
+      expect(extractRealClangdArgs(args)).toEqual(['--background-index-priority=normal']);
+    });
+
+    it('Given 两层嵌套的 proxy 参数(跨窗口重复 enable 的实机污染)When 提取 Then 只保留最内层真实参数', () => {
+      // bugfix-006 实机形态:外层(JoyCode 写入)套内层(VS Code 写入)
+      const args = [
+        '--real-clangd',
+        'C:/ext-0.2.0/out/launcher/proxy-launcher.bat',
+        '--keepalive-max',
+        '20',
+        '--log-path',
+        'C:/JoyCode/logs/clangd-proxy.log',
+        '--',
+        '--real-clangd',
+        'D:/scoop/apps/llvm/current/bin/clangd.exe',
+        '--keepalive-max',
+        '20',
+        '--log-path',
+        'C:/Code/logs/clangd-proxy.log',
+        '--',
+        '--background-index-priority=normal',
+      ];
+      expect(extractRealClangdArgs(args)).toEqual(['--background-index-priority=normal']);
+    });
+
+    it('Given proxy 形态但缺少分隔符 When 提取 Then 返回空数组(防御半截配置)', () => {
+      const args = ['--real-clangd', 'C:/llvm/clangd.exe', '--keepalive-max', '20'];
+      expect(extractRealClangdArgs(args)).toEqual([]);
     });
   });
 

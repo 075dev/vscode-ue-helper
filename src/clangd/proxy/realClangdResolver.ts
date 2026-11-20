@@ -96,6 +96,23 @@ interface RealClangdCandidate {
  * 6. PATH 中的 `clangd(.exe)`
  * 7. 默认 LLVM 安装目录中的 `clangd(.exe)`
  */
+/** launcher 脚本文件名(esbuild 固定生成名)。按 basename 排除可覆盖跨安装目录/版本差异。 */
+const PROXY_LAUNCHER_BASENAME = 'proxy-launcher.bat';
+
+/**
+ * 候选是否为本扩展 proxy launcher(bugfix-006)。
+ *
+ * [bugfix-006] 除与本实例 launcherPath 等同比较外,还按固定文件名判定:多窗口/多
+ * 宿主(JoyCode + VS Code 等)共享 workspace settings 时,另一份扩展副本写入的
+ * launcher 路径与本实例 launcherPath 不同,仅路径等同比较会放过"外来 launcher",
+ * 使 --real-clangd 指向 .bat,proxy 无 shell spawn 抛 EINVAL,clangd 停摆。
+ * 文件名由本扩展生成、用户真实 clangd 不会同名,误杀风险可忽略。
+ */
+function isProxyLauncherPath(candidatePath: string): boolean {
+  const basename = candidatePath.split(/[\\/]/).pop() ?? '';
+  return basename.toLowerCase() === PROXY_LAUNCHER_BASENAME;
+}
+
 export function resolveRealClangdPath(input: RealClangdResolverInput): RealClangdResolverResult {
   const rejected: RealClangdCheckedCandidate[] = [];
 
@@ -106,7 +123,10 @@ export function resolveRealClangdPath(input: RealClangdResolverInput): RealClang
       continue;
     }
 
-    if (input.launcherPath !== undefined && isSamePath(normalized, input.launcherPath)) {
+    if (
+      (input.launcherPath !== undefined && isSamePath(normalized, input.launcherPath)) ||
+      isProxyLauncherPath(normalized)
+    ) {
       rejected.push({ path: normalized, source: candidate.source, reason: 'proxyLauncher' });
       continue;
     }

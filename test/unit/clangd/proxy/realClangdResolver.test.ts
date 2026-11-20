@@ -130,6 +130,50 @@ describe('resolveRealClangdPath — 自动解析真实 clangd 路径', () => {
     expectSuccess(input, PATH_CLANGD, 'pathEnv');
   });
 
+  // [bugfix-006] 跨窗口/跨版本场景:另一份扩展副本(VS Code 窗口)写入 settings 的
+  // launcher 路径与当前实例(JoyCode 窗口)的 launcherPath 不同——仅按路径等同排除会
+  // 放过"外来 launcher",fileExists 通过后被写入 --real-clangd,proxy 对 .bat 无 shell
+  // spawn 抛 EINVAL,clangd 停摆。launcher 文件名是本扩展生成的固定名,按 basename
+  // 排除才能覆盖任意安装目录/版本差异。
+  it('Given 候选是另一份扩展副本的 launcher(basename 相同、路径不同)When 解析 Then 一律排除', () => {
+    // Given:外来 launcher 来自 .vscode/extensions 的 0.2.0 副本,本实例 launcherPath 指向别处
+    const FOREIGN_LAUNCHER =
+      'C:/Users/u/.vscode/extensions/vscode-ue-helper.vscode-ue-helper-0.2.0/out/launcher/proxy-launcher.bat';
+    const input = makeInput({
+      currentClangdPath: FOREIGN_LAUNCHER,
+      backupClangdPath: FOREIGN_LAUNCHER,
+      // 无 where / PATH / 默认目录可用 → 应判定 notFound(阻止写入 proxy 设置)
+      existingPaths: [FOREIGN_LAUNCHER],
+    });
+
+    // When
+    const result = resolveRealClangdPath(input);
+
+    // Then:绝不能把任何 proxy launcher 当真实 clangd 返回——
+    // 外来 launcher 只能以 proxyLauncher 原因出现在被拒列表中
+    expect(result.kind).toBe('notFound');
+    if (result.kind === 'notFound') {
+      expect(result.checkedCandidates.length).toBeGreaterThan(0);
+      expect(result.checkedCandidates.every((c) => c.reason === 'proxyLauncher')).toBe(true);
+    }
+  });
+
+  it('Given 外来 launcher 在前而 where 有真 clangd When 解析 Then 跳过外来 launcher 使用 where 候选', () => {
+    // Given:bugfix-006 实机场景——外来 launcher 污染 current/backup,但机器上有真 clangd
+    const FOREIGN_LAUNCHER =
+      'C:/Users/u/.vscode/extensions/vscode-ue-helper.vscode-ue-helper-0.2.0/out/launcher/proxy-launcher.bat';
+    const WHERE_CLANGD = 'D:/scoop/apps/llvm/current/bin/clangd.exe';
+    const input = makeInput({
+      currentClangdPath: FOREIGN_LAUNCHER,
+      backupClangdPath: FOREIGN_LAUNCHER,
+      whereClangdPath: WHERE_CLANGD,
+      existingPaths: [FOREIGN_LAUNCHER, WHERE_CLANGD],
+    });
+
+    // When / Then
+    expectSuccess(input, WHERE_CLANGD, 'whereCommand');
+  });
+
   it('Given PATH 中有 clangd When 解析 Then 不依赖真实机器 PATH 并返回 PATH 候选', () => {
     // Given
     const input = makeInput({
@@ -180,8 +224,10 @@ describe('resolveRealClangdPath — 自动解析真实 clangd 路径', () => {
     expectSuccess(input, BACKUP_CLANGD, 'backupClangdPath');
   });
 
-  it('Given 未注入 launcherPath When 解析 Then 不做 launcher 排除（SDK 探测场景）', () => {
-    // Given — SDK 探测链路不持有 launcher 路径；候选即使等于 launcher 也原样返回
+  it('Given 未注入 launcherPath 且候选是 launcher When 解析 Then 仍按文件名排除(bugfix-006 收紧 SDK 场景)', () => {
+    // Given — SDK 探测链路不持有 launcher 路径;[bugfix-006] 后按 basename 的排除
+    // 不依赖 launcherPath 注入:launcher(无论哪份扩展副本)永远不是真 clangd,
+    // SDK 拿它去跑 clangd --version 同样会失败,故无条件排除。
     const input = makeInput({
       launcherPath: undefined,
       currentClangdPath: LAUNCHER,
@@ -189,7 +235,18 @@ describe('resolveRealClangdPath — 自动解析真实 clangd 路径', () => {
     });
 
     // When / Then
-    expectSuccess(input, LAUNCHER, 'currentClangdPath');
+    const result = resolveRealClangdPath(input);
+    expect(result.kind).toBe('notFound');
+  });
+
+  it('Given 未注入 launcherPath 且候选是真实 clangd When 解析 Then 正常返回(SDK 探测场景不受影响)', () => {
+    const input = makeInput({
+      launcherPath: undefined,
+      currentClangdPath: CURRENT_CLANGD,
+      existingPaths: [CURRENT_CLANGD],
+    });
+
+    expectSuccess(input, CURRENT_CLANGD, 'currentClangdPath');
   });
 
   it('Given 候选路径缺失或为空 When 解析 Then 返回 typed notFound 且不抛异常', () => {

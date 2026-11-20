@@ -1,6 +1,7 @@
 # IDE、测试、构建相关
 .vscode/**
 .vscode-test/**
+.tsc-e2e/**
 test/**
 out/test/**
 coverage/**
@@ -16,6 +17,7 @@ vitest.config.ts
 .eslintrc.js
 .prettierrc
 .gitignore
+.mcp.json
 
 # AI辅助开发文件
 CLAUDE.md
@@ -24,6 +26,9 @@ CLAUDE.md
 .omp/**
 .specify/**
 .serena/**
+.qiling/**
+.tmp/**
+.zcode/**
 .planning/**
 .hermes/**
 .codegraph/**

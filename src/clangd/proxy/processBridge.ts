@@ -85,7 +85,13 @@ export class ProcessBridge implements ServerTransport {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.log(`[processBridge] spawn failed: ${msg}`);
+      // [bugfix-006] EINVAL 的典型根因:clangdPath 是 .bat/.cmd——Node(CVE-2024-27980
+      // 修复后)拒绝无 shell spawn 脚本。给出可操作的诊断,而不是只留一行 EINVAL。
+      const hint = /\.(bat|cmd)$/i.test(clangdPath)
+        ? ' (clangdPath is a .bat/.cmd script; Node refuses to spawn it without a shell — check --real-clangd, it must point to a real clangd executable)'
+        : '';
+      this.log(`[processBridge] spawn failed: ${msg}${hint}`);
+      this.onChildErrorCb?.(err instanceof Error ? err : new Error(msg));
       return;
     }
 

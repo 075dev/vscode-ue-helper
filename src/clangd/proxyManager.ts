@@ -199,17 +199,21 @@ export class ClangdProxyManager implements vscode.Disposable {
    * 但 B+C 修复后也只在某些 VS Code 实例下生效（target 解析问题），遂完全解耦。
    */
   async enable(): Promise<void> {
-    // 读取当前 clangd 参数（这些将作为 -- 之后的真实 clangd 参数传递）
+    // 读取当前 clangd 参数(这些将作为 -- 之后的真实 clangd 参数传递)
     const clangdConfig = vscode.workspace.getConfiguration('clangd');
     const originalArgs = clangdConfig.get<string[]>('arguments') ?? [];
+    // [bugfix-006] 若现有参数已是 proxy 形态(跨窗口 isActive 判定失效/双宿主共享
+    // workspace settings/firstRunInit 自动启用等场景),剥离出真实 clangd 参数,
+    // 否则会把旧 proxy 参数整段嵌套到新参数的 -- 之后,proxy CLI 解析错乱。
+    const realClangdArgs = extractRealClangdArgs(originalArgs);
 
     // 从 ClangdLocator 解析真实 clangd（统一候选链），再构建 proxy 参数。
     const realClangdPath = await this.resolveRealClangdPath();
     const proxyArgs = this.buildProxyArgs(realClangdPath);
 
     // P1-2: 确保后台索引优先级为 normal（用户未显式设置时注入，可逆）
-    const ensuredRealArgs = ensureBackgroundIndexPriority(originalArgs);
-    if (ensuredRealArgs.length !== originalArgs.length) {
+    const ensuredRealArgs = ensureBackgroundIndexPriority(realClangdArgs);
+    if (ensuredRealArgs.length !== realClangdArgs.length) {
       this.logger.info(
         '[proxyManager] injected --background-index-priority=normal into clangd args (P1-2)',
       );
@@ -251,9 +255,9 @@ export class ClangdProxyManager implements vscode.Disposable {
     }
     const clangdConfig = vscode.workspace.getConfiguration('clangd');
     const originalArgs = clangdConfig.get<string[]>('arguments') ?? [];
-    // 从 -- 分隔符后提取真实 clangd 参数
-    const dashDashIdx = originalArgs.indexOf('--');
-    const realClangdArgs = dashDashIdx === -1 ? [] : originalArgs.slice(dashDashIdx + 1);
+    // [bugfix-006] 统一用 extractRealClangdArgs 剥离(旧实现 indexOf 取第一个 --,
+    // 对已嵌套的参数会保留内层整段 proxy 参数,放大嵌套)。
+    const realClangdArgs = extractRealClangdArgs(originalArgs);
 
     const realClangdPath = await this.resolveRealClangdPath();
     const proxyArgs = this.buildProxyArgs(realClangdPath);
@@ -450,6 +454,24 @@ export class ClangdProxyManager implements vscode.Disposable {
 
     return args;
   }
+}
+
+/**
+ * [bugfix-006] 从 clangd.arguments 中提取"真实 clangd 参数"。
+ *
+ * - 非 proxy 形态(首元素不是 --real-clangd):原样返回——保持 enable 对用户原始
+ *   参数的既有语义(整段作为真实 clangd 参数)。
+ * - proxy 形态:取**最后一个** '--' 分隔符之后的段。重复 enable 会把旧 proxy 参数
+ *   嵌套到新参数的 -- 之后(任意层),只有最后一段是真正的 clangd 参数;用
+ *   lastIndexOf 而非 indexOf 才能对已嵌套参数一次剥离干净。
+ * - proxy 形态但缺分隔符(半截配置):返回空数组防御。
+ */
+export function extractRealClangdArgs(args: readonly string[]): string[] {
+  if (args.length === 0 || args[0] !== '--real-clangd') {
+    return [...args];
+  }
+  const lastSeparator = args.lastIndexOf('--');
+  return lastSeparator === -1 ? [] : args.slice(lastSeparator + 1);
 }
 
 /**

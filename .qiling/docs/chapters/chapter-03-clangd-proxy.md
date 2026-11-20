@@ -116,6 +116,7 @@ events: 0
 |-----------|------|------------------|------|
 | 审计修复（19 条） | 2026-10-25 | 请求关联 key 加 client / server 命名空间,消除客户端与服务端同 id 时的响应串扰;未知 CLI 参数从「整进程退出」降级为 warning 并忽略 | `src/clangd/proxy/messages.ts`、`src/clangd/proxy/bridge.ts`、`src/clangd/proxy/cliArgs.ts`、`src/clangd/proxy/cli.ts` |
 | bugfix-003 | 2026-10-11 | `bridge.close()` 清空请求关联表(消除取消/崩溃导致的在途请求条目无界增长);删除 completion/signatureHelp/inlayHint 三个 no-op 本地化占位函数 | `.qiling/planning/bugfix/003-audit-fixes.md` |
+| fix(bugfix-006) | 2026-11-13 | 双宿主(VS Code + JoyCode 等 fork)共享 workspace 时 clangd 停摆修复:resolver 按 launcher 固定文件名排除"外来 launcher"(旧逻辑只比对本实例路径,跨版本/安装目录失效,`--real-clangd` 被写成 .bat 后无 shell spawn 抛 EINVAL);enable/reapply 用 `extractRealClangdArgs`(lastIndexOf 剥离任意层嵌套,消除重复启用把旧 proxy 参数整段嵌套写入的缺陷);processBridge spawn 失败给根因诊断并 fail-fast;launcher bat 注释改纯 ASCII(UTF-8 中文注释在 GBK 代码页 cmd 下被当命令执行)。存量坏配置自愈:重新 enable/reapply 一次即可 | `src/clangd/proxy/realClangdResolver.ts`、`src/clangd/proxyManager.ts`、`src/clangd/proxy/processBridge.ts`、`esbuild.config.mjs`、`.qiling/planning/bugfix/006-clangd-proxy-deadlock.md` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 
