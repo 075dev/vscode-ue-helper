@@ -12,7 +12,7 @@
   "config.progressLocation.desc": "任务进度的显示位置。window = 状态栏转圈(任务结束自动消失,不弹窗);notification = 右下角弹窗。",
   "config.progressLocation.enum.0": "状态栏转圈 —— 任务结束自动消失,不弹窗",
   "config.progressLocation.enum.1": "右下角通知弹窗",
-  "config.useMCP.desc": "MCP 服务器模式。auto = 仅在 Cursor/Claude Code 中启用。",
+  "config.useMCP.desc": "控制是否通过 VS Code MCP Provider 向 Copilot Chat 发布工具：auto = Visual Studio Code 中启用，always = 任意支持 Provider API 的宿主启用，never = 禁用。详见 README 的 MCP 说明。",
   "config.lspLoggingLevel.desc": "扩展日志详细级别。",
   "config.clangdProxy.enabled.desc": "启用 clangd LSP 代理（didClose 保活和汉化支持）。",
   "config.clangdProxy.keepaliveMax.desc": "最大 keepalive 文档数。设为 0 可关闭保活（UE 大 PCH 项目下可显著降低 clangd 内存）。无效值将 clamp 到 20。",

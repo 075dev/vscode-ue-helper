@@ -12,7 +12,7 @@
   "config.progressLocation.desc": "Where task progress is shown. window = status bar spinner (auto-hides when done, no popup); notification = bottom-right popup.",
   "config.progressLocation.enum.0": "Status bar spinner — auto-hides when the task finishes, no popup",
   "config.progressLocation.enum.1": "Bottom-right notification popup",
-  "config.useMCP.desc": "MCP server mode. Auto = enable only in Cursor/Claude Code.",
+  "config.useMCP.desc": "Controls publishing tools to VS Code MCP clients through the MCP Provider API: auto = enable in Visual Studio Code; always = enable on any host supporting the provider API; never = disable. See the README MCP section.",
   "config.lspLoggingLevel.desc": "Log verbosity for the extension.",
   "config.clangdProxy.enabled.desc": "Enable clangd LSP proxy with didClose keepalive and localization.",
   "config.clangdProxy.keepaliveMax.desc": "Maximum number of keepalive documents. Set to 0 to disable keepalive (significantly reduces clangd memory on large UE PCH projects). Invalid values clamp to 20.",

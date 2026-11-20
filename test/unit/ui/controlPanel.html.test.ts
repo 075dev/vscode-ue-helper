@@ -200,7 +200,7 @@ describe('getControlPanelHtml — 模板完整性', () => {
     expect(html).toContain('</html>');
   });
 
-  it('5 个 tab 全部存在', () => {
+  it('6 个 tab 全部存在', () => {
     const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     for (const id of [
       'tab-actions',
@@ -208,9 +208,20 @@ describe('getControlPanelHtml — 模板完整性', () => {
       'tab-add-flags',
       'tab-proxy-settings',
       'tab-status',
+      'tab-guide',
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
+  });
+
+  it('插件使用说明包含工作区准备、功能介绍和 MCP 兼容性', () => {
+    const html = getControlPanelHtml('vscode-webview://test', 'P', '5.4', []);
+    expect(html).toContain('id="content-guide"');
+    expect(html).toContain('Generate Visual Studio project files');
+    expect(html).toContain('vscodeUEHelper.useMCP');
+    expect(html).toContain('Copilot Chat');
+    expect(html).toContain('Cursor and Claude Code do not consume VS Code provider registrations');
+    expect(html).toContain('Diagnose Clangd Project');
   });
 
   it('projectName 为空时降级显示 noProject 文案', () => {
@@ -272,9 +283,10 @@ describe('getControlPanelHtml — 面板可用性(无项目空状态 + 按钮适
     }
   });
 
-  it('无项目时 body 预置 no-project class(初始即不可用,等 panelState 纠正)', () => {
+  it('无项目时显示空状态，同时使用说明仍可访问', () => {
     const html = getControlPanelHtml('vscode-webview://test', '', '', []);
     expect(html).toContain('<body class="no-project">');
+    expect(html).toContain('body.no-project #content-guide { display: block !important; }');
   });
 
   it('有项目时 body 无 no-project class', () => {

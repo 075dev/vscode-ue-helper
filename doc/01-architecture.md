@@ -10,7 +10,7 @@ VSCodeUEHelper 是 VS Code 扩展，给 Unreal Engine 5.2+ C++ 开发用：
 - UBT 构建 / 重建 / 清理（Task Provider，Ctrl+Shift+B）
 - Live Coding 热重载（仅 Windows）
 - clangd 智能提示（compile_commands.json + `.clangd` + 自定义 Add flags）
-- 可选 MCP AI Agent 集成（Cursor / Claude Code 自动启用）
+- VS Code MCP Provider 集成（Copilot Chat 可调用 UE 构建和项目工具）
 - 状态栏 + 控制面板 Webview + QuickPick + Problems 面板
 
 **产品边界（宪法 I）**：本插件只支持 Windows 10/11 + Unreal Engine 5.2+ + MSVC + Windows SDK + VS Code 1.85+ + Node.js 18+。`package.json#platforms` 仅声明 `win32`；`vscodeUEHelper.platform` 配置虽有 `Win64/Mac/Linux` 三个枚举值，但产品对外承诺仅 Windows，Mac/Linux 不在支持范围。除非宪法明确修订，不引入 Mac/Linux 路径代码或文档。
@@ -124,23 +124,33 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 
 扩展侧通过 `clangd.path = <path-to-proxy-launcher>` + `clangd.useScriptAsExecutable=true` 触发，launcher 接收代理 CLI 参数 + `--` 分隔符后的真实 clangd 参数。
 
-## MCP 生命周期
+## MCP Provider 与进程桥接
 
-`src/mcp/lifecycle.ts` 用环境变量判断宿主：
+`src/mcp/provider.ts` 注册 VS Code 的 `McpServerDefinitionProvider`。VS Code 请求
+服务器定义时，扩展返回 `out/mcpServer.js` 的 stdio 进程定义；在服务器启动前，
+`resolveMcpServerDefinition` 建立随机命名管道，并通过环境变量只将该管道和随机令牌
+传给受 VS Code 管理的子进程。
 
-| 环境变量                                           | 宿主                      |
-| -------------------------------------------------- | ------------------------- |
-| `CURSOR_TRACE_ID` 或 `CURSOR_USER_DATA_DIR`        | Cursor                    |
-| `CLAUDE_CODE_ENTRYPOINT` 或 `CLAUDE_CODE_SSE_PORT` | Claude Code               |
-| 其他                                               | 普通 VS Code（MCP no-op） |
+```
+Copilot Chat
+    │ VS Code MCP Provider API
+    ▼
+out/mcpServer.js (stdio: MCP JSON-RPC)
+    │ 每次定义独立的本地命名管道 + 随机令牌
+    ▼
+扩展宿主 MCPBridgeServer
+    │ callToolResultAsync
+    ▼
+现有 UE commands + WorkspaceState / ClangdOps
+```
 
-`useMCP` 设置 `auto` / `always` / `never` 决定是否启动：
+MCP 子进程 stdout 只用于协议帧；命令仍在扩展宿主执行，以继续使用 VS Code API 和
+工作区状态。带命令的工具等待执行完成并返回命令结果。`useMCP` 的 `auto` 只向
+Visual Studio Code 宿主发布 Provider，`always` 面向任何实现此 VS Code API 的宿主，
+`never` 不发布定义。VS Code 未提供该 API 时记录警告，不影响扩展其他功能。
 
-- `auto`：仅在 Cursor / Claude Code 中启动
-- `always`：总是启动
-- `never`：不启动
-
-普通 VS Code 用户**永远不会**看到 MCP 工具 —— 这是设计选择，不是 bug。
+此注册面向 VS Code MCP 客户端（包括 Copilot Chat）；Cursor / Claude Code 不消费
+VS Code Provider 注册，仍需要单独的客户端集成。
 
 ## 数据流总览
 
@@ -162,10 +172,11 @@ UE 项目通常几十 GB、几千个 `.cpp` 文件，递归扫描会卡顿；wor
 并行：
 
 ```
-MCP Server ──► tools.ts (10 个工具: ue_build / ue_rebuild / ue_clean / ue_get_build_errors /
+Copilot Chat ──► VS Code MCP Provider ──► out/mcpServer.js (stdio) ──► named pipe ──► tools.ts
+                  (10 个工具: ue_build / ue_rebuild / ue_clean / ue_get_build_errors /
                        ue_launch_editor / ue_live_coding / ue_generate_compile_commands /
                        ue_show_project_info / ue_set_system_includes / ue_status)
-                  └─► callTool 派发到真实 executeXxx（fire-and-forget，非 stub）
+                  └─► callToolResultAsync 等待真实 executeXxx 结果
 ```
 
 ## 模块依赖（编译期 import 方向）
@@ -205,5 +216,5 @@ extension.ts
 5. **所有 VS Code 资源**（命令、状态栏、Watcher、DiagnosticCollection）必须 push 到 `context.subscriptions`
 6. **新增命令 4 步**：`package.json` 定义 → `commands/xxx.ts` 实现 → `commands/index.ts` 注册 → i18n 双语 key
 7. **宪法优先**：当本指南、`README.md`、`AGENTS.md`、Spec Kit 命令、源码或 PR 描述出现冲突，以 `.specify/memory/constitution.md` 为准；不能解决的冲突按宪法 §Governance 升级为修订（MUST NOT silently ignored）。
-8. **MCP `callTool` 是真实派发**：`src/mcp/tools.ts:callTool` 当前把工具调用派发到 `commands/*:executeXxx`（`silent=true` 跳过 auto-pick），`fire-and-forget` 后通过 `Logger` + Problems 面板回报进度；不存在 stub 形态。
+8. **MCP tool calls return real command results**：VS Code-managed calls use `callToolResultAsync` over the authenticated local bridge and await `commands/*:executeXxx` (`silent=true` skips pickers); the synchronous `callTool` API is compatibility-only.
 9. **completionMode 已废弃**：`package.json` 不再暴露 `vscodeUEHelper.completionMode`，`Config` 的 `CompletionMode` 类型 alias 已删除（H4-B 决策）。所有补全走 `slow` 单路径；状态栏不再提供 fast/slow 切换。

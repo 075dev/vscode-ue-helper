@@ -12,15 +12,14 @@
  *
  * ## MCP runtime context
  *
- * `setMCPContext()` 在 `activateMCP()` 中调用,注入本进程单例 config/logger/
- * detection/workspace/clangdOps。[bugfix-002] extension.ts 激活流程已接线 activateMCP:
- * 在 Cursor / Claude Code 宿主(检测 env vars)下启动,普通 VS Code 为 no-op。
+ * `setMCPContext()` 在 `registerMCPProvider()` 中调用,注入扩展宿主的
+ * config/logger/detection/workspace/clangdOps。独立 stdio 子进程通过本地命名管道
+ * 把工具调用转发回这里,因此命令仍可使用 VS Code API 和当前工作区状态。
  *
  * ## 同步签名 / fire-and-forget dispatch
  *
- * callTool 保持同步签名 `(name, args) => string`,不阻塞 MCP request handler;
- * 调 executeXxx 后立刻返回 `{ok: true, dispatched: name}`,真实进度通过 logger
- * 流到 OutputChannel + Problems 面板(命令层已有处理)。
+ * `callTool` 保留同步签名供旧调用方兼容；VS Code 管理的 MCP 服务器使用
+ * `callToolResultAsync` 等待命令完成并返回真实执行结果。
  */
 
 import type { Config } from '@core/config';
@@ -28,7 +27,12 @@ import type { Logger } from '@core/logger';
 import type { DetectionHandles } from '@detection';
 import type { WorkspaceState } from '@core/workspace';
 import type { ClangdOps } from '@clangd/clangdOps';
-import { errEnvelope, EC_MCP_CONTEXT_NOT_INITIALIZED, EC_UNKNOWN_TOOL } from '@core/envelope';
+import {
+  errEnvelope,
+  EC_INTERNAL_ERROR,
+  EC_MCP_CONTEXT_NOT_INITIALIZED,
+  EC_UNKNOWN_TOOL,
+} from '@core/envelope';
 import { buildUeCapabilityReport } from '@core/ueCapabilities';
 import { executeBuild } from '@commands/build';
 import { executeLaunchEditor } from '@commands/launchEditor';
@@ -136,9 +140,7 @@ export const MCP_TOOLS: MCPTool[] = [
 ];
 
 /**
- * MCP runtime context —— activateMCP 调 setMCPContext 注入。
- * MCP 模块在 Cursor / Claude Code spawn 时启动,普通 VS Code 完全不调,
- * 所以 _ctx 在普通环境下永远是 null,callTool 返回 `{ok: false, error: {code, message}}`。
+ * MCP runtime context —— registerMCPProvider 在扩展宿主调用 setMCPContext 注入。
  */
 export interface MCPContext {
   config: Config;
@@ -173,7 +175,7 @@ function isErrEnvelope(value: unknown): value is { ok: false; error: { code: str
   return typeof detail.code === 'string' && typeof detail.message === 'string';
 }
 
-/** 注入 MCP 运行时上下文 —— activateMCP 内部调用。传 null 等于清空(unmount/dispose)。 */
+/** 注入 MCP 运行时上下文 —— provider 注册/释放时调用。 */
 export function setMCPContext(ctx: MCPContext | null): void {
   _ctx = ctx;
 }
@@ -230,7 +232,7 @@ export function callTool(name: string, args: Record<string, unknown>): string {
 }
 
 /**
- * [D17] 调用工具并返回带 `isError` 的完整结果 —— MCP server 的入口。
+ * [D17] 调用工具并返回带 `isError` 的完整结果 —— 同步兼容入口。
  *
  * 与 `callTool` 同一套 dispatch 逻辑，区别只在返回值多一个协议级错误标记。
  */
@@ -240,7 +242,7 @@ export function callToolResult(name: string, args: Record<string, unknown>): Too
     return makeResult(
       errEnvelope(
         EC_MCP_CONTEXT_NOT_INITIALIZED,
-        'MCP context not initialized — extension is not running in Cursor / Claude Code host',
+        'MCP context not initialized — the extension MCP provider is not active',
       ),
     );
   }
@@ -395,5 +397,92 @@ export function callToolResult(name: string, args: Record<string, unknown>): Too
     default:
       // 契约错误出口(openapi.yaml Error + 决策 D5):{ok: false, error: {code, message}},非裸字符串
       return makeResult(errEnvelope(EC_UNKNOWN_TOOL, `Unknown tool: ${name}`));
+  }
+}
+
+/**
+ * Await command-backed tools for VS Code's managed MCP process so Copilot receives
+ * the actual command result rather than an optimistic "dispatched" acknowledgement.
+ */
+export async function callToolResultAsync(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  if (!_ctx) {
+    return callToolResult(name, args);
+  }
+  const { config, logger, detection, workspace, clangdOps } = _ctx;
+
+  const execute = async (operation: () => Promise<unknown>): Promise<ToolResult> => {
+    try {
+      const result = await operation();
+      if (typeof result === 'object' && result !== null && !Array.isArray(result)) {
+        return makeResult(result);
+      }
+      return makeResult({
+        ok: false,
+        error: {
+          code: EC_INTERNAL_ERROR,
+          message: `MCP tool ${name} returned an invalid result`,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`[mcp] tool ${name} failed:`, error);
+      return makeResult(errEnvelope(EC_INTERNAL_ERROR, message));
+    }
+  };
+
+  switch (name) {
+    case 'ue_build': {
+      const rawMode = typeof args.mode === 'string' ? args.mode : 'build';
+      const mode: 'build' | 'rebuild' | 'clean' =
+        rawMode === 'rebuild' || rawMode === 'clean' ? rawMode : 'build';
+      const trimmedModule = typeof args.module === 'string' ? args.module.trim() : '';
+      const validModule = /^[\w.+-]+$/u.test(trimmedModule);
+      const module = mode === 'build' && validModule ? trimmedModule : undefined;
+      let warning: string | undefined;
+      if (trimmedModule && mode !== 'build') {
+        warning = 'module ignored for rebuild/clean; only mode=build supports module filtering';
+      } else if (trimmedModule && !validModule) {
+        warning = 'module ignored: contains characters outside [A-Za-z0-9_.+-]';
+      }
+      return execute(async () => {
+        const result = await executeBuild(
+          mode,
+          config,
+          logger,
+          detection,
+          workspace,
+          true,
+          undefined,
+          module,
+        );
+        if (!warning || typeof result !== 'object' || result === null || Array.isArray(result)) {
+          return result;
+        }
+        return { ...result, warning };
+      });
+    }
+    case 'ue_rebuild':
+      return execute(() => executeBuild('rebuild', config, logger, detection, workspace, true));
+    case 'ue_clean':
+      return execute(() => executeBuild('clean', config, logger, detection, workspace, true));
+    case 'ue_launch_editor':
+      return execute(() => executeLaunchEditor(config, logger, detection, workspace, true));
+    case 'ue_live_coding':
+      return execute(() => executeLiveCoding(config, logger, detection, workspace, true));
+    case 'ue_generate_compile_commands':
+      return execute(() =>
+        executeGenerateCompileCommands(config, logger, detection, workspace, true),
+      );
+    case 'ue_show_project_info':
+      return execute(() => showProjectInfo(config, logger, detection, workspace, true));
+    case 'ue_set_system_includes':
+      return execute(() =>
+        executeSetSystemIncludes(config, logger, detection, workspace, clangdOps, true),
+      );
+    default:
+      return callToolResult(name, args);
   }
 }

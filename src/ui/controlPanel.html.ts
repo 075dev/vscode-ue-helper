@@ -147,6 +147,21 @@ export function getControlPanelHtml(
     .panel-btn.primary:hover:not(:disabled) { background: var(--c-primary-hover); border-color: transparent; }
     .panel-btn.primary .icon { opacity: 0.9; }
     .form-section { margin-bottom: 20px; }
+    .guide-content { display: flex; flex-direction: column; gap: 12px; }
+    .guide-card {
+      padding: 10px 12px; border: 1px solid var(--c-border-light);
+      border-radius: var(--radius-md); background: color-mix(in srgb, var(--c-bg) 85%, var(--c-primary));
+    }
+    .guide-card h3 { font-size: 12px; margin-bottom: 6px; font-weight: 600; }
+    .guide-card p, .guide-card li { font-size: 11px; line-height: 1.6; opacity: 0.8; }
+    .guide-card ol, .guide-card ul { padding-left: 18px; }
+    .guide-card code { font-family: var(--font-mono); font-size: 10px; overflow-wrap: anywhere; }
+    .guide-warning { border-color: color-mix(in srgb, var(--c-error) 55%, var(--c-border)); }
+    .guide-tool-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .guide-tool-list code {
+      padding: 2px 5px; border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--c-input-bg) 75%, transparent);
+    }
     .form-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
     .form-label { font-size: 12px; font-weight: 500; opacity: 0.8; }
     .form-label .desc { font-weight: 400; font-size: 11px; opacity: 0.45; margin-left: 4px; }
@@ -235,9 +250,13 @@ export function getControlPanelHtml(
     }
     .warning-notice .notice-close:hover { opacity: 1; }
     /* [面板可用性] 无 .uproject 时面板整体不可用：隐藏 tab 栏与全部内容页，显示空状态 */
-    body.no-project .tab-bar,
-    body.no-project .tab-content,
+    body.no-project .tab-bar { display: flex !important; }
+    body.no-project .tab-bar .tab:not([data-tab="guide"]) { display: none; }
+    body.no-project .tab-bar #tab-guide { opacity: 1; background: var(--c-tab-active-bg); }
+    body.no-project .tab-bar #tab-guide::after { transform: translateX(-50%) scaleX(1); }
+    body.no-project .tab-content:not(#content-guide),
     body.no-project #result-toast { display: none !important; }
+    body.no-project #content-guide { display: block !important; }
     .no-project-overlay {
       display: none; flex-direction: column; align-items: center; justify-content: center;
       gap: 10px; padding: 48px 20px; text-align: center; min-height: 60vh;
@@ -280,6 +299,7 @@ export function getControlPanelHtml(
     <button class="tab" data-tab="add-flags" id="tab-add-flags">${escapeHtml(t('panel.tab.addFlags'))}</button>
     <button class="tab" data-tab="proxy" id="tab-proxy-settings">${escapeHtml(t('panel.tab.proxySettings'))}</button>
     <button class="tab" data-tab="status" id="tab-status">${escapeHtml(t('panel.tab.status'))}</button>
+    <button class="tab" data-tab="guide" id="tab-guide">${escapeHtml(t('panel.tab.guide'))}</button>
   </div>
   <div class="tab-content active" id="content-actions">
     ${renderButtonGroups()}
@@ -357,6 +377,53 @@ export function getControlPanelHtml(
       </div>
     </div>
     <button class="status-refresh-btn" id="status-refresh-btn">↻ ${escapeHtml(t('panel.status.refresh'))}</button>
+  </div>
+  <div class="tab-content" id="content-guide">
+    <div class="guide-content">
+      <div class="section-title">${escapeHtml(t('panel.guide.title'))}</div>
+      <div class="guide-card">
+        <h3>${escapeHtml(t('panel.guide.requirementsTitle'))}</h3>
+        <p>${escapeHtml(t('panel.guide.requirements'))}</p>
+        <ol>
+          <li>${escapeHtml(t('panel.guide.setupStepGenerate'))}</li>
+          <li>${escapeHtml(t('panel.guide.setupStepOpen'))}</li>
+        </ol>
+      </div>
+      <div class="guide-card">
+        <h3>${escapeHtml(t('panel.guide.actionsTitle'))}</h3>
+        <ul>
+          <li>${escapeHtml(t('panel.guide.actionsBuild'))}</li>
+          <li>${escapeHtml(t('panel.guide.actionsClangd'))}</li>
+          <li>${escapeHtml(t('panel.guide.actionsProject'))}</li>
+        </ul>
+      </div>
+      <div class="guide-card">
+        <h3>${escapeHtml(t('panel.guide.settingsTitle'))}</h3>
+        <p>${escapeHtml(t('panel.guide.settingsDescription'))}</p>
+      </div>
+      <div class="guide-card">
+        <h3>${escapeHtml(t('panel.guide.mcpTitle'))}</h3>
+        <p>${escapeHtml(t('panel.guide.mcpConfig'))}</p>
+        <ul>
+          <li><code>auto</code> — ${escapeHtml(t('panel.guide.mcpAuto'))}</li>
+          <li><code>always</code> — ${escapeHtml(t('panel.guide.mcpAlways'))}</li>
+          <li><code>never</code> — ${escapeHtml(t('panel.guide.mcpNever'))}</li>
+        </ul>
+        <p style="margin-top:8px"><code>"vscodeUEHelper.useMCP": "auto"</code></p>
+      </div>
+      <div class="guide-card">
+        <h3>${escapeHtml(t('panel.guide.mcpToolsTitle'))}</h3>
+        <div class="guide-tool-list">
+          ${['ue_build', 'ue_rebuild', 'ue_clean', 'ue_get_build_errors', 'ue_launch_editor', 'ue_live_coding', 'ue_generate_compile_commands', 'ue_show_project_info', 'ue_set_system_includes', 'ue_status']
+            .map((name) => `<code>${name}</code>`)
+            .join('')}
+        </div>
+      </div>
+      <div class="guide-card guide-warning">
+        <h3>${escapeHtml(t('panel.guide.mcpLimitTitle'))}</h3>
+        <p>${escapeHtml(t('panel.guide.mcpLimitDescription'))}</p>
+      </div>
+    </div>
   </div>
   <div id="result-toast"></div>
   <div id="proxy-restart-notice" class="warning-notice" style="display:none">

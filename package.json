@@ -35,6 +35,7 @@
     "theme": "dark"
   },
   "activationEvents": [
+    "onMcpServerDefinitionProvider:vscode-ue-helper.mcp",
     "workspaceContains:**/*.uproject",
     "onCommand:vscodeUEHelper.build",
     "onCommand:vscodeUEHelper.rebuild",
@@ -67,6 +68,12 @@
   ],
   "main": "out/extension.js",
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "vscode-ue-helper.mcp",
+        "label": "VSCode UE Helper"
+      }
+    ],
     "commands": [
       {
         "command": "vscodeUEHelper.build",

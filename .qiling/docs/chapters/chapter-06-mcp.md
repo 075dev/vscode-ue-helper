@@ -133,6 +133,7 @@ events: 0
 | 版本/交付 | 日期 | 该功能发生了什么 | 证据 |
 |-----------|------|------------------|------|
 | 审计修复（19 条） | 2026-10-25 | 失败响应补 MCP 标准字段 `isError:true`（此前 AI 代理的错误分支永不触发），成功/失败响应统一由一个内部构造器产出；Logger 增加「只写 OutputChannel、不写 console」开关，MCP 激活期间关闭，避免日志插进 JSON-RPC 帧流；README 如实标注 MCP server 当前仍跑在扩展宿主进程内、外部客户端尚不能直连 | `src/mcp/tools.ts`、`src/mcp/server.ts`、`src/mcp/index.ts`、`src/core/logger.ts`、`.qiling/planning/context/openapi.yaml` |
+| fix(bugfix-005) | 2026-11-12 | MCP definition 改为 provide 阶段自足（pipe/token 不再只靠 resolve 注入——VS Code 后台转发/缓存重启路径不保证调 resolve，缺 env 的子进程立即退出导致"代理无法启动"）；bridge 单例化，消除每次 resolve 泄漏一个管道服务器的缺陷；新增回归测试 2 例 + 端到端冒烟（真实子进程回连） | `src/mcp/provider.ts`、`test/unit/mcp/provider.test.ts`、`test/unit/mcp/e2e-smoke.test.ts`、`.qiling/planning/bugfix/005-mcp-agent-cannot-start.md` |
 
 (本章正文永远最新态;该功能的历史变更逐条追加于此,只增不清)
 

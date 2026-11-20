@@ -1,6 +1,6 @@
 # VSCodeUEHelper
 
-> All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, optional MCP AI agent integration, and an embedded clangd LSP proxy with localization support.
+> All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, MCP tools for VS Code Copilot Chat, and an embedded clangd LSP proxy with localization support.
 
 ## Governance
 
@@ -19,7 +19,7 @@ in Chinese by convention.
 | 2     | ✅     | UBT Build/Rebuild/Clean, Live Coding, MSVC parsing, Problems panel, Task provider                            |
 | 3     | ✅     | clangd IntelliSense, `compile_commands.json`, `.clangd` config, preparse includes, workspace backup          |
 | 4     | ✅     | Status bar, QuickPick pickers, **28 commands**                                                               |
-| 5     | ✅     | MCP server (auto-enabled in Cursor / Claude Code), AI agent rules                                            |
+| 5     | ✅     | VS Code MCP Provider for Copilot Chat, AI agent rules                                                         |
 | 6     | ✅     | Unit tests (Vitest, 1500+ tests), CI-ready scripts                                                            |
 | 7     | ✅     | clangd LSP proxy + control panel webview + preparse cache, perf instrumentation                              |
 | 8     | ✅     | `WorkspaceState`（36 callers）+ `ClangdOps`（22 callers）统一架构、Phase 7/8/9 SSoT 收束                     |
@@ -110,28 +110,46 @@ The code is written from scratch to avoid version-coupling, but the patterns are
 
 ### MCP AI Agent Integration
 
-- Auto-starts in Cursor / Claude Code (detected via env vars)
-- 10 tools exposed: `ue_build`, `ue_rebuild`, `ue_clean`, `ue_get_build_errors`, `ue_launch_editor`, `ue_live_coding`, `ue_generate_compile_commands`, `ue_show_project_info`, `ue_set_system_includes`, `ue_status`
-- `ue_get_build_errors` returns the last build's structured diagnostics (severity totals, files-with-errors dedup, truncated details) so agents can close the "build → read errors → fix" loop
-- `ue_status` returns the detected engine version, the active build configuration/target/platform, and the **UE version capability matrix** — so an agent knows which clangd toolchain the engine expects and which capabilities are available _before_ it touches the build
-- Stdio transport via `@modelcontextprotocol/sdk`
-- AI agent rules generated to `.cursor/rules/unreal-cpp.mdc` and `.github/copilot-instructions.md`
+The extension contains an MCP server implementation and 10 tools:
+`ue_build`, `ue_rebuild`, `ue_clean`, `ue_get_build_errors`, `ue_launch_editor`,
+`ue_live_coding`, `ue_generate_compile_commands`, `ue_show_project_info`,
+`ue_set_system_includes`, and `ue_status`.
 
-> **⚠️ Current limitation — the MCP server is not yet externally connectable.**
->
-> The MCP server currently runs **inside the VS Code extension host process**. Its
-> stdin/stdout are the extension host's own, **not** the MCP client's pipe — so an
-> external client (Cursor / Claude Code) cannot connect to it yet.
->
-> - `useMCP: "auto"` means *"the host was detected and stdout is not polluted"* —
->   **not** "end-to-end usable".
-> - The server does keep stdout clean: the logger's `console` output is disabled
->   while MCP is active, so `logger.info` cannot corrupt the JSON-RPC frame stream.
->   All logs remain visible in the **VSCodeUEHelper** output channel.
-> - **Follow-up (not implemented here)**: running the MCP server as a standalone
->   process. That requires decoupling the `detection` / `commands` layers from
->   their `vscode` runtime dependencies first — those layers currently assume the
->   extension host API.
+- `ue_get_build_errors` returns structured diagnostics from the last build.
+- `ue_status` reports the detected UE version, active build settings, and UE capability matrix.
+- Build and setup tools wait for the command result and return it to Copilot Chat.
+- AI agent rules can be installed with `Install AI Agent Rules`; this is separate from MCP and does not register MCP tools.
+
+#### Use with VS Code Copilot Chat
+
+1. Open a UE-generated `.code-workspace` in VS Code and make sure the extension is active.
+2. Set `vscodeUEHelper.useMCP` to `auto` (default) or `always`.
+3. Open Copilot Chat, open **Configure Tools**, and enable the tools provided by **VSCode UE Helper**.
+4. Ask Copilot to inspect the UE project or build it. Build tools wait for completion and return the command result; `ue_get_build_errors` can read structured diagnostics from the latest build.
+
+The extension registers a VS Code MCP Server Definition Provider. VS Code starts a bundled stdio server on demand; it forwards tool calls over an authenticated, per-session local named pipe to the extension host, where the existing UE commands and workspace state are available. MCP protocol traffic stays on the child process's stdout; extension logs do not interfere with it.
+
+#### Configuration
+
+```json
+{
+  "vscodeUEHelper.useMCP": "auto"
+}
+```
+
+Values:
+
+| Value | Behavior |
+| ----- | -------- |
+| `auto` | Default. Offer the server to VS Code when the host identifies itself as Visual Studio Code. |
+| `always` | Offer the server on any host that supports the VS Code MCP provider API. |
+| `never` | Do not offer the server to the MCP client. |
+
+Changes to this setting notify VS Code to refresh the available server definitions; a reload is normally not required.
+
+#### Compatibility
+
+This provider is for VS Code's MCP integration, including Copilot Chat. Cursor and Claude Code do not consume VS Code's server-provider registration; this extension does not currently ship a standalone server configuration for those clients. Setting `always` does not add that separate integration. On VS Code builds without the MCP provider API, the extension logs a warning and does not publish the server.
 
 ### Control Panel
 
@@ -171,7 +189,7 @@ Settings live under the `vscodeUEHelper.*` namespace.
 | `progressLocation`                 | enum   | `window`      | Task progress UI: `window` = status bar spinner (auto-hides, no popup) / `notification` = bottom-right popup.     |
 | `scaffold.clangFormat`             | bool   | `true`        | Create Project: scaffold base `.clang-format` (never overwrites).                                                 |
 | `scaffold.clangTidy`               | bool   | `false`       | Create Project: scaffold base `.clang-tidy` (never overwrites).                                                   |
-| `useMCP`                           | enum   | `auto`        | `auto` = only in Cursor/Claude Code. `always` / `never`.                                                          |
+| `useMCP`                           | enum   | `auto`        | Offers MCP tools to VS Code's MCP clients (including Copilot Chat): `auto` / `always` / `never`.                  |
 | `lspLoggingLevel`                  | enum   | `info`        | error / warn / info / debug                                                                                       |
 | `clangdProxy.enabled`              | bool   | `false`       | Enable clangd LSP proxy (didClose keepalive + localization).                                                      |
 | `clangdProxy.keepaliveMax`         | number | `20`          | Max keepalive documents. `0` = disable keepalive (recommended for large UE PCH projects to cut clangd memory).     |

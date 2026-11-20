@@ -51,7 +51,13 @@ vi.mock('@commands/showProjectInfo', () => ({
 // 测试主体 import (hoist 之后)
 // ============================================================
 
-import { MCP_TOOLS, callTool, setMCPContext, getMCPContext } from '@mcp/tools';
+import {
+  MCP_TOOLS,
+  callTool,
+  callToolResultAsync,
+  setMCPContext,
+  getMCPContext,
+} from '@mcp/tools';
 import {
   rememberBuildSnapshot,
   resetLastBuildSnapshot,
@@ -211,6 +217,31 @@ describe('MCP tools', () => {
     expect(props.module?.type).toBe('string');
     expect(props.module?.description).toContain('UBT -Module=');
     expect(props.module?.enum).toBeUndefined();
+  });
+
+  it('异步 MCP 调用等待命令完成并返回真实命令结果', async () => {
+    mockExecuteBuild.mockResolvedValue({
+      ok: true,
+      data: { buildId: 'build-123', succeeded: true },
+    });
+
+    const result = await callToolResultAsync('ue_build', {});
+
+    expect(result.isError).toBe(false);
+    expect(JSON.parse(result.text)).toEqual({
+      ok: true,
+      data: { buildId: 'build-123', succeeded: true },
+    });
+    expect(mockExecuteBuild).toHaveBeenCalledWith(
+      'build',
+      fakeConfig,
+      fakeLogger,
+      fakeDetection,
+      fakeWorkspace,
+      true,
+      undefined,
+      undefined,
+    );
   });
 
   // ============================================================

@@ -366,15 +366,17 @@ const MSVC_RE = /^(.*?)\((\d+)(?:,(\d+))?\)\s*:\s*(error|warning|note|fatal erro
 
 详细按钮职责见 `src/ui/AGENTS.md`。
 
-## 8. `src/mcp/` —— MCP 服务器
+## 8. `src/mcp/` —— VS Code MCP Provider
 
-依赖 `@core` / `@build` / `@clangd` / `@commands`（仅在 Cursor / Claude Code 启动）。
+依赖 VS Code MCP Provider API、MCP SDK 及 `@core` / `@build` / `@clangd` / `@commands`。
 
-| 文件           | 职责                                                                              |
-| -------------- | --------------------------------------------------------------------------------- |
-| `server.ts`    | `MCPServer` 类：包装 `@modelcontextprotocol/sdk` 的 Server + StdioServerTransport |
-| `tools.ts`     | `MCP_TOOLS` 10 个工具定义 + `callTool` 派发                                       |
-| `lifecycle.ts` | `shouldStartMCP` / `detectHost`（环境变量判断）                                   |
+| 文件              | 职责                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| `provider.ts`     | 注册 Provider、按 `useMCP` 提供服务器定义，并在解析时创建受令牌保护的命名管道                |
+| `stdioServer.ts`  | MCP stdio 子进程；定义从扩展传入，工具请求通过桥接返回扩展宿主                                 |
+| `bridge.ts`       | 子进程/扩展宿主之间的随机命名管道 JSON-line RPC                                                |
+| `tools.ts`        | 10 个工具 schema 与实际命令处理；Provider 路径使用 async handler 返回执行结果                 |
+| `index.ts`        | 对外导出 Provider、bridge 和工具接口                                                          |
 
 ### 10 个 MCP 工具
 
@@ -391,25 +393,4 @@ const MSVC_RE = /^(.*?)\((\d+)(?:,(\d+))?\)\s*:\s*(error|warning|note|fatal erro
 | `ue_set_system_includes`       | 设置 Windows MSVC + Win SDK 头（Windows only，由统一渲染入口写入 `.clangd`）           |
 | `ue_status`                    | 返回项目 / 引擎 / 当前构建配置 + UE 版本能力矩阵（同步）                               |
 
-**`callTool` 派发**：`src/mcp/tools.ts:callTool(name, args)` 同步返回 `{ok, dispatched}`，内部 `dispatch(executeXxx(config, logger, detection, workspace, ..., silent=true), name)` 把工具调用派发到对应 `commands/*:executeXxx`，fire-and-forget，真实进度通过 `Logger` + Output 通道 + Problems 面板回报。不存在 stub 形态 —— `ue_toggle_completion_mode` 已删除（fast/slow 已合并）。
-
-## 9. `src/rules/` —— AI 规则生成
-
-无外部依赖。
-
-| 文件             | 职责                                                                                                                  |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `cursorRules.ts` | `UE_HELPER_RULES_MDC`（`.cursor/rules/*.mdc`）+ `UE_HELPER_COPILOT_INSTRUCTIONS`（`.github/copilot-instructions.md`） |
-| `index.ts`       | re-export                                                                                                             |
-
-## 10. `src/i18n/` —— 中英双语
-
-依赖 `vscode.env`。
-
-| 文件              | 职责                                                                                      |
-| ----------------- | ----------------------------------------------------------------------------------------- |
-| `index.ts`        | `initI18n()` / `t(key, params)`；按 `vscode.env.language` 选 locale，缺 key fallback 英文 |
-| `locales/en.json` | 英文文案                                                                                  |
-| `locales/zh.json` | 中文文案                                                                                  |
-
-**约束**：所有用户可见字符串走 `t()`，改文案必须同步两个文件。
+**`callToolResultAsync` 执行**：Provider 管理的 stdio server 经桥接调用扩展宿主中的工具处理器；命令类工具等待 `executeXxx(..., silent=true)` 完成并将结果返回给 Copilot Chat。同步 `callTool` 保留给兼容调用方，不用于新 Provider 流程。`package.json` 的 Provider contribution ID、activation event 和 `MCP_PROVIDER_ID` 必须一致。

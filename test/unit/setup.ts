@@ -5,6 +5,19 @@
 import { vi } from 'vitest';
 
 vi.mock('vscode', () => ({
+  lm: {
+    registerMcpServerDefinitionProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  },
+  McpStdioServerDefinition: class {
+    cwd: unknown;
+    constructor(
+      public readonly label: string,
+      public command: string,
+      public args: string[] = [],
+      public env: Record<string, string | number | null> = {},
+      public version?: string,
+    ) {}
+  },
   workspace: {
     getConfiguration: vi.fn(() => ({
       get: vi.fn((_key: string, def?: unknown) => def),
@@ -250,6 +263,7 @@ vi.mock('vscode', () => ({
     isWindows: process.platform === 'win32',
     isMac: process.platform === 'darwin',
     isLinux: process.platform === 'linux',
+    appName: 'Visual Studio Code',
   },
   version: '1.85.0',
 }));

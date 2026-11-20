@@ -1,19 +1,15 @@
 /**
- * extension.test.ts —— 扩展激活入口的接线测试(bugfix-002 复现/回归)
+ * extension.test.ts —— 扩展激活入口的 MCP provider 接线测试
  *
- * bug:extension.ts 激活流程从未调用 activateMCP(Phase 11 遗留 dead code,
- * src/mcp/index.ts 头注释自称"Plan 12 处理"但后续未落地)——MCP 服务器在
- * 任何宿主下都不会启动,AI agent 的 9 个 ue_* 工具全部不可用。
- *
- * 回归断言:activate() 必须接线 activateMCP(fire-and-forget,不阻塞激活),
- * 且 MCP 启动失败不影响主激活流程。
+ * MCP Provider 必须在扩展激活时注册，并注入当前工作区运行时上下文。
  */
 
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { MCPProviderDeps } from '@mcp/provider';
 
 // ============ mock 全部 activate 链路依赖(懒箭头,规避 hoist 顺序问题) ============
 
-const mockActivateMCP = vi.fn<unknown[], Promise<unknown>>();
+const mockRegisterMCPProvider = vi.fn<[MCPProviderDeps], void>();
 const mockActivateDetection = vi.fn<unknown[], unknown>();
 const mockActivateBuild = vi.fn<unknown[], unknown>();
 const mockActivateClangd = vi.fn<unknown[], unknown>();
@@ -22,8 +18,8 @@ const mockActivateCommands = vi.fn<unknown[], unknown>();
 const mockRunFirstTimeInit = vi.fn<unknown[], Promise<unknown>>();
 const mockShowProjectInfo = vi.fn<unknown[], Promise<unknown>>();
 
-vi.mock('@mcp/index', () => ({
-  activateMCP: (...args: unknown[]) => mockActivateMCP(...args),
+vi.mock('@mcp/provider', () => ({
+  registerMCPProvider: (deps: MCPProviderDeps) => mockRegisterMCPProvider(deps),
 }));
 vi.mock('@detection', () => ({
   activateDetection: (...args: unknown[]) => mockActivateDetection(...args),
@@ -108,11 +104,8 @@ function fakeContext(): vscode.ExtensionContext {
 }
 
 describe('extension activate 的 MCP 接线(bugfix-002)', () => {
-  const mockActivateMCPResolves = mockActivateMCP as unknown as Mock;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    mockActivateMCPResolves.mockResolvedValue({ server: {}, host: 'cursor' });
     mockActivateDetection.mockReturnValue({ workspaceContext: {} });
     mockActivateBuild.mockReturnValue({});
     mockActivateClangd.mockReturnValue({});
@@ -121,24 +114,25 @@ describe('extension activate 的 MCP 接线(bugfix-002)', () => {
     mockRunFirstTimeInit.mockResolvedValue(undefined);
   });
 
-  it('activate 应调用 activateMCP(fire-and-forget,不阻塞激活)', async () => {
+  it('activate 应注册 VS Code MCP provider 并注入运行时上下文', async () => {
     await activate(fakeContext());
 
-    expect(mockActivateMCP).toHaveBeenCalledTimes(1);
-    // (context, config, logger, detection, workspace, clangdOps)
-    expect(mockActivateMCP).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(mockRegisterMCPProvider).toHaveBeenCalledTimes(1);
+    const deps = mockRegisterMCPProvider.mock.calls[0]?.[0];
+    if (!deps) {
+      throw new Error('MCP provider was not registered');
+    }
+    expect(deps.context).toBeDefined();
+    expect(deps.config).toBeDefined();
+    expect(deps.logger).toBeDefined();
+    expect(deps.mcpContext.config).toBeDefined();
+    expect(deps.mcpContext.logger).toBeDefined();
+    expect(deps.mcpContext.detection).toBeDefined();
+    expect(deps.mcpContext.workspace).toBeDefined();
+    expect(deps.mcpContext.clangdOps).toBeDefined();
   });
 
-  it('activateMCP 启动失败(reject)不影响主激活流程', async () => {
-    mockActivateMCPResolves.mockRejectedValueOnce(new Error('stdio unavailable'));
-
+  it('MCP provider 注册不影响扩展主激活流程', async () => {
     await expect(activate(fakeContext())).resolves.toBeUndefined();
     expect(vscode.window.showErrorMessage).not.toHaveBeenCalledWith(
       expect.stringContaining('failed to activate'),
