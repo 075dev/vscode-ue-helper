@@ -563,4 +563,91 @@ describe('LspBridge — 代理桥接', () => {
 
     stdoutWrite.mockRestore();
   });
+
+  // ─── [bugfix-007] 保活 TTL 空闲检查 ─────────────────────────
+
+  describe('[bugfix-007] 保活 TTL 在空闲时也生效', () => {
+    it('无任何 LSP 消息时，TTL 到期后自动转发 didClose', () => {
+      vi.useFakeTimers();
+      try {
+        const t = new FakeTransport();
+        // TTL=8s → 检查间隔 = 8s/4 = 2s
+        const b = new LspBridge(t, { keepaliveMax: 20, keepaliveTtlSec: 8 });
+        b.onClientOutput(() => {});
+
+        // 关闭一个文件（进入保活，不转发）
+        b.feedClientFrame(
+          encodeMessage({
+            jsonrpc: '2.0',
+            method: 'textDocument/didClose',
+            params: didCloseParams('file:///idle.cpp'),
+          }),
+        );
+        expect(parseFrames(t.sent)).toHaveLength(0);
+
+        // 关键：此后不喂任何消息，只推进时间
+        vi.advanceTimersByTime(8_000 + 2_000);
+
+        const sent = parseFrames(t.sent);
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.method).toBe('textDocument/didClose');
+        expect((sent[0]?.params as { textDocument: { uri: string } }).textDocument.uri).toBe(
+          'file:///idle.cpp',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('close() 后定时器停止，不再转发', () => {
+      vi.useFakeTimers();
+      try {
+        const t = new FakeTransport();
+        const b = new LspBridge(t, { keepaliveMax: 20, keepaliveTtlSec: 8 });
+        b.onClientOutput(() => {});
+
+        b.feedClientFrame(
+          encodeMessage({
+            jsonrpc: '2.0',
+            method: 'textDocument/didClose',
+            params: didCloseParams('file:///closed.cpp'),
+          }),
+        );
+
+        b.close(); // flush 会转发一次 didClose
+        const afterClose = parseFrames(t.sent).length;
+
+        // 再推进时间，不应再有任何新帧
+        vi.advanceTimersByTime(60_000);
+        expect(parseFrames(t.sent).length).toBe(afterClose);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keepaliveMax=0 时不启动定时器（保活已禁用）', () => {
+      vi.useFakeTimers();
+      try {
+        const t = new FakeTransport();
+        const b = new LspBridge(t, { keepaliveMax: 0, keepaliveTtlSec: 900 });
+        b.onClientOutput(() => {});
+
+        // max=0：didClose 立即转发，不驻留
+        b.feedClientFrame(
+          encodeMessage({
+            jsonrpc: '2.0',
+            method: 'textDocument/didClose',
+            params: didCloseParams('file:///no-keep.cpp'),
+          }),
+        );
+        expect(parseFrames(t.sent)).toHaveLength(1);
+
+        // 推进任意时长，不应出现额外帧（无定时器在跑）
+        vi.advanceTimersByTime(1_000_000);
+        expect(parseFrames(t.sent)).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

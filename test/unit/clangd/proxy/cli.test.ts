@@ -205,6 +205,35 @@ describe('parseArgs — CLI 参数解析', () => {
     expect(result.options.keepaliveMax).toBe(20);
   });
 
+  // ─── [bugfix-007] --keepalive-max 0 = 关闭保活 ────────────────
+
+  it('[bugfix-007] --keepalive-max 0 被接受（关闭保活）', () => {
+    const result = parseArgs([
+      'node',
+      'proxy.js',
+      '--keepalive-max',
+      '0',
+      '--real-clangd',
+      '/usr/bin/clangd',
+    ]);
+
+    // 旧实现用 `> 0` 判定，0 被静默忽略并回落到默认 20
+    expect(result.options.keepaliveMax).toBe(0);
+  });
+
+  it('[bugfix-007] --keepalive-max 负数仍回落到默认值', () => {
+    const result = parseArgs([
+      'node',
+      'proxy.js',
+      '--keepalive-max',
+      '-3',
+      '--real-clangd',
+      '/usr/bin/clangd',
+    ]);
+
+    expect(result.options.keepaliveMax).toBe(20);
+  });
+
   // ─── --keepalive-ttl-sec 非数字值 ─────────────────────────────
 
   it('--keepalive-ttl-sec 非数字值时使用默认值', () => {

@@ -129,6 +129,14 @@ export class LspBridge {
   /** [Phase 8] 规范化 uri → VS Code 原始 uri。注入 didChange 必须用 VS Code 原始 uri，
    *  否则 clangd DraftStore 查不到（"non-added document"），didChange 被拒绝。 */
   private readonly originalUris = new Map<string, string>();
+  /**
+   * [bugfix-007] 保活 TTL 的空闲检查定时器。
+   *
+   * 旧实现只在收到 LSP 消息时调 tick()，用户关掉文件后离开 IDE（无消息）时，
+   * 保活条目永不失效，clangd 会一直持有这些文档的 AST/preamble —— UE 大 PCH
+   * 项目下单进程可涨到 GB 级。定时器让 TTL 在空闲时也生效。
+   */
+  private ttlTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(transport: ServerTransport, options?: LspBridgeOptions) {
     this.transport = transport;
@@ -148,6 +156,47 @@ export class LspBridge {
 
     // 监听服务器数据
     this.transport.onData((data: Buffer) => this.handleServerData(data));
+
+    // [bugfix-007] 启动空闲 TTL 检查：TTL 语义不应依赖"有消息进来"
+    this.startTtlTimer();
+  }
+
+  /**
+   * [bugfix-007] 启动保活 TTL 的空闲检查定时器。
+   *
+   * 检查间隔取 TTL 的 1/4（夹在 [1s, 60s]），保证过期条目最迟在
+   * TTL + 60s 内被转发 didClose，且不会因 TTL 很大而过度轮询。
+   *
+   * 不启动的情形：
+   * - `ttlMs === 0`（TTL 关闭，条目在下一次 tick 时立即过期，无需轮询）
+   * - `maxEntries === 0`（保活被禁用，条目根本不会驻留）
+   */
+  private startTtlTimer(): void {
+    if (this.ttlTimer !== null) {
+      return;
+    }
+    const ttlMs = this.keepalive.ttlMs;
+    if (ttlMs <= 0 || this.keepalive.maxEntries <= 0) {
+      return;
+    }
+    const intervalMs = Math.min(Math.max(Math.floor(ttlMs / 4), 1_000), 60_000);
+    this.ttlTimer = setInterval(() => {
+      const actions = this.keepalive.tick();
+      for (const action of actions) {
+        this.executeKeepaliveAction(action);
+      }
+    }, intervalMs);
+    // 定时器不应阻止进程退出（proxy 由 stdio 管道决定生命周期）
+    this.ttlTimer.unref?.();
+  }
+
+  /** [bugfix-007] 停止空闲 TTL 检查定时器。重复调用安全。 */
+  private stopTtlTimer(): void {
+    if (this.ttlTimer === null) {
+      return;
+    }
+    clearInterval(this.ttlTimer);
+    this.ttlTimer = null;
   }
 
   // ─── 客户端→服务器路径 ──────────────────────────────────────
@@ -736,6 +785,7 @@ export class LspBridge {
    * 永远等不到响应,不清会一直滞留。
    */
   close(): void {
+    this.stopTtlTimer();
     this.flush();
     this.correlation.clear();
     this.transport.close();

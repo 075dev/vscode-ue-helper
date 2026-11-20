@@ -67,3 +67,6 @@ last_activity: >-
 
 ## 已知阻塞
 - 无(交付完成;远端仓库 075dev/vscode-ue-helper 为本次交付新建,private)
+
+## Bugfix 登记(旁路,不推进 current_phase)
+- bugfix-007(2026-11-20,severity: high,状态 fixed,评审 pending):clangd 持续占用内存——keepalive 默认 max=20 在 UE 大 PCH 项目下放大 AST 驻留(实测单进程 2.6 GB);TTL 无定时器,空闲时不失效;config 把 0 clamp 回 20 导致保活无法关闭。修复:bridge 层加空闲 TTL 定时器(间隔 clamp(ttl/4,1s,60s)+unref)、config/cliArgs 放开 0 值语义(`>0`→`>=0`)、补 keepalive 可观测 getter(ttlMs/maxEntries)、更新 NLS 文案与 README/doc。回归:typecheck PASS、build PASS、全量 1555/1555 PASS、反向回滚验证 3 个新测试确实失败、真 bundle 端到端确认空闲 6s 自动转发 didClose。10 个 clangd 实例已用复现实验排除为本插件产生(proxy 不残留孤儿),需现场 `ParentProcessId` 数据定位。报告见 `.qiling/planning/bugfix/007-clangd-keepalive-memory.md`。

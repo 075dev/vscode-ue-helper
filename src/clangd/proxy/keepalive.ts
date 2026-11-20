@@ -59,17 +59,31 @@ export class Keepalive {
   /** URI → 保活条目，按插入顺序 */
   private readonly entries: Map<string, KeepaliveEntry>;
   private readonly max: number;
-  private readonly ttlMs: number;
+  private readonly ttlMs_: number;
 
   constructor(options?: KeepaliveOptions) {
     this.entries = new Map();
     this.max = options?.max ?? DEFAULT_MAX;
-    this.ttlMs = (options?.ttlSec ?? DEFAULT_TTL_SEC) * 1000;
+    this.ttlMs_ = (options?.ttlSec ?? DEFAULT_TTL_SEC) * 1000;
   }
 
   /** 当前保活条目数 */
   get size(): number {
     return this.entries.size;
+  }
+
+  /**
+   * TTL 毫秒数。供调用方计算定时检查间隔。
+   *
+   * 0 表示"立即过期"（等价于关闭保活）——调用方据此跳过定时器。
+   */
+  get ttlMs(): number {
+    return this.ttlMs_;
+  }
+
+  /** 最大保活条目数。0 表示不保活任何条目。 */
+  get maxEntries(): number {
+    return this.max;
   }
 
   /**
@@ -167,7 +181,7 @@ export class Keepalive {
     const now = Date.now();
 
     for (const [uri, entry] of this.entries) {
-      if (now - entry.timestamp >= this.ttlMs) {
+      if (now - entry.timestamp >= this.ttlMs_) {
         this.entries.delete(uri);
         actions.push({
           type: 'forwardDidClose',

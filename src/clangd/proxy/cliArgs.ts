@@ -115,7 +115,10 @@ export function parseArgs(argv: string[]): ParseArgsResult {
         i++;
         const val = proxyArgs[i];
         const num = Number(val);
-        if (val !== undefined && Number.isFinite(num) && Number.isInteger(num) && num > 0) {
+        // [bugfix-007] `>= 0`：0 是合法值（关闭保活），与 config.ts 的
+        // clangdProxyKeepaliveMax 语义对齐。旧实现用 `> 0`，用户显式传
+        // --keepalive-max 0 会被静默忽略并回落到默认 20。
+        if (val !== undefined && Number.isFinite(num) && Number.isInteger(num) && num >= 0) {
           options.keepaliveMax = num;
         }
         break;

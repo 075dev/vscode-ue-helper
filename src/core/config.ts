@@ -205,20 +205,36 @@ export class Config {
     return this.root.get<boolean>('clangdProxy.enabled') ?? false;
   }
 
-  /** clangd Proxy 最大 keepalive 连接数，无效值（<=0 / 非数值）clamp 到 20 */
+  /**
+   * clangd Proxy 最大 keepalive 条目数。
+   *
+   * `0` 是**合法值**：表示关闭保活（每次 didClose 立即转发给 clangd，不驻留 AST）。
+   * 这是 UE 大 PCH 项目下控制 clangd 内存的主要手段 —— 旧实现把 0 当无效值
+   * clamp 回 20，用户无法关闭保活（bugfix-007）。
+   *
+   * 无效值（负数 / 非数值 / null / undefined）才回退到默认 20。
+   */
   get clangdProxyKeepaliveMax(): number {
     const raw = this.root.get<unknown>('clangdProxy.keepaliveMax');
-    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
-      return raw;
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+      return Math.floor(raw);
     }
     return DEFAULT_KEEPALIVE_MAX;
   }
 
-  /** clangd Proxy keepalive TTL（秒），无效值（<=0 / 非数值）clamp 到 900 */
+  /**
+   * clangd Proxy keepalive TTL（秒）。
+   *
+   * `0` 是**合法值**：表示条目在下一次检查时立即过期（配合 keepaliveMax=0 使用，
+   * 或单独用于"关掉延迟关闭"）。语义与 `cliArgs.ts` 的 `--keepalive-ttl-sec`
+   * 解析保持一致（`>= 0`），旧实现此处用 `> 0` 造成两处不一致（bugfix-007）。
+   *
+   * 无效值（负数 / 非数值 / null / undefined）才回退到默认 900。
+   */
   get clangdProxyKeepaliveTtlSec(): number {
     const raw = this.root.get<unknown>('clangdProxy.keepaliveTtlSec');
-    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
-      return raw;
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+      return Math.floor(raw);
     }
     return DEFAULT_KEEPALIVE_TTL_SEC;
   }

@@ -351,4 +351,32 @@ describe('Keepalive — didClose 保活状态机', () => {
     const ka2 = new Keepalive();
     expect(ka2.size).toBe(0);
   });
+
+  // ─── [bugfix-007] 配置可观测性 ──────────────────────────────
+
+  it('[bugfix-007] ttlMs getter 返回 TTL 的毫秒值', () => {
+    expect(new Keepalive({ ttlSec: 900 }).ttlMs).toBe(900_000);
+    expect(new Keepalive({ ttlSec: 0 }).ttlMs).toBe(0);
+    // 不传时用默认 900s
+    expect(new Keepalive().ttlMs).toBe(900_000);
+  });
+
+  it('[bugfix-007] maxEntries getter 返回最大条目数', () => {
+    expect(new Keepalive({ max: 5 }).maxEntries).toBe(5);
+    expect(new Keepalive({ max: 0 }).maxEntries).toBe(0);
+    // 不传时用默认 20
+    expect(new Keepalive().maxEntries).toBe(20);
+  });
+
+  it('[bugfix-007] ttlSec=0 时下次 tick 立即过期', () => {
+    const ka = new Keepalive({ ttlSec: 0 });
+    ka.handleDidClose('file:///a.cpp', didCloseParams('file:///a.cpp'));
+    expect(ka.size).toBe(1);
+
+    // ttlMs=0 → now - timestamp >= 0 恒成立
+    const actions = ka.tick();
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.type).toBe('forwardDidClose');
+    expect(ka.size).toBe(0);
+  });
 });

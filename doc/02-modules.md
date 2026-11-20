@@ -238,7 +238,7 @@ InlayHints:
 | `processBridge.ts`                         | 真实 clangd 子进程适配器（stdout 是 LSP 协议通道，不写日志）                  |
 | `framing.ts`                               | LSP 帧编解码（Content-Length header）                                         |
 | `messages.ts`                              | JSON-RPC 消息解析 + 请求/响应关联                                             |
-| `keepalive.ts`                             | didClose 保活（防止 clangd 索引被回收）                                       |
+| `keepalive.ts`                             | didClose 保活（防止 clangd 索引被回收）。`max=0` 可关闭；TTL 由 bridge 层定时器驱动，空闲时也生效 |
 | `localization.ts`                          | clangd 输出汉化（hover / diagnostics / codeAction）                           |
 | `genericTranslator.ts`                     | 通用术语翻译                                                                  |
 | `ueDiagnosticWatcher.ts`                   | **[Phase 8]** 监听 UE 诊断，被动触发 UBT 重生成                               |

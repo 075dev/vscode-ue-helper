@@ -174,8 +174,8 @@ Settings live under the `vscodeUEHelper.*` namespace.
 | `useMCP`                           | enum   | `auto`        | `auto` = only in Cursor/Claude Code. `always` / `never`.                                                          |
 | `lspLoggingLevel`                  | enum   | `info`        | error / warn / info / debug                                                                                       |
 | `clangdProxy.enabled`              | bool   | `false`       | Enable clangd LSP proxy (didClose keepalive + localization).                                                      |
-| `clangdProxy.keepaliveMax`         | number | `20`          | Max keepalive documents.                                                                                          |
-| `clangdProxy.keepaliveTtlSec`      | number | `900`         | Keepalive TTL (seconds).                                                                                          |
+| `clangdProxy.keepaliveMax`         | number | `20`          | Max keepalive documents. `0` = disable keepalive (recommended for large UE PCH projects to cut clangd memory).     |
+| `clangdProxy.keepaliveTtlSec`      | number | `900`         | Keepalive TTL (seconds). `0` = expire immediately. TTL is enforced even when idle (no LSP traffic).                |
 | `clangdProxy.realClangdPath`       | string | `""`          | Path to real clangd binary. Empty = auto-detect.                                                                  |
 | `clangdProxy.localization.enabled` | bool   | `false`       | Enable hover localization (UE docs dict).                                                                         |
 | `clangdProxy.localization.mode`    | enum   | `append`      | append = 中文追加 / zh-only = 仅中文                                                                                     |

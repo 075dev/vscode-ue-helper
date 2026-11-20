@@ -134,10 +134,10 @@ describe('ClangdProxyConfig', () => {
       expect(config.clangdProxyKeepaliveMax).toBe(20);
     });
 
-    it('keepaliveMax 零值 clamp 到 20', () => {
+    it('keepaliveMax 零值是合法配置：关闭保活（bugfix-007）', () => {
       setupMockConfig({ 'clangdProxy.keepaliveMax': 0 });
       const config = new Config();
-      expect(config.clangdProxyKeepaliveMax).toBe(20);
+      expect(config.clangdProxyKeepaliveMax).toBe(0);
     });
 
     it('keepaliveMax 非数值 clamp 到 20', () => {
@@ -158,10 +158,10 @@ describe('ClangdProxyConfig', () => {
       expect(config.clangdProxyKeepaliveTtlSec).toBe(900);
     });
 
-    it('keepaliveTtlSec 零值 clamp 到 900', () => {
+    it('keepaliveTtlSec 零值是合法配置：立即过期（bugfix-007）', () => {
       setupMockConfig({ 'clangdProxy.keepaliveTtlSec': 0 });
       const config = new Config();
-      expect(config.clangdProxyKeepaliveTtlSec).toBe(900);
+      expect(config.clangdProxyKeepaliveTtlSec).toBe(0);
     });
 
     it('keepaliveTtlSec 非数值 clamp 到 900', () => {
