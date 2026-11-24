@@ -11,6 +11,7 @@ node_modules/**
 src/**
 tsconfig.json
 tsconfig.test.json
+tsconfig.e2e.json
 esbuild.config.mjs
 vitest.config.ts
 .eslintrc.json
@@ -18,6 +19,9 @@ vitest.config.ts
 .prettierrc
 .gitignore
 .mcp.json
+# 未被任何代码引用的历史遗留清单（打包时排除）
+features.json
+patterns.json
 
 # AI辅助开发文件
 CLAUDE.md

@@ -3,7 +3,7 @@
 All notable changes to VSCodeUEHelper are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.1] - 2026-11-24
 
 ### Added
 
@@ -36,6 +36,10 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - **UBT 刷新后恢复错了文件，`launch.json` 丢失**：备份与恢复各自独立地找「第一个 `.code-workspace`」，两次之间不共享文件名 → UBT 重写目录后可能恢复到另一个文件；文件头承诺保护的 `.vscode/launch.json` 从未被备份；恢复是直接覆盖、非原子。现在备份按原文件名存到 `.vscode/uehelper-backup/`，`snapshot()` 记录被备份的名字、`restore()` 只恢复它（找不到同名备份就不恢复并记 error），`launch.json` 一并纳入，恢复改 temp + rename。旧的单文件备份视为过期，直接忽略不迁移。
 - **silent 模式仍然弹窗，AI 代理被卡在对话框前**：`silent` 只作用于选项目那一步，选 MSVC / SDK 版本的两个 QuickPick 与一个模态错误框照弹。现在 silent 路径直接采用自动检测到的 MSVC / SDK 版本、不弹任何窗，检测失败则返回明确错误信封；非 silent 路径的错误框改为非模态。
 - **写数组类型设置会产生无意义 warning**：`Config.update` 写盘前的校验比较的是序列化字符串，数组 / 对象类设置每次都被判成「有变化」。现在改为按值比较。
+
+- **clangd 持续占用内存（单进程可达 GB 级）**：proxy 的 didClose 保活会拦截关闭通知、让 clangd 一直认为文档打开着，默认保活 20 份；在 UE 大 PCH 项目下（实测 SharedPCH 单个 2.4 GB、131 个编译单元）单份 AST + preamble 达 100~300 MB，20 份即 2~6 GB。更糟的是保活 TTL **只在收到 LSP 消息时才检查**——用户关掉文件离开 IDE 后条目永不失效，实际驻留远超配置的 15 分钟；而配置层把 `0` 当无效值 clamp 回 20，用户**无法关闭保活**。现在 bridge 层新增空闲 TTL 检查定时器（间隔 `clamp(ttl/4, 1s, 60s)`，`unref()` 不阻止退出），`keepaliveMax` / `keepaliveTtlSec` 的 `0` 成为合法值（关闭保活 / 立即过期），配置层与 CLI 解析层语义对齐（原先一处 `> 0`、一处 `>= 0`）。默认值不变，既有用户无感。**UE 大 PCH 项目建议把 `clangdProxy.keepaliveMax` 设为 0 以彻底关闭保活。**
+- **双宿主下启用 clangd 代理后 clangd 直接停摆**：VS Code 与 JoyCode 等 fork 同时打开同一 UE 项目时，另一份扩展副本写入的 launcher 路径与本实例不同，而 resolver 的 launcher 排除只做「与本实例路径等同比较」，外来 launcher 逃过排除被写进 `--real-clangd` → proxy 对 .bat 无 shell spawn 抛 `EINVAL` 挂死。叠加缺陷：`enable()` 无防重入，把现有 proxy 参数整段当成真实 clangd 参数嵌套写入，重复启用时嵌套层数不断增加。现在按固定文件名 `proxy-launcher.bat` 排除外来 launcher（跨安装目录/版本有效），`enable`/`reapply` 统一用 `extractRealClangdArgs` 以 `lastIndexOf('--')` 一次剥离任意层嵌套，spawn 失败给出根因诊断并 fail-fast 而非静默挂死。存量坏配置自愈：重新执行一次启用或重新应用即可。另修正 launcher bat 注释为纯 ASCII（UTF-8 中文注释在 GBK 代码页下会被 cmd 当命令执行）。
+- **代理无法启动 MCP 服务器，且反复重新拉起新进程**：`provideMcpServerDefinitions` 返回的定义在 provide 阶段不携带子进程启动所需的管道/令牌环境变量，只靠 `resolveMcpServerDefinition` 注入；而 VS Code 存在不调用 resolve 的启动路径（后台转发到 Copilot 会话、定义缓存重启），这些路径 spawn 的子进程因缺环境变量立即退出，代理侧表现为「无法启动」。叠加每次 resolve 都新建 bridge 且从不清理，定义变更/会话重启时反复泄漏管道服务器，表现为「重新呼出新进程」。现在 definition 在 provide 阶段即自足，bridge 单例化（懒建 + 缓存 + 随扩展释放）。**MCP 架构同步迁移到 VS Code MCP Provider + 命名管道回连扩展宿主**：`out/mcpServer.js` 作为受 VS Code 托管的 stdio 子进程，工具调用经带随机令牌的本地命名管道回到扩展宿主执行，stdout 只承载协议帧；`useMCP` 的 `auto` 改为面向 Visual Studio Code（含 Copilot Chat），不再是 Cursor / Claude Code 专用。
 
 ## [0.2.0] - 2026-10-05
 

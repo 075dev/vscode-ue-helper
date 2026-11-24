@@ -1,8 +1,8 @@
 {
   "name": "vscode-ue-helper",
   "displayName": "VSCode UE Helper",
-  "description": "All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, and optional MCP AI agent integration.",
-  "version": "0.2.0",
+  "description": "All-in-one VS Code plugin for Unreal Engine C++ development: UBT build, Live Coding hot-reload, clangd IntelliSense, MCP tools for Copilot Chat, and a clangd LSP proxy.",
+  "version": "0.2.1",
   "license": "MIT",
   "repository": {
     "type": "git",
