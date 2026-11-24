@@ -86,6 +86,11 @@ export class ProxyLogTailer implements vscode.Disposable {
   /**
    * 单次检查：stat → 增量读取 → flush 行。
    * 全程不抛异常；文件不存在或读取失败时静默/告警并等下个周期。
+   *
+   * [bugfix-007 同批] 本方法是 async，`dispose()` 只能 clearInterval + 置标志，
+   * 无法中断**已经进入 await 链**的这次调用。若不在每个 await 之后重新检查
+   * `disposed`，dispose 之后仍会走完 flushLines 把新内容写进 channel——
+   * 表现为"dispose 后仍在输出"，且是概率性的（取决于 dispose 落在哪个 await）。
    */
   private async check(): Promise<void> {
     if (this.disposed) {
@@ -97,6 +102,10 @@ export class ProxyLogTailer implements vscode.Disposable {
       stat = await fs.promises.stat(this.logPath);
     } catch {
       // 文件还不存在（proxy 尚未启动）—— 静默等待，下个周期重试
+      return;
+    }
+    // await 期间可能已 dispose：直接放弃，不推进 offset、不写 channel
+    if (this.disposed) {
       return;
     }
     if (!stat.isFile()) {
@@ -121,6 +130,10 @@ export class ProxyLogTailer implements vscode.Disposable {
       try {
         // position 传 this.offset，从上次读到的位置开始
         const { bytesRead } = await fd.read(buf, 0, length, this.offset);
+        // await 期间可能已 dispose：丢弃本次读到的内容，不写 channel
+        if (this.disposed) {
+          return;
+        }
         // 只推进实际读到的字节（stat 与 read 之间文件可能变化）
         this.offset += bytesRead;
         this.lineBuffer += buf.toString('utf-8', 0, bytesRead);
@@ -140,6 +153,10 @@ export class ProxyLogTailer implements vscode.Disposable {
    * 半行（无 \n 结尾）保留在 lineBuffer，等下次拼齐。
    */
   private flushLines(): void {
+    // dispose 之后不得再写 channel（防御：调用方应已拦截，此处兜底）
+    if (this.disposed) {
+      return;
+    }
     let idx: number;
     while ((idx = this.lineBuffer.indexOf('\n')) >= 0) {
       const line = this.lineBuffer.slice(0, idx);

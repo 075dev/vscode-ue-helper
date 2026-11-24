@@ -198,6 +198,47 @@ describe('ProxyLogTailer', () => {
     expect(lines).toEqual(['before']);
   });
 
+  it('dispose 落在 in-flight 异步链中间时，不写入已读到的内容', async () => {
+    // 回归锁定（确定性）：check() 是 async，dispose() 无法中断已经进入 await 的
+    // 调用。旧实现只在 check() 入口检查 disposed，await read 之后不再检查，
+    // 于是 dispose 后仍会走完 flushLines 把内容写进 channel。
+    //
+    // 这里用 vi.spyOn 拦截 fd.read，在 read 的 await 内部**精确**触发 dispose，
+    // 强制制造"dispose 落在 read 之后、flushLines 之前"的时序，不依赖调度运气。
+    const { channel, lines } = makeChannel();
+    writeFileSync(logFile, 'before\n');
+    const tailer = new ProxyLogTailer(logFile, channel, makeLogger(), 10);
+
+    tailer.start();
+    await sleep(40);
+    expect(lines).toEqual(['before']);
+
+    // 拦截 read：读到内容后、返回前调用 dispose()
+    const fsMod = await import('node:fs');
+    const realOpen = fsMod.promises.open;
+    const openSpy = vi.spyOn(fsMod.promises, 'open').mockImplementation(async (...args) => {
+      const handle = await realOpen(...(args as Parameters<typeof realOpen>));
+      const realRead = handle.read.bind(handle);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (handle as any).read = async (...rargs: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (realRead as any)(...rargs);
+        // 关键：read 已读到数据，但 flushLines 还没跑 —— 此刻 dispose
+        tailer.dispose();
+        return result;
+      };
+      return handle;
+    });
+
+    appendFileSync(logFile, 'race\n');
+    await sleep(60);
+
+    openSpy.mockRestore();
+
+    // 即便 read 已完成，dispose 之后的写入必须被拦下
+    expect(lines).toEqual(['before']);
+  });
+
   // ─── 重复 start / dispose 幂等 ──────────────────────────────
 
   it('重复 start 与重复 dispose 均安全', async () => {
